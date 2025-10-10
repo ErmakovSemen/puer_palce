@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Search } from "lucide-react";
 
 interface ProductFiltersProps {
@@ -7,6 +8,8 @@ interface ProductFiltersProps {
   onSearchChange: (value: string) => void;
   selectedType: string;
   onTypeChange: (type: string) => void;
+  selectedEffects: string[];
+  onEffectsChange: (effects: string[]) => void;
 }
 
 const teaTypes = [
@@ -16,37 +19,76 @@ const teaTypes = [
   { id: "aged", label: "Выдержанный" },
 ];
 
+const effects = [
+  { id: "бодрит", label: "Бодрит" },
+  { id: "успокаивает", label: "Успокаивает" },
+  { id: "концентрирует", label: "Концентрирует" },
+  { id: "согревает", label: "Согревает" },
+  { id: "расслабляет", label: "Расслабляет" },
+  { id: "тонизирует", label: "Тонизирует" },
+];
+
 export default function ProductFilters({
   searchTerm,
   onSearchChange,
   selectedType,
   onTypeChange,
+  selectedEffects,
+  onEffectsChange,
 }: ProductFiltersProps) {
+  const toggleEffect = (effectId: string) => {
+    if (selectedEffects.includes(effectId)) {
+      onEffectsChange(selectedEffects.filter(e => e !== effectId));
+    } else {
+      onEffectsChange([...selectedEffects, effectId]);
+    }
+  };
+
   return (
-    <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-      <div className="relative flex-1 w-full md:max-w-xs">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Найти чай..."
-          value={searchTerm}
-          onChange={(e) => onSearchChange(e.target.value)}
-          className="pl-10"
-          data-testid="input-search"
-        />
+    <div className="space-y-4">
+      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+        <div className="relative flex-1 w-full md:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Найти чай..."
+            value={searchTerm}
+            onChange={(e) => onSearchChange(e.target.value)}
+            className="pl-10"
+            data-testid="input-search"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {teaTypes.map((type) => (
+            <Button
+              key={type.id}
+              variant={selectedType === type.id ? "default" : "outline"}
+              onClick={() => onTypeChange(type.id)}
+              className={selectedType === type.id ? "bg-primary text-primary-foreground border border-primary-border" : ""}
+              data-testid={`button-filter-${type.id}`}
+            >
+              {type.label}
+            </Button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {teaTypes.map((type) => (
-          <Button
-            key={type.id}
-            variant={selectedType === type.id ? "default" : "outline"}
-            onClick={() => onTypeChange(type.id)}
-            className={selectedType === type.id ? "bg-primary text-primary-foreground border border-primary-border" : ""}
-            data-testid={`button-filter-${type.id}`}
-          >
-            {type.label}
-          </Button>
-        ))}
+      <div>
+        <Label className="mb-3 block text-sm font-medium">Эффект</Label>
+        <div className="flex flex-wrap gap-2">
+          {effects.map((effect) => (
+            <Button
+              key={effect.id}
+              variant={selectedEffects.includes(effect.id) ? "default" : "outline"}
+              size="sm"
+              onClick={() => toggleEffect(effect.id)}
+              className={selectedEffects.includes(effect.id) ? "bg-primary text-primary-foreground border border-primary-border" : ""}
+              data-testid={`button-effect-${effect.id}`}
+            >
+              {effect.label}
+            </Button>
+          ))}
+        </div>
       </div>
     </div>
   );

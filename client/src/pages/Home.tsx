@@ -49,6 +49,7 @@ export default function Home() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
+  const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const { toast } = useToast();
 
   const filteredProducts = useMemo(() => {
@@ -56,9 +57,15 @@ export default function Home() {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = selectedType === "all" || product.type === selectedType;
-      return matchesSearch && matchesType;
+      const matchesEffects = selectedEffects.length === 0 || 
+        selectedEffects.some(effect => 
+          product.effects.some(productEffect => 
+            productEffect.toLowerCase() === effect.toLowerCase()
+          )
+        );
+      return matchesSearch && matchesType && matchesEffects;
     });
-  }, [searchTerm, selectedType]);
+  }, [searchTerm, selectedType, selectedEffects]);
 
   const addToCart = (productId: number) => {
     const product = mockProducts.find(p => p.id === productId);
@@ -137,6 +144,8 @@ export default function Home() {
             onSearchChange={setSearchTerm}
             selectedType={selectedType}
             onTypeChange={setSelectedType}
+            selectedEffects={selectedEffects}
+            onEffectsChange={setSelectedEffects}
           />
         </div>
 
