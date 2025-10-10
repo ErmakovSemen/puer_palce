@@ -26,11 +26,11 @@ export default function Header({ cartItemCount, onCartClick, isAdmin = false }: 
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative"
+                className="relative h-12 w-12"
                 onClick={onCartClick}
                 data-testid="button-cart"
               >
-                <ShoppingCart className="w-5 h-5" />
+                <ShoppingCart className="w-6 h-6" />
                 {cartItemCount > 0 && (
                   <Badge 
                     className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-primary text-primary-foreground border border-primary-border"

@@ -134,11 +134,16 @@ export default function Home() {
       />
       
       <div className="max-w-7xl mx-auto px-4 py-4">
-        <h1 className="font-serif text-3xl font-bold mb-4" data-testid="text-catalog-title">
-          Каталог чая
-        </h1>
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="font-serif text-2xl font-bold" data-testid="text-catalog-title">
+            Каталог чая
+          </h1>
+          <p className="text-sm text-muted-foreground" data-testid="text-products-count">
+            Найдено: {filteredProducts.length}
+          </p>
+        </div>
         
-        <div className="mb-4">
+        <div className="mb-6">
           <ProductFilters
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
@@ -147,12 +152,6 @@ export default function Home() {
             selectedEffects={selectedEffects}
             onEffectsChange={setSelectedEffects}
           />
-        </div>
-
-        <div className="mb-4">
-          <p className="text-sm text-muted-foreground" data-testid="text-products-count">
-            Найдено товаров: {filteredProducts.length}
-          </p>
         </div>
 
         {filteredProducts.length === 0 ? (

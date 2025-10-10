@@ -45,8 +45,8 @@ export default function ProductFilters({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="relative w-full md:max-w-sm">
+    <div className="flex flex-col lg:flex-row gap-4 lg:gap-6">
+      <div className="relative w-full lg:w-80">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="Найти чай..."
@@ -57,39 +57,41 @@ export default function ProductFilters({
         />
       </div>
 
-      <div>
-        <Label className="mb-2 block text-sm font-medium">Тип чая</Label>
-        <div className="flex flex-wrap gap-2">
-          {teaTypes.map((type) => (
-            <Button
-              key={type.id}
-              variant={selectedType === type.id ? "default" : "outline"}
-              size="sm"
-              onClick={() => onTypeChange(type.id)}
-              className={selectedType === type.id ? "bg-primary text-primary-foreground border border-primary-border" : ""}
-              data-testid={`button-filter-${type.id}`}
-            >
-              {type.label}
-            </Button>
-          ))}
+      <div className="flex-1 space-y-3">
+        <div>
+          <Label className="mb-2 block text-sm font-medium">Тип чая</Label>
+          <div className="flex flex-wrap gap-2">
+            {teaTypes.map((type) => (
+              <Button
+                key={type.id}
+                variant={selectedType === type.id ? "default" : "outline"}
+                size="sm"
+                onClick={() => onTypeChange(type.id)}
+                className={selectedType === type.id ? "bg-primary text-primary-foreground border border-primary-border" : ""}
+                data-testid={`button-filter-${type.id}`}
+              >
+                {type.label}
+              </Button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div>
-        <Label className="mb-2 block text-sm font-medium">Эффект</Label>
-        <div className="flex flex-wrap gap-2">
-          {effects.map((effect) => (
-            <Button
-              key={effect.id}
-              variant={selectedEffects.includes(effect.id) ? "default" : "outline"}
-              size="sm"
-              onClick={() => toggleEffect(effect.id)}
-              className={selectedEffects.includes(effect.id) ? "bg-primary text-primary-foreground border border-primary-border" : ""}
-              data-testid={`button-effect-${effect.id}`}
-            >
-              {effect.label}
-            </Button>
-          ))}
+        <div>
+          <Label className="mb-2 block text-sm font-medium">Эффект</Label>
+          <div className="flex flex-wrap gap-2">
+            {effects.map((effect) => (
+              <Button
+                key={effect.id}
+                variant={selectedEffects.includes(effect.id) ? "default" : "outline"}
+                size="sm"
+                onClick={() => toggleEffect(effect.id)}
+                className={selectedEffects.includes(effect.id) ? "bg-primary text-primary-foreground border border-primary-border" : ""}
+                data-testid={`button-effect-${effect.id}`}
+              >
+                {effect.label}
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
