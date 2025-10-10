@@ -45,24 +45,26 @@ export default function ProductFilters({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-        <div className="relative flex-1 w-full md:max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Найти чай..."
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10"
-            data-testid="input-search"
-          />
-        </div>
+    <div className="space-y-6">
+      <div className="relative w-full md:max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Найти чай..."
+          value={searchTerm}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="pl-10"
+          data-testid="input-search"
+        />
+      </div>
 
+      <div>
+        <Label className="mb-3 block text-sm font-medium">Тип чая</Label>
         <div className="flex flex-wrap gap-2">
           {teaTypes.map((type) => (
             <Button
               key={type.id}
               variant={selectedType === type.id ? "default" : "outline"}
+              size="sm"
               onClick={() => onTypeChange(type.id)}
               className={selectedType === type.id ? "bg-primary text-primary-foreground border border-primary-border" : ""}
               data-testid={`button-filter-${type.id}`}
