@@ -10,6 +10,8 @@ export default function ProductCardExample() {
         pricePerGram={12}
         description="Выдержанный темный пуэр с глубоким землистым вкусом и нотками сухофруктов"
         image={teaImage}
+        teaType="Шу Пуэр"
+        effects={["Бодрит", "Согревает"]}
         onAddToCart={(id) => console.log('Added to cart:', id)}
       />
     </div>

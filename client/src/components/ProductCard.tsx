@@ -1,5 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ShoppingCart } from "lucide-react";
 
 interface ProductCardProps {
@@ -8,10 +9,12 @@ interface ProductCardProps {
   pricePerGram: number;
   description: string;
   image: string;
+  teaType: string;
+  effects: string[];
   onAddToCart: (id: number) => void;
 }
 
-export default function ProductCard({ id, name, pricePerGram, description, image, onAddToCart }: ProductCardProps) {
+export default function ProductCard({ id, name, pricePerGram, description, image, teaType, effects, onAddToCart }: ProductCardProps) {
   return (
     <Card className="overflow-hidden hover-elevate transition-all duration-200" data-testid={`card-product-${id}`}>
       <div className="aspect-square overflow-hidden">
@@ -23,9 +26,26 @@ export default function ProductCard({ id, name, pricePerGram, description, image
         />
       </div>
       <div className="p-4 space-y-3">
-        <h3 className="font-serif text-xl font-semibold text-foreground" data-testid={`text-product-name-${id}`}>
-          {name}
-        </h3>
+        <div className="space-y-2">
+          <h3 className="font-serif text-xl font-semibold text-foreground" data-testid={`text-product-name-${id}`}>
+            {name}
+          </h3>
+          <div className="flex flex-wrap gap-1">
+            <Badge variant="secondary" className="text-xs" data-testid={`badge-tea-type-${id}`}>
+              {teaType}
+            </Badge>
+            {effects.map((effect, index) => (
+              <Badge 
+                key={index} 
+                variant="outline" 
+                className="text-xs"
+                data-testid={`badge-effect-${id}-${index}`}
+              >
+                {effect}
+              </Badge>
+            ))}
+          </div>
+        </div>
         <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2" data-testid={`text-product-description-${id}`}>
           {description}
         </p>

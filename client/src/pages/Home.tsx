@@ -21,18 +21,18 @@ import teaImage4 from "@assets/stock_images/various_types_of_loo_32fadc10.jpg";
 import teaImage5 from "@assets/stock_images/various_types_of_loo_6f6a1381.jpg";
 
 const mockProducts = [
-  { id: 1, name: "Шу Пуэр Императорский", pricePerGram: 12, description: "Выдержанный темный пуэр с глубоким землистым вкусом", image: teaImage1, type: "shu" },
-  { id: 2, name: "Шен Пуэр Дикий", pricePerGram: 15, description: "Свежий зеленый пуэр с цветочными нотами", image: teaImage2, type: "shen" },
-  { id: 3, name: "Лао Шу Гу Шу", pricePerGram: 20, description: "Пуэр из древних чайных деревьев", image: teaImage3, type: "aged" },
-  { id: 4, name: "Да И Шу Пуэр", pricePerGram: 13, description: "Классический шу пуэр с мягким вкусом", image: teaImage4, type: "shu" },
-  { id: 5, name: "Юннань Шен", pricePerGram: 14, description: "Молодой шен пуэр с освежающим вкусом", image: teaImage5, type: "shen" },
-  { id: 6, name: "Пуэр Бин Ча", pricePerGram: 18, description: "Прессованный пуэр в форме блина", image: teaImage1, type: "aged" },
-  { id: 7, name: "Мэнхай Шу", pricePerGram: 11, description: "Классический шу пуэр из Мэнхая", image: teaImage2, type: "shu" },
-  { id: 8, name: "Иу Шен", pricePerGram: 19, description: "Элитный шен пуэр из региона Иу", image: teaImage3, type: "shen" },
-  { id: 9, name: "Банчжан Шу", pricePerGram: 22, description: "Премиальный шу пуэр из Банчжана", image: teaImage4, type: "aged" },
-  { id: 10, name: "Булан Шен", pricePerGram: 16, description: "Горный шен пуэр с насыщенным вкусом", image: teaImage5, type: "shen" },
-  { id: 11, name: "Сягуань Точа", pricePerGram: 12.5, description: "Туо ча классической формы", image: teaImage1, type: "shu" },
-  { id: 12, name: "Гу Шу Ча", pricePerGram: 25, description: "Чай с древних деревьев премиум класса", image: teaImage2, type: "aged" },
+  { id: 1, name: "Шу Пуэр Императорский", pricePerGram: 12, description: "Выдержанный темный пуэр с глубоким землистым вкусом", image: teaImage1, type: "shu", teaType: "Шу Пуэр", effects: ["Бодрит", "Согревает"] },
+  { id: 2, name: "Шен Пуэр Дикий", pricePerGram: 15, description: "Свежий зеленый пуэр с цветочными нотами", image: teaImage2, type: "shen", teaType: "Шен Пуэр", effects: ["Концентрирует", "Освежает"] },
+  { id: 3, name: "Лао Шу Гу Шу", pricePerGram: 20, description: "Пуэр из древних чайных деревьев", image: teaImage3, type: "aged", teaType: "Шен Пуэр", effects: ["Успокаивает", "Концентрирует"] },
+  { id: 4, name: "Да И Шу Пуэр", pricePerGram: 13, description: "Классический шу пуэр с мягким вкусом", image: teaImage4, type: "shu", teaType: "Шу Пуэр", effects: ["Бодрит"] },
+  { id: 5, name: "Юннань Габа", pricePerGram: 14, description: "Молодой шен пуэр с освежающим вкусом", image: teaImage5, type: "shen", teaType: "Габа", effects: ["Успокаивает", "Расслабляет"] },
+  { id: 6, name: "Пуэр Бин Ча", pricePerGram: 18, description: "Прессованный пуэр в форме блина", image: teaImage1, type: "aged", teaType: "Шу Пуэр", effects: ["Бодрит", "Согревает"] },
+  { id: 7, name: "Мэнхай Шу", pricePerGram: 11, description: "Классический шу пуэр из Мэнхая", image: teaImage2, type: "shu", teaType: "Шу Пуэр", effects: ["Бодрит"] },
+  { id: 8, name: "Иу Шен", pricePerGram: 19, description: "Элитный шен пуэр из региона Иу", image: teaImage3, type: "shen", teaType: "Шен Пуэр", effects: ["Концентрирует", "Освежает"] },
+  { id: 9, name: "Красный Пуэр", pricePerGram: 22, description: "Премиальный красный пуэр из Банчжана", image: teaImage4, type: "aged", teaType: "Красный", effects: ["Бодрит", "Согревает", "Тонизирует"] },
+  { id: 10, name: "Булан Шен", pricePerGram: 16, description: "Горный шен пуэр с насыщенным вкусом", image: teaImage5, type: "shen", teaType: "Шен Пуэр", effects: ["Концентрирует"] },
+  { id: 11, name: "Габа Алишань", pricePerGram: 12.5, description: "Туо ча классической формы", image: teaImage1, type: "shu", teaType: "Габа", effects: ["Успокаивает", "Расслабляет"] },
+  { id: 12, name: "Гу Шу Ча", pricePerGram: 25, description: "Чай с древних деревьев премиум класса", image: teaImage2, type: "aged", teaType: "Шен Пуэр", effects: ["Успокаивает", "Концентрирует", "Медитативный"] },
 ];
 
 interface CartItem {
