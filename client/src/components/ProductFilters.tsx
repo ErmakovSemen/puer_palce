@@ -45,8 +45,8 @@ export default function ProductFilters({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="relative w-full md:max-w-md">
+    <div className="space-y-3">
+      <div className="relative w-full md:max-w-sm">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           placeholder="Найти чай..."
@@ -58,7 +58,7 @@ export default function ProductFilters({
       </div>
 
       <div>
-        <Label className="mb-3 block text-sm font-medium">Тип чая</Label>
+        <Label className="mb-2 block text-sm font-medium">Тип чая</Label>
         <div className="flex flex-wrap gap-2">
           {teaTypes.map((type) => (
             <Button
@@ -76,7 +76,7 @@ export default function ProductFilters({
       </div>
 
       <div>
-        <Label className="mb-3 block text-sm font-medium">Эффект</Label>
+        <Label className="mb-2 block text-sm font-medium">Эффект</Label>
         <div className="flex flex-wrap gap-2">
           {effects.map((effect) => (
             <Button

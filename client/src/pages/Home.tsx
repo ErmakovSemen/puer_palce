@@ -133,12 +133,12 @@ export default function Home() {
         onCartClick={() => setIsCartOpen(true)}
       />
       
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="font-serif text-4xl font-bold mb-6" data-testid="text-catalog-title">
-            Каталог чая
-          </h1>
-          
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <h1 className="font-serif text-3xl font-bold mb-4" data-testid="text-catalog-title">
+          Каталог чая
+        </h1>
+        
+        <div className="mb-4">
           <ProductFilters
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
@@ -150,7 +150,7 @@ export default function Home() {
         </div>
 
         <div className="mb-4">
-          <p className="text-muted-foreground" data-testid="text-products-count">
+          <p className="text-sm text-muted-foreground" data-testid="text-products-count">
             Найдено товаров: {filteredProducts.length}
           </p>
         </div>
