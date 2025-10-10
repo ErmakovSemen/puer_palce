@@ -3,6 +3,7 @@ import Header from "@/components/Header";
 import AdminProductForm from "@/components/AdminProductForm";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -22,11 +23,29 @@ interface Product {
   price: number;
   description: string;
   imageUrl: string;
+  teaType: string;
+  effects: string[];
 }
 
 const mockInitialProducts: Product[] = [
-  { id: 1, name: "Шу Пуэр Императорский", price: 1200, description: "Выдержанный темный пуэр с глубоким землистым вкусом и нотками сухофруктов", imageUrl: teaImage1 },
-  { id: 2, name: "Шен Пуэр Дикий", price: 1500, description: "Свежий зеленый пуэр с цветочными нотами и легкой сладостью", imageUrl: teaImage1 },
+  { 
+    id: 1, 
+    name: "Шу Пуэр Императорский", 
+    price: 12, 
+    description: "Выдержанный темный пуэр с глубоким землистым вкусом и нотками сухофруктов", 
+    imageUrl: teaImage1,
+    teaType: "Шу Пуэр",
+    effects: ["Бодрит", "Согревает"]
+  },
+  { 
+    id: 2, 
+    name: "Шен Пуэр Дикий", 
+    price: 15, 
+    description: "Свежий зеленый пуэр с цветочными нотами и легкой сладостью", 
+    imageUrl: teaImage1,
+    teaType: "Шен Пуэр",
+    effects: ["Концентрирует", "Освежает"]
+  },
 ];
 
 export default function Admin() {
@@ -117,15 +136,35 @@ export default function Admin() {
                     className="w-32 h-32 object-cover rounded-md"
                     data-testid={`img-admin-product-${product.id}`}
                   />
-                  <div className="flex-1 space-y-2">
-                    <h3 className="font-serif text-2xl font-semibold" data-testid={`text-admin-product-name-${product.id}`}>
-                      {product.name}
-                    </h3>
+                  <div className="flex-1 space-y-3">
+                    <div>
+                      <h3 className="font-serif text-2xl font-semibold mb-2" data-testid={`text-admin-product-name-${product.id}`}>
+                        {product.name}
+                      </h3>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        <Badge 
+                          variant="default" 
+                          className="bg-primary text-primary-foreground border border-primary-border"
+                          data-testid={`badge-admin-tea-type-${product.id}`}
+                        >
+                          {product.teaType}
+                        </Badge>
+                        {product.effects.map((effect) => (
+                          <Badge 
+                            key={effect} 
+                            variant="outline"
+                            data-testid={`badge-admin-effect-${product.id}-${effect}`}
+                          >
+                            {effect}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
                     <p className="text-muted-foreground" data-testid={`text-admin-product-description-${product.id}`}>
                       {product.description}
                     </p>
                     <p className="text-xl font-semibold text-primary" data-testid={`text-admin-product-price-${product.id}`}>
-                      {product.price} ₽
+                      {product.price} ₽/г
                     </p>
                   </div>
                   <div className="flex flex-col gap-2">
@@ -154,7 +193,7 @@ export default function Admin() {
       </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-serif text-2xl">
               {editingProduct ? "Редактировать товар" : "Добавить товар"}
