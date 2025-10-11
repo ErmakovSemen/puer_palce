@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 // modify the interface with any CRUD methods
@@ -11,6 +11,13 @@ export interface IStorage {
   
   getQuizConfig(): Promise<QuizConfig>;
   updateQuizConfig(config: QuizConfig): Promise<QuizConfig>;
+  
+  // Products
+  getProducts(): Promise<Product[]>;
+  getProduct(id: number): Promise<Product | undefined>;
+  createProduct(product: InsertProduct): Promise<Product>;
+  updateProduct(id: number, product: InsertProduct): Promise<Product | undefined>;
+  deleteProduct(id: number): Promise<boolean>;
 }
 
 const defaultQuizConfig: QuizConfig = {
@@ -58,10 +65,14 @@ const defaultQuizConfig: QuizConfig = {
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private quizConfig: QuizConfig;
+  private products: Map<number, Product>;
+  private productIdCounter: number;
 
   constructor() {
     this.users = new Map();
     this.quizConfig = defaultQuizConfig;
+    this.products = new Map();
+    this.productIdCounter = 1;
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -88,6 +99,34 @@ export class MemStorage implements IStorage {
   async updateQuizConfig(config: QuizConfig): Promise<QuizConfig> {
     this.quizConfig = config;
     return this.quizConfig;
+  }
+
+  async getProducts(): Promise<Product[]> {
+    return Array.from(this.products.values());
+  }
+
+  async getProduct(id: number): Promise<Product | undefined> {
+    return this.products.get(id);
+  }
+
+  async createProduct(insertProduct: InsertProduct): Promise<Product> {
+    const id = this.productIdCounter++;
+    const product: Product = { ...insertProduct, id };
+    this.products.set(id, product);
+    return product;
+  }
+
+  async updateProduct(id: number, insertProduct: InsertProduct): Promise<Product | undefined> {
+    const existing = this.products.get(id);
+    if (!existing) return undefined;
+    
+    const updated: Product = { ...insertProduct, id };
+    this.products.set(id, updated);
+    return updated;
+  }
+
+  async deleteProduct(id: number): Promise<boolean> {
+    return this.products.delete(id);
   }
 }
 

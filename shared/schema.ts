@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -16,6 +16,29 @@ export const insertUserSchema = createInsertSchema(users).pick({
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Products
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  price: real("price").notNull(),
+  description: text("description").notNull(),
+  images: text("images").array().notNull().default(sql`ARRAY[]::text[]`),
+  teaType: text("tea_type").notNull(),
+  effects: text("effects").array().notNull().default(sql`ARRAY[]::text[]`),
+});
+
+export const insertProductSchema = createInsertSchema(products, {
+  name: z.string().min(2, "Название должно содержать минимум 2 символа"),
+  price: z.number().min(0, "Цена должна быть положительной"),
+  description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
+  images: z.array(z.string().url()).min(1, "Добавьте хотя бы одно изображение"),
+  teaType: z.string().min(1, "Выберите тип чая"),
+  effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
+}).omit({ id: true });
+
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type Product = typeof products.$inferSelect;
 
 // Quiz types
 export interface QuizOption {
