@@ -3,9 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { quizConfigSchema, insertProductSchema } from "@shared/schema";
 import multer from "multer";
-import path from "path";
-import { writeFile } from "fs/promises";
 import { randomUUID } from "crypto";
+import { ObjectStorageService } from "./objectStorage";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -105,27 +104,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const publicDir = process.env.PUBLIC_OBJECT_SEARCH_PATHS?.split(',')[0];
-      if (!publicDir) {
-        res.status(500).json({ error: "Object storage not configured" });
-        return;
-      }
-
+      const objectStorageService = new ObjectStorageService();
       const uploadedUrls: string[] = [];
 
       for (const file of req.files) {
-        const ext = path.extname(file.originalname);
-        const filename = `${randomUUID()}${ext}`;
-        const filepath = path.join(publicDir, filename);
-        
-        await writeFile(filepath, file.buffer);
-        uploadedUrls.push(`/public/${filename}`);
+        const ext = file.originalname.split('.').pop();
+        const filename = `${randomUUID()}.${ext}`;
+        const url = await objectStorageService.uploadPublicObject(file.buffer, filename);
+        uploadedUrls.push(url);
       }
 
       res.json({ urls: uploadedUrls });
     } catch (error) {
       console.error("Upload error:", error);
       res.status(500).json({ error: "Failed to upload files" });
+    }
+  });
+
+  // Serve public objects
+  app.get("/public/:filePath(*)", async (req, res) => {
+    const filePath = req.params.filePath;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const file = await objectStorageService.searchPublicObject(filePath);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      objectStorageService.downloadObject(file, res);
+    } catch (error) {
+      console.error("Error searching for public object:", error);
+      return res.status(500).json({ error: "Internal server error" });
     }
   });
 
