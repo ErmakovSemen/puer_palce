@@ -84,8 +84,7 @@ export default function ProductFilters({
         </div>
       </div>
 
-      <div className="w-80">
-        <Label className="mb-2 block text-sm font-medium">Найти чай</Label>
+      <div className="w-80 pt-6">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
