@@ -12,12 +12,17 @@ interface ProductCardProps {
   teaType: string;
   effects: string[];
   onAddToCart: (id: number) => void;
+  onClick: (id: number) => void;
 }
 
-export default function ProductCard({ id, name, pricePerGram, description, image, teaType, effects, onAddToCart }: ProductCardProps) {
+export default function ProductCard({ id, name, pricePerGram, description, image, teaType, effects, onAddToCart, onClick }: ProductCardProps) {
   return (
-    <Card className="overflow-hidden hover-elevate transition-all duration-200" data-testid={`card-product-${id}`}>
-      <div className="aspect-square overflow-hidden">
+    <Card 
+      className="overflow-hidden hover-elevate transition-all duration-200 cursor-pointer" 
+      data-testid={`card-product-${id}`}
+      onClick={() => onClick(id)}
+    >
+      <div className="h-48 overflow-hidden">
         <img 
           src={image} 
           alt={name}
@@ -54,8 +59,11 @@ export default function ProductCard({ id, name, pricePerGram, description, image
             {pricePerGram} ₽/г
           </span>
           <Button
-            onClick={() => onAddToCart(id)}
-            className="bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddToCart(id);
+            }}
+            className="bg-primary text-primary-foreground border border-primary-border"
             data-testid={`button-add-to-cart-${id}`}
           >
             <ShoppingCart className="w-4 h-4 mr-2" />

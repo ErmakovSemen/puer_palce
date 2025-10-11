@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import Header from "@/components/Header";
 import ProductCard from "@/components/ProductCard";
+import ProductDetail from "@/components/ProductDetail";
 import ProductFilters from "@/components/ProductFilters";
 import CartDrawer from "@/components/CartDrawer";
 import CheckoutForm from "@/components/CheckoutForm";
@@ -47,6 +48,7 @@ export default function Home() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
@@ -66,6 +68,8 @@ export default function Home() {
       return matchesSearch && matchesType && matchesEffects;
     });
   }, [searchTerm, selectedType, selectedEffects]);
+
+  const selectedProduct = mockProducts.find(p => p.id === selectedProductId);
 
   const addToCart = (productId: number) => {
     const product = mockProducts.find(p => p.id === productId);
@@ -162,6 +166,7 @@ export default function Home() {
                 key={product.id}
                 {...product}
                 onAddToCart={addToCart}
+                onClick={setSelectedProductId}
               />
             ))}
           </div>
@@ -189,6 +194,24 @@ export default function Home() {
             onSubmit={handleOrderSubmit}
             onCancel={() => setIsCheckoutOpen(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={selectedProductId !== null} onOpenChange={(open) => !open && setSelectedProductId(null)}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Детали товара</DialogTitle>
+            <DialogDescription className="sr-only">
+              Подробная информация о чае
+            </DialogDescription>
+          </DialogHeader>
+          {selectedProduct && (
+            <ProductDetail
+              {...selectedProduct}
+              onAddToCart={addToCart}
+              onClose={() => setSelectedProductId(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
