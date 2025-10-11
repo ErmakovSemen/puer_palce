@@ -86,7 +86,7 @@ export default function ProductFilters({
                 ? "bg-primary text-primary-foreground border-primary-border" 
                 : ""
             }`}
-            onClick={() => onTypeChange(type.id)}
+            onClick={() => onTypeChange(selectedType === type.id ? "all" : type.id)}
             data-testid={`button-filter-${type.id}`}
           >
             # {type.label}
