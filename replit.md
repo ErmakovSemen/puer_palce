@@ -6,6 +6,14 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
 
 ## Recent Changes (October 2025)
 
+### Order Email Notifications via Resend
+- Integrated Resend email service for order notifications
+- Email sent to semen.learning@gmail.com on each order
+- Email includes customer details (name, email, phone, address, comment)
+- Email shows order items with quantities in grams and total price
+- Proper error handling: 502 for email failures, 400 for validation errors
+- Order items correctly converted from cart units (100g) to grams
+
 ### Mobile-Responsive Product Cards
 - Optimized card layout for mobile: 2 cards per row on mobile devices (grid-cols-2)
 - Compact design: reduced image height (h-36), padding (p-3), and gap (gap-3) on mobile
@@ -33,6 +41,32 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
 ### Database Schema
 - Product schema uses `pricePerGram` (real type) for per-gram pricing display
 - Images stored as array of URLs in Object Storage bucket
+
+## Order Processing Flow
+
+The order system processes purchases and sends email notifications:
+
+1. **Cart System**: Items stored as units (1 unit = 100g)
+   - Cart quantity: number of 100g units
+   - Cart price: pricePerGram × 100 (price per unit)
+   
+2. **Order Submission**: Frontend converts units to grams
+   - Transforms `quantity` from units to grams (quantity × 100)
+   - Sends order data to POST /api/orders with customer details
+   
+3. **Backend Validation**: Zod schema validates order
+   - Ensures quantities are positive (min 1 gram)
+   - Validates customer contact information
+   
+4. **Email Notification**: Resend sends formatted email to semen.learning@gmail.com
+   - Line items format: "Tea Name - 200г × 12₽/г = 2400₽"
+   - Includes customer details (name, email, phone, address, comment)
+   - Shows total order price
+
+5. **Error Handling**:
+   - 400: Invalid order data (validation failed)
+   - 502: Email service unavailable
+   - 500: Internal server error
 
 ## User Preferences
 
