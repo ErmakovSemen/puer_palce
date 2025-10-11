@@ -1,10 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { quizConfigSchema, insertProductSchema } from "@shared/schema";
+import { quizConfigSchema, insertProductSchema, orderSchema } from "@shared/schema";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
+import { sendOrderNotification } from "./resend";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -134,6 +135,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching for public object:", error);
       return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Order placement route
+  app.post("/api/orders", async (req, res) => {
+    try {
+      const orderData = orderSchema.parse(req.body);
+      
+      // Send email notification
+      await sendOrderNotification(orderData);
+      
+      res.status(201).json({ 
+        success: true, 
+        message: "Заказ успешно оформлен" 
+      });
+    } catch (error) {
+      console.error("Order error:", error);
+      if (error instanceof Error) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: "Failed to process order" });
+      }
     }
   });
 

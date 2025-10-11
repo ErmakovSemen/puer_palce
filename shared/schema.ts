@@ -86,3 +86,24 @@ export const quizConfigSchema = z.object({
 export type InsertQuizQuestion = z.infer<typeof quizQuestionSchema>;
 export type InsertQuizRecommendationRule = z.infer<typeof quizRecommendationRuleSchema>;
 export type InsertQuizConfig = z.infer<typeof quizConfigSchema>;
+
+// Order schema
+export const orderItemSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  pricePerGram: z.number(),
+  quantity: z.number(),
+});
+
+export const orderSchema = z.object({
+  name: z.string().min(2, "Имя должно содержать минимум 2 символа"),
+  email: z.string().email("Введите корректный email"),
+  phone: z.string().min(10, "Введите корректный номер телефона"),
+  address: z.string().min(10, "Введите полный адрес доставки"),
+  comment: z.string().optional(),
+  items: z.array(orderItemSchema).min(1, "Корзина не может быть пустой"),
+  total: z.number().min(0),
+});
+
+export type OrderItem = z.infer<typeof orderItemSchema>;
+export type Order = z.infer<typeof orderSchema>;
