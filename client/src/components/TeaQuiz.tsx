@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { X } from "lucide-react";
 
 interface TeaQuizProps {
   onClose: () => void;
@@ -87,18 +85,7 @@ export default function TeaQuiz({ onClose, onRecommend }: TeaQuizProps) {
 
   return (
     <div className="relative">
-      <div className="absolute top-0 right-0">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          data-testid="button-close-quiz"
-        >
-          <X className="w-5 h-5" />
-        </Button>
-      </div>
-
-      <div className="pt-8 pb-6">
+      <div className="pt-4 pb-6">
         <div className="flex justify-end mb-6">
           <span className="text-4xl font-bold text-muted-foreground" data-testid="text-quiz-progress">
             {currentQuestion + 1}/{questions.length}
