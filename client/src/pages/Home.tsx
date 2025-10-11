@@ -53,15 +53,12 @@ export default function Home() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isQuizOpen, setIsQuizOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const { toast } = useToast();
 
   const filteredProducts = useMemo(() => {
     return mockProducts.filter((product) => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = selectedType === "all" || product.type === selectedType;
       const matchesEffects = selectedEffects.length === 0 || 
         selectedEffects.some(effect => 
@@ -69,9 +66,9 @@ export default function Home() {
             productEffect.toLowerCase() === effect.toLowerCase()
           )
         );
-      return matchesSearch && matchesType && matchesEffects;
+      return matchesType && matchesEffects;
     });
-  }, [searchTerm, selectedType, selectedEffects]);
+  }, [selectedType, selectedEffects]);
 
   const selectedProduct = mockProducts.find(p => p.id === selectedProductId);
 
@@ -162,8 +159,6 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="mb-6">
           <ProductFilters
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
             selectedType={selectedType}
             onTypeChange={setSelectedType}
             selectedEffects={selectedEffects}

@@ -1,12 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface ProductFiltersProps {
-  searchTerm: string;
-  onSearchChange: (value: string) => void;
   selectedType: string;
   onTypeChange: (type: string) => void;
   selectedEffects: string[];
@@ -31,23 +28,13 @@ const effects = [
 ];
 
 export default function ProductFilters({
-  searchTerm,
-  onSearchChange,
   selectedType,
   onTypeChange,
   selectedEffects,
   onEffectsChange,
   onQuizClick,
 }: ProductFiltersProps) {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (isSearchOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isSearchOpen]);
 
   const toggleEffect = (effectId: string) => {
     if (selectedEffects.includes(effectId)) {
@@ -62,43 +49,13 @@ export default function ProductFilters({
   const secondaryEffects = effects.slice(3);
 
   return (
-    <div className="space-y-3">
-      {/* Первая строка: поиск, квиз, типы чая */}
+    <div className="space-y-2">
+      {/* Первая строка: квиз, типы чая, основные эффекты */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Поиск */}
-        {!isSearchOpen ? (
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setIsSearchOpen(true)}
-            data-testid="button-open-search"
-          >
-            <Search className="w-3.5 h-3.5" />
-          </Button>
-        ) : (
-          <div className="relative w-60">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              ref={inputRef}
-              placeholder="Поиск..."
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-              onBlur={() => {
-                if (!searchTerm) {
-                  setIsSearchOpen(false);
-                }
-              }}
-              className="pl-8 h-7 text-sm"
-              data-testid="input-search"
-            />
-          </div>
-        )}
-
-        {/* Кнопка квиза в стиле Badge */}
+        {/* Кнопка квиза */}
         <Badge
           onClick={onQuizClick}
-          className="cursor-pointer bg-gradient-to-r from-primary to-accent text-primary-foreground border-0 hover-elevate active-elevate-2 gap-1.5"
+          className="cursor-pointer bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover-elevate active-elevate-2 gap-1.5"
           data-testid="button-open-quiz"
         >
           <Sparkles className="w-3.5 h-3.5" />

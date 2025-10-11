@@ -4,6 +4,27 @@
 
 Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application is a full-stack web application featuring a public-facing tea shop with product catalog, shopping cart, and checkout functionality, plus an admin interface for product management. The design emphasizes cultural authenticity, warmth, and a premium user experience inspired by high-end e-commerce platforms.
 
+## Recent Changes (October 2025)
+
+### Filter Redesign
+- Redesigned product filters to match compact catalog-style layout
+- Quiz button ("Подобрать чай") now uses light emerald green background (bg-emerald-100) with Sparkles icon
+- All filter tags styled as Badge components with hashtag symbols (# Все виды, # Шу Пуэр, etc.)
+- Removed search functionality in favor of cleaner filter-only interface
+- Two-row layout: primary filters (types + 3 effects) and collapsible secondary effects row
+- Consistent hover/active elevation effects across all filter badges
+
+### Image Upload System
+- Multi-image upload support using Replit Object Storage
+- ObjectStorageService handles presigned URLs and file management
+- Admin form validation ensures products have at least one image before saving
+- Image carousel with autoplay in product cards
+- Gallery view with thumbnails in product detail modal
+
+### Database Schema
+- Product schema uses `pricePerGram` (real type) for per-gram pricing display
+- Images stored as array of URLs in Object Storage bucket
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
