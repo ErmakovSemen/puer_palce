@@ -21,7 +21,7 @@ export type User = typeof users.$inferSelect;
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  price: real("price").notNull(),
+  pricePerGram: real("price_per_gram").notNull(),
   description: text("description").notNull(),
   images: text("images").array().notNull().default(sql`ARRAY[]::text[]`),
   teaType: text("tea_type").notNull(),
@@ -30,7 +30,7 @@ export const products = pgTable("products", {
 
 export const insertProductSchema = createInsertSchema(products, {
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
-  price: z.number().min(0, "Цена должна быть положительной"),
+  pricePerGram: z.number().min(0, "Цена должна быть положительной"),
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
   images: z.array(z.string().url()).min(1, "Добавьте хотя бы одно изображение"),
   teaType: z.string().min(1, "Выберите тип чая"),

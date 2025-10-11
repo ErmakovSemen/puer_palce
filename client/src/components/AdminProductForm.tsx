@@ -28,7 +28,7 @@ import { useState } from "react";
 
 const productSchema = z.object({
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
-  price: z.number().min(0, "Цена должна быть положительной"),
+  pricePerGram: z.number().min(0, "Цена должна быть положительной"),
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
   images: z.array(z.string().url()).min(1, "Добавьте хотя бы одно изображение"),
   teaType: z.string().min(1, "Выберите тип чая"),
@@ -75,7 +75,7 @@ export default function AdminProductForm({
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: defaultValues?.name || "",
-      price: defaultValues?.price || 0,
+      pricePerGram: defaultValues?.pricePerGram || 0,
       description: defaultValues?.description || "",
       images: defaultValues?.images || [],
       teaType: defaultValues?.teaType || "",
@@ -145,7 +145,7 @@ export default function AdminProductForm({
 
         <FormField
           control={form.control}
-          name="price"
+          name="pricePerGram"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Цена за грамм (₽/г)</FormLabel>
@@ -314,7 +314,7 @@ export default function AdminProductForm({
           <Button
             type="submit"
             className="flex-1 bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
-            disabled={isSubmitting || isUploading}
+            disabled={isSubmitting || isUploading || form.watch('images').length === 0}
             data-testid="button-save-product"
           >
             {isSubmitting ? "Сохранение..." : "Сохранить"}
