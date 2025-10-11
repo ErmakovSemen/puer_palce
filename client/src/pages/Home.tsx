@@ -5,6 +5,7 @@ import ProductDetail from "@/components/ProductDetail";
 import ProductFilters from "@/components/ProductFilters";
 import CartDrawer from "@/components/CartDrawer";
 import CheckoutForm from "@/components/CheckoutForm";
+import TeaQuiz from "@/components/TeaQuiz";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // todo: remove mock functionality
@@ -49,6 +52,7 @@ export default function Home() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
+  const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
@@ -128,6 +132,24 @@ export default function Home() {
     setIsCheckoutOpen(false);
   };
 
+  const handleQuizRecommend = (teaType: string) => {
+    // Устанавливаем фильтр по типу чая
+    const typeMap: { [key: string]: string } = {
+      "Шу Пуэр": "shu",
+      "Шен Пуэр": "shen",
+      "Габа": "shen",
+      "Красный": "aged",
+    };
+    
+    const typeValue = typeMap[teaType] || "all";
+    setSelectedType(typeValue);
+    
+    toast({
+      title: "Подбор завершён!",
+      description: `Мы рекомендуем вам ${teaType}`,
+    });
+  };
+
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
@@ -138,6 +160,17 @@ export default function Home() {
       />
       
       <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="mb-6">
+          <Button
+            onClick={() => setIsQuizOpen(true)}
+            className="w-full h-auto py-4 text-lg font-semibold bg-gradient-to-r from-green-400 via-purple-400 to-yellow-400 hover:from-green-500 hover:via-purple-500 hover:to-yellow-500 text-black border-0"
+            data-testid="button-open-quiz"
+          >
+            <Sparkles className="w-5 h-5 mr-2" />
+            Подобрать чай за минуту
+          </Button>
+        </div>
+
         <div className="flex items-start justify-between gap-6 mb-6">
           <ProductFilters
             searchTerm={searchTerm}
@@ -212,6 +245,21 @@ export default function Home() {
               onClose={() => setSelectedProductId(null)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isQuizOpen} onOpenChange={setIsQuizOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Подбор чая</DialogTitle>
+            <DialogDescription className="sr-only">
+              Ответьте на 3 вопроса, чтобы мы подобрали для вас идеальный чай
+            </DialogDescription>
+          </DialogHeader>
+          <TeaQuiz
+            onClose={() => setIsQuizOpen(false)}
+            onRecommend={handleQuizRecommend}
+          />
         </DialogContent>
       </Dialog>
     </div>
