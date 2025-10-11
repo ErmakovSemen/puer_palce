@@ -91,8 +91,8 @@ export type InsertQuizConfig = z.infer<typeof quizConfigSchema>;
 export const orderItemSchema = z.object({
   id: z.number(),
   name: z.string(),
-  pricePerGram: z.number(),
-  quantity: z.number(),
+  pricePerGram: z.number().min(0),
+  quantity: z.number().min(1, "Количество должно быть больше 0"), // quantity in grams
 });
 
 export const orderSchema = z.object({

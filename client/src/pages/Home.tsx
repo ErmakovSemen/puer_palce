@@ -153,7 +153,7 @@ export default function Home() {
         id: item.id,
         name: item.name,
         pricePerGram: product?.pricePerGram || 0,
-        quantity: item.quantity, // This is quantity in grams (100g increments)
+        quantity: item.quantity * 100, // Convert units to grams (each unit is 100g)
       };
     });
 

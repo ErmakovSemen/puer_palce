@@ -62,7 +62,11 @@ interface OrderData {
 }
 
 export async function sendOrderNotification(orderData: OrderData) {
+  console.log('[Resend] Preparing to send order notification for:', orderData.name);
+  console.log('[Resend] Order items:', orderData.items.map(i => `${i.name} - ${i.quantity}g`).join(', '));
+  
   const { client, fromEmail } = await getUncachableResendClient();
+  console.log('[Resend] Client initialized with from email:', fromEmail);
   
   // Format items list
   const itemsList = orderData.items.map(item => 
@@ -87,6 +91,7 @@ export async function sendOrderNotification(orderData: OrderData) {
     <h3>Итого: ${orderData.total}₽</h3>
   `;
 
+  console.log('[Resend] Sending email to: semen.learning@gmail.com');
   const result = await client.emails.send({
     from: fromEmail,
     to: 'semen.learning@gmail.com',
@@ -94,5 +99,6 @@ export async function sendOrderNotification(orderData: OrderData) {
     html: emailHtml,
   });
 
+  console.log('[Resend] Email sent successfully. Result:', result);
   return result;
 }

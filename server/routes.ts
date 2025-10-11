@@ -141,21 +141,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Order placement route
   app.post("/api/orders", async (req, res) => {
     try {
+      console.log("[Order] Received new order request");
       const orderData = orderSchema.parse(req.body);
+      console.log("[Order] Order validated:", {
+        customer: orderData.name,
+        itemCount: orderData.items.length,
+        total: orderData.total
+      });
       
       // Send email notification
-      await sendOrderNotification(orderData);
+      try {
+        await sendOrderNotification(orderData);
+        console.log("[Order] Email notification sent successfully");
+      } catch (emailError) {
+        console.error("[Order] Email sending failed:", emailError);
+        // Return 502 for external service failures
+        res.status(502).json({ error: "Не удалось отправить уведомление. Попробуйте позже." });
+        return;
+      }
       
       res.status(201).json({ 
         success: true, 
         message: "Заказ успешно оформлен" 
       });
     } catch (error) {
-      console.error("Order error:", error);
-      if (error instanceof Error) {
-        res.status(400).json({ error: error.message });
+      console.error("[Order] Order processing error:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        res.status(400).json({ error: "Неверные данные заказа" });
       } else {
-        res.status(500).json({ error: "Failed to process order" });
+        res.status(500).json({ error: "Ошибка обработки заказа" });
       }
     }
   });
