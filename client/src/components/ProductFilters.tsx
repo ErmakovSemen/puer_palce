@@ -65,16 +65,15 @@ export default function ProductFilters({
     <div className="space-y-3">
       {/* Первая строка: квиз, типы чая, поиск */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Кнопка квиза */}
-        <Button
+        {/* Кнопка квиза в стиле Badge */}
+        <Badge
           onClick={onQuizClick}
-          size="sm"
-          className="bg-gradient-to-r from-primary/90 to-accent/90 text-primary-foreground border-0 hover-elevate active-elevate-2"
+          className="cursor-pointer bg-gradient-to-r from-primary to-accent text-primary-foreground border-0 hover-elevate active-elevate-2 gap-1.5"
           data-testid="button-open-quiz"
         >
-          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+          <Sparkles className="w-3.5 h-3.5" />
           Подобрать чай
-        </Button>
+        </Badge>
 
         {/* Типы чая */}
         {teaTypes.map((type) => (
