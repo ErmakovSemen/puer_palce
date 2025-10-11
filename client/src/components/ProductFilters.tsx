@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +37,15 @@ export default function ProductFilters({
   selectedEffects,
   onEffectsChange,
 }: ProductFiltersProps) {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isSearchOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isSearchOpen]);
+
   const toggleEffect = (effectId: string) => {
     if (selectedEffects.includes(effectId)) {
       onEffectsChange(selectedEffects.filter(e => e !== effectId));
@@ -84,17 +94,34 @@ export default function ProductFilters({
         </div>
       </div>
 
-      <div className="w-80 pt-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Поиск по названию..."
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-10"
-            data-testid="input-search"
-          />
-        </div>
+      <div className="pt-6">
+        {!isSearchOpen ? (
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsSearchOpen(true)}
+            data-testid="button-open-search"
+          >
+            <Search className="w-4 h-4" />
+          </Button>
+        ) : (
+          <div className="relative w-80">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              placeholder="Поиск по названию..."
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onBlur={() => {
+                if (!searchTerm) {
+                  setIsSearchOpen(false);
+                }
+              }}
+              className="pl-10"
+              data-testid="input-search"
+            />
+          </div>
+        )}
       </div>
     </div>
   );
