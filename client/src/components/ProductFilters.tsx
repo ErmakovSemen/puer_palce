@@ -63,8 +63,38 @@ export default function ProductFilters({
 
   return (
     <div className="space-y-3">
-      {/* Первая строка: квиз, типы чая, поиск */}
+      {/* Первая строка: поиск, квиз, типы чая */}
       <div className="flex items-center gap-2 flex-wrap">
+        {/* Поиск */}
+        {!isSearchOpen ? (
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setIsSearchOpen(true)}
+            data-testid="button-open-search"
+          >
+            <Search className="w-3.5 h-3.5" />
+          </Button>
+        ) : (
+          <div className="relative w-60">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              placeholder="Поиск..."
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onBlur={() => {
+                if (!searchTerm) {
+                  setIsSearchOpen(false);
+                }
+              }}
+              className="pl-8 h-7 text-sm"
+              data-testid="input-search"
+            />
+          </div>
+        )}
+
         {/* Кнопка квиза в стиле Badge */}
         <Badge
           onClick={onQuizClick}
@@ -108,36 +138,6 @@ export default function ProductFilters({
             # {effect.label}
           </Badge>
         ))}
-
-        {/* Поиск */}
-        {!isSearchOpen ? (
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setIsSearchOpen(true)}
-            data-testid="button-open-search"
-          >
-            <Search className="w-3.5 h-3.5" />
-          </Button>
-        ) : (
-          <div className="relative w-60">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              ref={inputRef}
-              placeholder="Поиск..."
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-              onBlur={() => {
-                if (!searchTerm) {
-                  setIsSearchOpen(false);
-                }
-              }}
-              className="pl-8 h-7 text-sm"
-              data-testid="input-search"
-            />
-          </div>
-        )}
 
         {/* Кнопка разворачивания */}
         <Button
