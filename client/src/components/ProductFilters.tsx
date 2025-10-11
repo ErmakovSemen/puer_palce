@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Search } from "lucide-react";
+import { Search, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface ProductFiltersProps {
   searchTerm: string;
@@ -11,6 +11,7 @@ interface ProductFiltersProps {
   onTypeChange: (type: string) => void;
   selectedEffects: string[];
   onEffectsChange: (effects: string[]) => void;
+  onQuizClick: () => void;
 }
 
 const teaTypes = [
@@ -36,8 +37,10 @@ export default function ProductFilters({
   onTypeChange,
   selectedEffects,
   onEffectsChange,
+  onQuizClick,
 }: ProductFiltersProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -54,62 +57,76 @@ export default function ProductFilters({
     }
   };
 
+  // Разделим эффекты на основные и дополнительные
+  const primaryEffects = effects.slice(0, 3);
+  const secondaryEffects = effects.slice(3);
+
   return (
-    <div className="flex-1 flex gap-6">
-      <div className="flex-1 space-y-3">
-        <div>
-          <Label className="mb-2 block text-sm font-medium">Тип чая</Label>
-          <div className="flex flex-wrap gap-2">
-            {teaTypes.map((type) => (
-              <Button
-                key={type.id}
-                variant={selectedType === type.id ? "default" : "outline"}
-                size="sm"
-                onClick={() => onTypeChange(type.id)}
-                className={selectedType === type.id ? "bg-primary text-primary-foreground border border-primary-border" : ""}
-                data-testid={`button-filter-${type.id}`}
-              >
-                {type.label}
-              </Button>
-            ))}
-          </div>
-        </div>
+    <div className="space-y-3">
+      {/* Первая строка: квиз, типы чая, поиск */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Кнопка квиза */}
+        <Button
+          onClick={onQuizClick}
+          size="sm"
+          className="bg-gradient-to-r from-primary/90 to-accent/90 text-primary-foreground border-0 hover-elevate active-elevate-2"
+          data-testid="button-open-quiz"
+        >
+          <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+          Подобрать чай
+        </Button>
 
-        <div>
-          <Label className="mb-2 block text-sm font-medium">Эффект</Label>
-          <div className="flex flex-wrap gap-2">
-            {effects.map((effect) => (
-              <Button
-                key={effect.id}
-                variant={selectedEffects.includes(effect.id) ? "default" : "outline"}
-                size="sm"
-                onClick={() => toggleEffect(effect.id)}
-                className={selectedEffects.includes(effect.id) ? "bg-primary text-primary-foreground border border-primary-border" : ""}
-                data-testid={`button-effect-${effect.id}`}
-              >
-                {effect.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-      </div>
+        {/* Типы чая */}
+        {teaTypes.map((type) => (
+          <Badge
+            key={type.id}
+            variant={selectedType === type.id ? "default" : "outline"}
+            className={`cursor-pointer hover-elevate active-elevate-2 ${
+              selectedType === type.id 
+                ? "bg-primary text-primary-foreground border-primary-border" 
+                : ""
+            }`}
+            onClick={() => onTypeChange(type.id)}
+            data-testid={`button-filter-${type.id}`}
+          >
+            # {type.label}
+          </Badge>
+        ))}
 
-      <div className="pt-6">
+        {/* Основные эффекты */}
+        {primaryEffects.map((effect) => (
+          <Badge
+            key={effect.id}
+            variant={selectedEffects.includes(effect.id) ? "default" : "outline"}
+            className={`cursor-pointer hover-elevate active-elevate-2 ${
+              selectedEffects.includes(effect.id)
+                ? "bg-primary text-primary-foreground border-primary-border"
+                : ""
+            }`}
+            onClick={() => toggleEffect(effect.id)}
+            data-testid={`button-effect-${effect.id}`}
+          >
+            # {effect.label}
+          </Badge>
+        ))}
+
+        {/* Поиск */}
         {!isSearchOpen ? (
           <Button
             variant="outline"
             size="icon"
+            className="h-7 w-7"
             onClick={() => setIsSearchOpen(true)}
             data-testid="button-open-search"
           >
-            <Search className="w-4 h-4" />
+            <Search className="w-3.5 h-3.5" />
           </Button>
         ) : (
-          <div className="relative w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <div className="relative w-60">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               ref={inputRef}
-              placeholder="Поиск по названию..."
+              placeholder="Поиск..."
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
               onBlur={() => {
@@ -117,12 +134,48 @@ export default function ProductFilters({
                   setIsSearchOpen(false);
                 }
               }}
-              className="pl-10"
+              className="pl-8 h-7 text-sm"
               data-testid="input-search"
             />
           </div>
         )}
+
+        {/* Кнопка разворачивания */}
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-7 w-7 ml-auto"
+          onClick={() => setIsExpanded(!isExpanded)}
+          data-testid="button-toggle-filters"
+        >
+          {isExpanded ? (
+            <ChevronUp className="w-3.5 h-3.5" />
+          ) : (
+            <ChevronDown className="w-3.5 h-3.5" />
+          )}
+        </Button>
       </div>
+
+      {/* Вторая строка: дополнительные эффекты (collapsible) */}
+      {isExpanded && (
+        <div className="flex items-center gap-2 flex-wrap">
+          {secondaryEffects.map((effect) => (
+            <Badge
+              key={effect.id}
+              variant={selectedEffects.includes(effect.id) ? "default" : "outline"}
+              className={`cursor-pointer hover-elevate active-elevate-2 ${
+                selectedEffects.includes(effect.id)
+                  ? "bg-primary text-primary-foreground border-primary-border"
+                  : ""
+              }`}
+              onClick={() => toggleEffect(effect.id)}
+              data-testid={`button-effect-${effect.id}`}
+            >
+              # {effect.label}
+            </Badge>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -161,17 +161,6 @@ export default function Home() {
       
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="mb-6">
-          <Button
-            onClick={() => setIsQuizOpen(true)}
-            className="w-full h-auto py-4 text-lg font-semibold bg-gradient-to-r from-green-400 via-purple-400 to-yellow-400 hover:from-green-500 hover:via-purple-500 hover:to-yellow-500 text-black border-0"
-            data-testid="button-open-quiz"
-          >
-            <Sparkles className="w-5 h-5 mr-2" />
-            Подобрать чай за минуту
-          </Button>
-        </div>
-
-        <div className="flex items-start justify-between gap-6 mb-6">
           <ProductFilters
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
@@ -179,9 +168,12 @@ export default function Home() {
             onTypeChange={setSelectedType}
             selectedEffects={selectedEffects}
             onEffectsChange={setSelectedEffects}
+            onQuizClick={() => setIsQuizOpen(true)}
           />
-          
-          <p className="text-sm text-muted-foreground whitespace-nowrap pt-2" data-testid="text-products-count">
+        </div>
+
+        <div className="flex items-end justify-end mb-2">
+          <p className="text-sm text-muted-foreground" data-testid="text-products-count">
             Найдено: {filteredProducts.length}
           </p>
         </div>
