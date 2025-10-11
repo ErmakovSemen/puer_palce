@@ -2,13 +2,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart } from "lucide-react";
 import { getTeaTypeColor } from "@/lib/teaColors";
+import { useState } from "react";
 
 interface ProductDetailProps {
   id: number;
   name: string;
   pricePerGram: number;
   description: string;
-  image: string;
+  image?: string;  // Keep for backwards compatibility
+  images?: string[];
   teaType: string;
   effects: string[];
   onAddToCart: (id: number) => void;
@@ -21,23 +23,64 @@ export default function ProductDetail({
   pricePerGram,
   description,
   image,
+  images,
   teaType,
   effects,
   onAddToCart,
   onClose,
 }: ProductDetailProps) {
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  
+  // Use images array if available, otherwise fallback to single image
+  const imageList = images && images.length > 0 ? images : (image ? [image] : []);
+  
   return (
     <div className="space-y-6">
       <div className="grid md:grid-cols-2 gap-6">
-        <div className="overflow-hidden rounded-md">
-          <img
-            src={image}
-            alt={name}
-            className="w-full h-auto object-cover"
-            data-testid={`img-detail-product-${id}`}
-          />
+        {/* Image Gallery */}
+        <div className="space-y-3">
+          {/* Main image */}
+          <div className="overflow-hidden rounded-md">
+            {imageList.length > 0 ? (
+              <img
+                src={imageList[selectedImageIndex]}
+                alt={name}
+                className="w-full h-auto object-cover"
+                data-testid={`img-detail-product-${id}`}
+              />
+            ) : (
+              <div className="w-full h-96 bg-muted flex items-center justify-center rounded-md">
+                <p className="text-muted-foreground">Нет изображения</p>
+              </div>
+            )}
+          </div>
+          
+          {/* Thumbnail strip - only show if multiple images */}
+          {imageList.length > 1 && (
+            <div className="grid grid-cols-5 gap-2">
+              {imageList.map((img, index) => (
+                <button
+                  key={index}
+                  onClick={() => setSelectedImageIndex(index)}
+                  className={`overflow-hidden rounded-md border-2 transition-all ${
+                    index === selectedImageIndex 
+                      ? 'border-primary' 
+                      : 'border-transparent hover:border-muted-foreground/30'
+                  }`}
+                  data-testid={`button-thumbnail-${id}-${index}`}
+                >
+                  <img
+                    src={img}
+                    alt={`${name} ${index + 1}`}
+                    className="w-full h-16 object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
+        {/* Product Info */}
         <div className="space-y-4">
           <div>
             <h2 className="font-serif text-3xl font-bold mb-3" data-testid={`text-detail-name-${id}`}>

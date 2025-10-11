@@ -1,35 +1,111 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
 import { getTeaTypeColor } from "@/lib/teaColors";
+import { useState } from "react";
 
 interface ProductCardProps {
   id: number;
   name: string;
   pricePerGram: number;
   description: string;
-  image: string;
+  image?: string;  // Keep for backwards compatibility
+  images?: string[];
   teaType: string;
   effects: string[];
   onAddToCart: (id: number) => void;
   onClick: (id: number) => void;
 }
 
-export default function ProductCard({ id, name, pricePerGram, description, image, teaType, effects, onAddToCart, onClick }: ProductCardProps) {
+export default function ProductCard({ 
+  id, 
+  name, 
+  pricePerGram, 
+  description, 
+  image,
+  images,
+  teaType, 
+  effects, 
+  onAddToCart, 
+  onClick 
+}: ProductCardProps) {
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
+  // Use images array if available, otherwise fallback to single image
+  const imageList = images && images.length > 0 ? images : (image ? [image] : []);
+  const hasMultipleImages = imageList.length > 1;
+
+  const nextImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev + 1) % imageList.length);
+  };
+
+  const prevImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => (prev - 1 + imageList.length) % imageList.length);
+  };
+
   return (
     <Card 
       className="overflow-hidden hover-elevate transition-all duration-200 cursor-pointer" 
       data-testid={`card-product-${id}`}
       onClick={() => onClick(id)}
     >
-      <div className="h-48 overflow-hidden">
-        <img 
-          src={image} 
-          alt={name}
-          className="w-full h-full object-cover"
-          data-testid={`img-product-${id}`}
-        />
+      <div className="h-48 overflow-hidden relative group">
+        {imageList.length > 0 ? (
+          <>
+            <img 
+              src={imageList[currentImageIndex]} 
+              alt={name}
+              className="w-full h-full object-cover transition-opacity"
+              data-testid={`img-product-${id}`}
+            />
+            
+            {/* Navigation arrows - only show if multiple images */}
+            {hasMultipleImages && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                  onClick={prevImage}
+                  data-testid={`button-prev-image-${id}`}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                  onClick={nextImage}
+                  data-testid={`button-next-image-${id}`}
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+                
+                {/* Dots indicator */}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                  {imageList.map((_, index) => (
+                    <div
+                      key={index}
+                      className={`h-1.5 w-1.5 rounded-full transition-all ${
+                        index === currentImageIndex 
+                          ? 'bg-primary w-3' 
+                          : 'bg-background/60'
+                      }`}
+                      data-testid={`dot-indicator-${id}-${index}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <div className="w-full h-full bg-muted flex items-center justify-center">
+            <p className="text-muted-foreground text-sm">Нет изображения</p>
+          </div>
+        )}
       </div>
       <div className="p-4 space-y-3">
         <div className="space-y-2">
