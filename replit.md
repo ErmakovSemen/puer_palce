@@ -6,11 +6,20 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
 
 ## Recent Changes (October 2025)
 
+### Mobile-Responsive Product Cards
+- Optimized card layout for mobile: 2 cards per row on mobile devices (grid-cols-2)
+- Compact design: reduced image height (h-36), padding (p-3), and gap (gap-3) on mobile
+- Hidden description text on mobile to save space (visible on sm+ breakpoints)
+- Icon-only add-to-cart button on mobile (text visible on sm+)
+- Touch-accessible buttons: min-h-11 (44px) for add-to-cart, h-11 w-11 for carousel navigation
+- Always-visible carousel navigation on mobile (hover-only on desktop)
+- Limited effect badges to 2 on mobile for cleaner appearance
+
 ### Filter Redesign
-- Redesigned product filters to match compact catalog-style layout
-- Quiz button ("Подобрать чай") now uses light emerald green background (bg-emerald-100) with Sparkles icon
+- Added compact search button back to filter row
+- Quiz button ("Подобрать чай") grouped with type filters for visual cohesion
+- Quiz button uses light emerald green background (bg-emerald-100) with Sparkles icon
 - All filter tags styled as Badge components with hashtag symbols (# Все виды, # Шу Пуэр, etc.)
-- Removed search functionality in favor of cleaner filter-only interface
 - Two-row layout: primary filters (types + 3 effects) and collapsible secondary effects row
 - Consistent hover/active elevation effects across all filter badges
 

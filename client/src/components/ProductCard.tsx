@@ -52,7 +52,7 @@ export default function ProductCard({
       data-testid={`card-product-${id}`}
       onClick={() => onClick(id)}
     >
-      <div className="h-48 overflow-hidden relative group">
+      <div className="h-36 sm:h-48 overflow-hidden relative group">
         {imageList.length > 0 ? (
           <>
             <img 
@@ -68,7 +68,7 @@ export default function ProductCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 opacity-0 sm:group-hover:opacity-100 sm:opacity-0 opacity-100 transition-opacity h-11 w-11 sm:h-8 sm:w-8"
                   onClick={prevImage}
                   data-testid={`button-prev-image-${id}`}
                 >
@@ -77,7 +77,7 @@ export default function ProductCard({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90 opacity-0 sm:group-hover:opacity-100 sm:opacity-0 opacity-100 transition-opacity h-11 w-11 sm:h-8 sm:w-8"
                   onClick={nextImage}
                   data-testid={`button-next-image-${id}`}
                 >
@@ -107,9 +107,9 @@ export default function ProductCard({
           </div>
         )}
       </div>
-      <div className="p-4 space-y-3">
-        <div className="space-y-2">
-          <h3 className="font-serif text-xl font-semibold text-foreground" data-testid={`text-product-name-${id}`}>
+      <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
+        <div className="space-y-1.5 sm:space-y-2">
+          <h3 className="font-serif text-base sm:text-xl font-semibold text-foreground line-clamp-2" data-testid={`text-product-name-${id}`}>
             {name}
           </h3>
           <div className="flex flex-wrap gap-1">
@@ -119,7 +119,7 @@ export default function ProductCard({
             >
               {teaType}
             </Badge>
-            {effects.map((effect, index) => (
+            {effects.slice(0, 2).map((effect, index) => (
               <Badge 
                 key={index} 
                 variant="outline" 
@@ -131,11 +131,11 @@ export default function ProductCard({
             ))}
           </div>
         </div>
-        <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2" data-testid={`text-product-description-${id}`}>
+        <p className="hidden sm:block text-muted-foreground text-sm leading-relaxed line-clamp-2" data-testid={`text-product-description-${id}`}>
           {description}
         </p>
-        <div className="flex items-center justify-between gap-4">
-          <span className="text-xl font-semibold text-primary" data-testid={`text-product-price-${id}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-lg sm:text-xl font-semibold text-primary" data-testid={`text-product-price-${id}`}>
             {pricePerGram} ₽/г
           </span>
           <Button
@@ -143,11 +143,11 @@ export default function ProductCard({
               e.stopPropagation();
               onAddToCart(id);
             }}
-            className="bg-primary text-primary-foreground border border-primary-border"
+            className="bg-primary text-primary-foreground border border-primary-border min-h-11"
             data-testid={`button-add-to-cart-${id}`}
           >
-            <ShoppingCart className="w-4 h-4 mr-2" />
-            В корзину
+            <ShoppingCart className="w-4 h-4" />
+            <span className="hidden sm:inline ml-2">В корзину</span>
           </Button>
         </div>
       </div>
