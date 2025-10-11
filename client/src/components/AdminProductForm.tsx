@@ -22,12 +22,15 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Upload, X } from "lucide-react";
+import { useState } from "react";
 
 const productSchema = z.object({
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
   price: z.number().min(0, "Цена должна быть положительной"),
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
-  imageUrl: z.string().url("Введите корректный URL изображения"),
+  images: z.array(z.string().url()).min(1, "Добавьте хотя бы одно изображение"),
   teaType: z.string().min(1, "Выберите тип чая"),
   effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
 });
@@ -66,13 +69,15 @@ export default function AdminProductForm({
   defaultValues,
   isSubmitting = false 
 }: AdminProductFormProps) {
+  const [isUploading, setIsUploading] = useState(false);
+
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: defaultValues?.name || "",
       price: defaultValues?.price || 0,
       description: defaultValues?.description || "",
-      imageUrl: defaultValues?.imageUrl || "",
+      images: defaultValues?.images || [],
       teaType: defaultValues?.teaType || "",
       effects: defaultValues?.effects || [],
     },
@@ -85,6 +90,40 @@ export default function AdminProductForm({
     } else {
       form.setValue("effects", [...currentEffects, effectId]);
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('images', file);
+      });
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const data = await response.json();
+      const currentImages = form.getValues('images');
+      form.setValue('images', [...currentImages, ...data.urls]);
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Ошибка загрузки файлов');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const removeImage = (index: number) => {
+    const currentImages = form.getValues('images');
+    form.setValue('images', currentImages.filter((_, i) => i !== index));
   };
 
   return (
@@ -202,17 +241,60 @@ export default function AdminProductForm({
 
         <FormField
           control={form.control}
-          name="imageUrl"
-          render={({ field }) => (
+          name="images"
+          render={() => (
             <FormItem>
-              <FormLabel>URL изображения</FormLabel>
-              <FormControl>
-                <Input 
-                  placeholder="https://example.com/image.jpg"
-                  {...field}
-                  data-testid="input-product-image"
-                />
-              </FormControl>
+              <FormLabel>Изображения</FormLabel>
+              <FormDescription className="text-sm text-muted-foreground">
+                Загрузите одно или несколько изображений товара
+              </FormDescription>
+              
+              {/* Image previews */}
+              {form.watch('images').length > 0 && (
+                <div className="grid grid-cols-3 gap-4 mt-2">
+                  {form.watch('images').map((url, index) => (
+                    <Card key={index} className="relative p-2">
+                      <img 
+                        src={url} 
+                        alt={`Preview ${index + 1}`} 
+                        className="w-full h-32 object-cover rounded-md"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                        onClick={() => removeImage(index)}
+                        data-testid={`button-remove-image-${index}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* Upload button */}
+              <div className="mt-2">
+                <label htmlFor="image-upload">
+                  <div className="border-2 border-dashed rounded-md p-6 text-center cursor-pointer hover-elevate transition-all">
+                    <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      {isUploading ? "Загрузка..." : "Нажмите для загрузки изображений"}
+                    </p>
+                  </div>
+                  <Input
+                    id="image-upload"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileUpload}
+                    disabled={isUploading}
+                    data-testid="input-product-images"
+                  />
+                </label>
+              </div>
               <FormMessage />
             </FormItem>
           )}
@@ -224,7 +306,7 @@ export default function AdminProductForm({
             variant="outline"
             onClick={onCancel}
             className="flex-1"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isUploading}
             data-testid="button-cancel-product"
           >
             Отмена
@@ -232,7 +314,7 @@ export default function AdminProductForm({
           <Button
             type="submit"
             className="flex-1 bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isUploading}
             data-testid="button-save-product"
           >
             {isSubmitting ? "Сохранение..." : "Сохранить"}
