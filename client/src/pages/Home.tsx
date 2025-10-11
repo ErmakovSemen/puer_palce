@@ -29,13 +29,13 @@ const mockProducts = [
   { id: 2, name: "Шен Пуэр Дикий", pricePerGram: 15, description: "Свежий зеленый пуэр с цветочными нотами", images: [teaImage2, teaImage3], type: "shen", teaType: "Шен Пуэр", effects: ["Концентрирует", "Освежает"] },
   { id: 3, name: "Лао Шу Гу Шу", pricePerGram: 20, description: "Пуэр из древних чайных деревьев", images: [teaImage3, teaImage4, teaImage5], type: "aged", teaType: "Шен Пуэр", effects: ["Успокаивает", "Концентрирует"] },
   { id: 4, name: "Да И Шу Пуэр", pricePerGram: 13, description: "Классический шу пуэр с мягким вкусом", images: [teaImage4], type: "shu", teaType: "Шу Пуэр", effects: ["Бодрит"] },
-  { id: 5, name: "Юннань Габа", pricePerGram: 14, description: "Молодой шен пуэр с освежающим вкусом", images: [teaImage5, teaImage1], type: "shen", teaType: "Габа", effects: ["Успокаивает", "Расслабляет"] },
+  { id: 5, name: "Юннань Габа", pricePerGram: 14, description: "Японский чай с высоким содержанием GABA", images: [teaImage5, teaImage1], type: "gaba", teaType: "Габа", effects: ["Успокаивает", "Расслабляет"] },
   { id: 6, name: "Пуэр Бин Ча", pricePerGram: 18, description: "Прессованный пуэр в форме блина", images: [teaImage1, teaImage2], type: "aged", teaType: "Шу Пуэр", effects: ["Бодрит", "Согревает"] },
   { id: 7, name: "Мэнхай Шу", pricePerGram: 11, description: "Классический шу пуэр из Мэнхая", images: [teaImage2, teaImage3, teaImage4], type: "shu", teaType: "Шу Пуэр", effects: ["Бодрит"] },
   { id: 8, name: "Иу Шен", pricePerGram: 19, description: "Элитный шен пуэр из региона Иу", images: [teaImage3], type: "shen", teaType: "Шен Пуэр", effects: ["Концентрирует", "Освежает"] },
   { id: 9, name: "Красный Пуэр", pricePerGram: 22, description: "Премиальный красный пуэр из Банчжана", images: [teaImage4, teaImage5], type: "aged", teaType: "Красный", effects: ["Бодрит", "Согревает", "Тонизирует"] },
   { id: 10, name: "Булан Шен", pricePerGram: 16, description: "Горный шен пуэр с насыщенным вкусом", images: [teaImage5, teaImage1, teaImage2], type: "shen", teaType: "Шен Пуэр", effects: ["Концентрирует"] },
-  { id: 11, name: "Габа Алишань", pricePerGram: 12.5, description: "Туо ча классической формы", images: [teaImage1], type: "shu", teaType: "Габа", effects: ["Успокаивает", "Расслабляет"] },
+  { id: 11, name: "Габа Алишань", pricePerGram: 12.5, description: "Тайваньский чай с успокаивающим эффектом", images: [teaImage1], type: "gaba", teaType: "Габа", effects: ["Успокаивает", "Расслабляет"] },
   { id: 12, name: "Гу Шу Ча", pricePerGram: 25, description: "Чай с древних деревьев премиум класса", images: [teaImage2, teaImage4, teaImage5], type: "aged", teaType: "Шен Пуэр", effects: ["Успокаивает", "Концентрирует", "Медитативный"] },
 ];
 
@@ -53,12 +53,15 @@ export default function Home() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isQuizOpen, setIsQuizOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const { toast } = useToast();
 
   const filteredProducts = useMemo(() => {
     return mockProducts.filter((product) => {
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = selectedType === "all" || product.type === selectedType;
       const matchesEffects = selectedEffects.length === 0 || 
         selectedEffects.some(effect => 
@@ -66,9 +69,9 @@ export default function Home() {
             productEffect.toLowerCase() === effect.toLowerCase()
           )
         );
-      return matchesType && matchesEffects;
+      return matchesSearch && matchesType && matchesEffects;
     });
-  }, [selectedType, selectedEffects]);
+  }, [searchTerm, selectedType, selectedEffects]);
 
   const selectedProduct = mockProducts.find(p => p.id === selectedProductId);
 
@@ -134,7 +137,7 @@ export default function Home() {
     const typeMap: { [key: string]: string } = {
       "Шу Пуэр": "shu",
       "Шен Пуэр": "shen",
-      "Габа": "shen",
+      "Габа": "gaba",
       "Красный": "aged",
     };
     
@@ -159,6 +162,8 @@ export default function Home() {
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="mb-6">
           <ProductFilters
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
             selectedType={selectedType}
             onTypeChange={setSelectedType}
             selectedEffects={selectedEffects}
