@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart } from "lucide-react";
+import { getTeaTypeColor } from "@/lib/teaColors";
 
 interface ProductCardProps {
   id: number;
@@ -36,7 +37,10 @@ export default function ProductCard({ id, name, pricePerGram, description, image
             {name}
           </h3>
           <div className="flex flex-wrap gap-1">
-            <Badge variant="secondary" className="text-xs" data-testid={`badge-tea-type-${id}`}>
+            <Badge 
+              className={`text-xs ${getTeaTypeColor(teaType)}`}
+              data-testid={`badge-tea-type-${id}`}
+            >
               {teaType}
             </Badge>
             {effects.map((effect, index) => (

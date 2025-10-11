@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { getTeaTypeColor } from "@/lib/teaColors";
 
 // todo: remove mock functionality
 import teaImage1 from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
@@ -143,8 +144,7 @@ export default function Admin() {
                       </h3>
                       <div className="flex flex-wrap gap-2 mb-2">
                         <Badge 
-                          variant="default" 
-                          className="bg-primary text-primary-foreground border border-primary-border"
+                          className={getTeaTypeColor(product.teaType)}
                           data-testid={`badge-admin-tea-type-${product.id}`}
                         >
                           {product.teaType}
