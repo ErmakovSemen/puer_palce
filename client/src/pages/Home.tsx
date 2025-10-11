@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 // todo: remove mock functionality
 import teaImage1 from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
@@ -122,14 +124,46 @@ export default function Home() {
     setIsCheckoutOpen(true);
   };
 
+  const orderMutation = useMutation({
+    mutationFn: async (orderData: any) => {
+      return await apiRequest("POST", "/api/orders", orderData);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Заказ оформлен!",
+        description: "Мы свяжемся с вами в ближайшее время",
+      });
+      setCartItems([]);
+      setIsCheckoutOpen(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Ошибка при оформлении заказа",
+        description: error.message || "Попробуйте еще раз",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleOrderSubmit = (data: any) => {
-    console.log("Order submitted:", { ...data, items: cartItems });
-    toast({
-      title: "Заказ оформлен!",
-      description: "Мы свяжемся с вами в ближайшее время",
+    // Transform cart items to match order schema
+    const orderItems = cartItems.map(item => {
+      const product = mockProducts.find(p => p.id === item.id);
+      return {
+        id: item.id,
+        name: item.name,
+        pricePerGram: product?.pricePerGram || 0,
+        quantity: item.quantity, // This is quantity in grams (100g increments)
+      };
     });
-    setCartItems([]);
-    setIsCheckoutOpen(false);
+
+    const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    orderMutation.mutate({
+      ...data,
+      items: orderItems,
+      total,
+    });
   };
 
   const handleQuizRecommend = (teaType: string) => {
@@ -218,6 +252,7 @@ export default function Home() {
           <CheckoutForm
             onSubmit={handleOrderSubmit}
             onCancel={() => setIsCheckoutOpen(false)}
+            isSubmitting={orderMutation.isPending}
           />
         </DialogContent>
       </Dialog>

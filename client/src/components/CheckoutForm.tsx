@@ -29,7 +29,7 @@ interface CheckoutFormProps {
   isSubmitting?: boolean;
 }
 
-export default function CheckoutForm({ onSubmit, onCancel, isSubmitting = false }: CheckoutFormProps) {
+export default function CheckoutForm({ onSubmit, onCancel, isSubmitting }: CheckoutFormProps) {
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
