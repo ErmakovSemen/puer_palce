@@ -1,94 +1,74 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
+import type { QuizConfig } from "@shared/schema";
 
 interface TeaQuizProps {
   onClose: () => void;
   onRecommend: (teaType: string) => void;
 }
 
-interface Question {
-  id: number;
-  text: string;
-  options: {
-    label: string;
-    value: string;
-  }[];
-}
-
-const questions: Question[] = [
-  {
-    id: 1,
-    text: "КАКОЙ ЭФФЕКТ ВЫ ХОТИТЕ ПОЛУЧИТЬ?",
-    options: [
-      { label: "Бодрость и энергию", value: "energize" },
-      { label: "Спокойствие", value: "calm" },
-      { label: "Концентрацию", value: "focus" },
-    ],
-  },
-  {
-    id: 2,
-    text: "КАКОЙ ВКУС ВАМ БЛИЖЕ?",
-    options: [
-      { label: "Землистый и глубокий", value: "earthy" },
-      { label: "Свежий и цветочный", value: "fresh" },
-      { label: "Насыщенный выдержанный", value: "aged" },
-    ],
-  },
-  {
-    id: 3,
-    text: "КОГДА ПЛАНИРУЕТЕ ПИТЬ ЧАЙ?",
-    options: [
-      { label: "Утром", value: "morning" },
-      { label: "Днём", value: "day" },
-      { label: "Вечером", value: "evening" },
-    ],
-  },
-];
-
 export default function TeaQuiz({ onClose, onRecommend }: TeaQuizProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<string[]>([]);
+
+  const { data: quizConfig } = useQuery<QuizConfig>({
+    queryKey: ["/api/quiz/config"],
+  });
+
+  if (!quizConfig) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-muted-foreground">Загрузка...</p>
+      </div>
+    );
+  }
 
   const handleAnswer = (value: string) => {
     const newAnswers = [...answers, value];
     setAnswers(newAnswers);
 
-    if (currentQuestion < questions.length - 1) {
+    if (currentQuestion < quizConfig.questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
       // Логика подбора чая на основе ответов
-      const recommendedType = getRecommendation(newAnswers);
+      const recommendedType = getRecommendation(newAnswers, quizConfig);
       onRecommend(recommendedType);
       onClose();
     }
   };
 
-  const getRecommendation = (userAnswers: string[]): string => {
-    const [effect, taste, time] = userAnswers;
-    
-    // Простая логика рекомендаций
-    if (effect === "energize" || effect === "focus") {
-      if (taste === "earthy") return "Шу Пуэр";
-      if (taste === "fresh") return "Шен Пуэр";
-      return "Красный";
+  const getRecommendation = (userAnswers: string[], config: QuizConfig): string => {
+    // Находим правило с наибольшим количеством совпадений
+    let bestMatch = config.rules[0];
+    let maxMatches = 0;
+
+    for (const rule of config.rules) {
+      const matches = rule.conditions.filter(cond => userAnswers.includes(cond)).length;
+      
+      // Правило подходит если:
+      // - все его условия содержатся в ответах
+      // - или это дефолтное правило (пустые условия)
+      const isMatch = rule.conditions.length === 0 || 
+                      (matches > 0 && matches >= rule.conditions.length);
+      
+      if (isMatch && matches > maxMatches) {
+        maxMatches = matches;
+        bestMatch = rule;
+      }
     }
     
-    if (effect === "calm") {
-      if (taste === "fresh") return "Шен Пуэр";
-      return "Габа";
-    }
-    
-    return "Шу Пуэр";
+    return bestMatch.teaType;
   };
 
-  const question = questions[currentQuestion];
+  const question = quizConfig.questions[currentQuestion];
 
   return (
     <div className="relative">
       <div className="pt-4 pb-6">
         <div className="flex justify-end mb-6">
           <span className="text-4xl font-bold text-muted-foreground" data-testid="text-quiz-progress">
-            {currentQuestion + 1}/{questions.length}
+            {currentQuestion + 1}/{quizConfig.questions.length}
           </span>
         </div>
 

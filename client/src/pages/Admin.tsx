@@ -1,9 +1,12 @@
 import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import AdminProductForm from "@/components/AdminProductForm";
+import QuizConfigEditor from "@/components/QuizConfigEditor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +17,8 @@ import {
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getTeaTypeColor } from "@/lib/teaColors";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { QuizConfig } from "@shared/schema";
 
 // todo: remove mock functionality
 import teaImage1 from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
@@ -54,6 +59,32 @@ export default function Admin() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const { toast } = useToast();
+
+  // Quiz config
+  const { data: quizConfig } = useQuery<QuizConfig>({
+    queryKey: ["/api/quiz/config"],
+  });
+
+  const updateQuizMutation = useMutation({
+    mutationFn: async (config: QuizConfig) => {
+      const response = await fetch("/api/quiz/config", {
+        method: "PUT",
+        body: JSON.stringify(config),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      if (!response.ok) throw new Error("Failed to update quiz config");
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quiz/config"] });
+      toast({
+        title: "Конфигурация сохранена",
+        description: "Настройки квиза успешно обновлены",
+      });
+    },
+  });
 
   const handleAddProduct = () => {
     setEditingProduct(null);
@@ -106,29 +137,38 @@ export default function Admin() {
       />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="font-serif text-4xl font-bold" data-testid="text-admin-title">
-            Управление товарами
-          </h1>
-          <Button
-            onClick={handleAddProduct}
-            className="bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
-            data-testid="button-add-product"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Добавить товар
-          </Button>
-        </div>
+        <h1 className="font-serif text-4xl font-bold mb-8" data-testid="text-admin-title">
+          Панель управления
+        </h1>
 
-        <div className="space-y-4">
-          {products.length === 0 ? (
-            <Card className="p-8 text-center">
-              <p className="text-muted-foreground" data-testid="text-no-products">
-                Нет товаров. Добавьте первый товар.
-              </p>
-            </Card>
-          ) : (
-            products.map((product) => (
+        <Tabs defaultValue="products">
+          <TabsList className="grid w-full max-w-md grid-cols-2 mb-8">
+            <TabsTrigger value="products" data-testid="tab-products">Товары</TabsTrigger>
+            <TabsTrigger value="quiz" data-testid="tab-quiz">Квиз подбора</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="products">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-serif text-2xl font-semibold">Управление товарами</h2>
+              <Button
+                onClick={handleAddProduct}
+                className="bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
+                data-testid="button-add-product"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Добавить товар
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {products.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <p className="text-muted-foreground" data-testid="text-no-products">
+                    Нет товаров. Добавьте первый товар.
+                  </p>
+                </Card>
+              ) : (
+                products.map((product) => (
               <Card key={product.id} className="p-6" data-testid={`admin-product-${product.id}`}>
                 <div className="flex gap-6">
                   <img
@@ -187,9 +227,24 @@ export default function Admin() {
                   </div>
                 </div>
               </Card>
-            ))
-          )}
-        </div>
+                ))
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="quiz">
+            {quizConfig ? (
+              <QuizConfigEditor
+                config={quizConfig}
+                onSave={(config) => updateQuizMutation.mutate(config)}
+              />
+            ) : (
+              <Card className="p-8 text-center">
+                <p className="text-muted-foreground">Загрузка конфигурации квиза...</p>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
