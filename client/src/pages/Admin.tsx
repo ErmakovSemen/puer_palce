@@ -73,12 +73,14 @@ export default function Admin() {
   // Products
   const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
     queryKey: ["/api/products"],
+    queryFn: () => adminFetch("/api/products"),
     enabled: !!adminPassword,
   });
 
   // Quiz config
   const { data: quizConfig } = useQuery<QuizConfig>({
     queryKey: ["/api/quiz/config"],
+    queryFn: () => adminFetch("/api/quiz/config"),
     enabled: !!adminPassword,
   });
 
