@@ -27,6 +27,12 @@ function requireAdminAuth(req: any, res: any, next: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Admin auth verification endpoint
+  app.post("/api/auth/verify", requireAdminAuth, async (_req, res) => {
+    // If middleware passes, password is correct
+    res.json({ valid: true });
+  });
+
   // Quiz config routes
   app.get("/api/quiz/config", async (_req, res) => {
     try {

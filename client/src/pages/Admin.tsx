@@ -31,12 +31,42 @@ export default function Admin() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const { toast } = useToast();
 
-  // Check password
-  const handleLogin = (e: React.FormEvent) => {
+  // Check password by verifying with backend
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    sessionStorage.setItem("adminPassword", passwordInput);
-    setAdminPassword(passwordInput);
-    setPasswordInput("");
+    
+    try {
+      const response = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: {
+          "X-Admin-Password": passwordInput,
+        },
+      });
+      
+      if (response.status === 401) {
+        toast({
+          title: "Ошибка",
+          description: "Неверный пароль",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (!response.ok) {
+        throw new Error("Server error");
+      }
+      
+      // Password is correct
+      sessionStorage.setItem("adminPassword", passwordInput);
+      setAdminPassword(passwordInput);
+      setPasswordInput("");
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось проверить пароль",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleLogout = () => {

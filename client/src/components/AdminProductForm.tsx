@@ -115,14 +115,18 @@ export default function AdminProductForm({
         body: formData,
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || 'Upload failed');
+      }
 
       const data = await response.json();
       const currentImages = form.getValues('images');
       form.setValue('images', [...currentImages, ...data.urls]);
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Ошибка загрузки файлов');
+      const errorMessage = error instanceof Error ? error.message : 'Ошибка загрузки файлов';
+      alert(`Ошибка загрузки файлов: ${errorMessage}`);
     } finally {
       setIsUploading(false);
     }
