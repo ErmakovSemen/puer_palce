@@ -137,6 +137,10 @@ export default function AdminProductForm({
     form.setValue('images', currentImages.filter((_, i) => i !== index));
   };
 
+  // Log form errors for debugging
+  console.log('Form errors:', form.formState.errors);
+  console.log('Form values:', form.getValues());
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -166,7 +170,11 @@ export default function AdminProductForm({
                   step="0.1"
                   placeholder="12"
                   {...field}
-                  onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                  value={field.value || ''}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value);
+                    field.onChange(isNaN(value) ? 0 : value);
+                  }}
                   data-testid="input-product-price"
                 />
               </FormControl>
