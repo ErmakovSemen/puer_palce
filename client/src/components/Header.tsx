@@ -1,4 +1,5 @@
 import { ShoppingCart } from "lucide-react";
+import { SiTelegram, SiVk } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import ThemeToggle from "./ThemeToggle";
@@ -22,6 +23,26 @@ export default function Header({ cartItemCount, onCartClick, isAdmin = false }: 
           </Link>
           
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              asChild
+              data-testid="link-telegram"
+            >
+              <a href="https://t.me/puerpub" target="_blank" rel="noopener noreferrer">
+                <SiTelegram className="w-5 h-5" />
+              </a>
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              asChild
+              data-testid="link-vk"
+            >
+              <a href="https://vk.com/puerpab" target="_blank" rel="noopener noreferrer">
+                <SiVk className="w-5 h-5" />
+              </a>
+            </Button>
             {!isAdmin && (
               <Button
                 variant="ghost"

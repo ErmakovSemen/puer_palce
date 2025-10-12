@@ -16,9 +16,11 @@ interface ProductFiltersProps {
 
 const teaTypes = [
   { id: "all", label: "Все виды" },
-  { id: "shu", label: "Шу Пуэр" },
-  { id: "shen", label: "Шен Пуэр" },
-  { id: "aged", label: "Выдержанный" },
+  { id: "Шу Пуэр", label: "Шу Пуэр" },
+  { id: "Шэн Пуэр", label: "Шэн Пуэр" },
+  { id: "Белый Пуэр", label: "Белый Пуэр" },
+  { id: "Красный Пуэр", label: "Красный Пуэр" },
+  { id: "Чёрный Пуэр", label: "Чёрный Пуэр" },
 ];
 
 const effects = [

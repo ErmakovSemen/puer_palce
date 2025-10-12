@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
 import { getTeaTypeColor } from "@/lib/teaColors";
 import { useState } from "react";
+import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
 
 interface ProductCardProps {
   id: number;
@@ -32,8 +33,8 @@ export default function ProductCard({
 }: ProductCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
-  // Use images array if available, otherwise fallback to single image
-  const imageList = images && images.length > 0 ? images : (image ? [image] : []);
+  // Use images array if available, otherwise fallback to single image or default
+  const imageList = images && images.length > 0 ? images : (image ? [image] : [fallbackImage]);
   const hasMultipleImages = imageList.length > 1;
 
   const nextImage = (e: React.MouseEvent) => {

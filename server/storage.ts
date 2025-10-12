@@ -135,6 +135,63 @@ import { users as usersTable, products as productsTable } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 export class DbStorage implements IStorage {
+  async seedInitialProducts(): Promise<void> {
+    const existingProducts = await this.getProducts();
+    
+    if (existingProducts.length === 0) {
+      console.log('Seeding initial products...');
+      
+      const initialProducts: InsertProduct[] = [
+        {
+          name: 'Шу Пуэр Мэнхай 2018',
+          description: 'Классический выдержанный Шу Пуэр из провинции Юньнань. Насыщенный землистый вкус с нотками орехов и древесины. Идеален для ежедневного чаепития.',
+          pricePerGram: 15.50,
+          images: [],
+          teaType: 'Шу Пуэр',
+          effects: ['Бодрит', 'Концентрирует']
+        },
+        {
+          name: 'Шэн Пуэр Дикие деревья',
+          description: 'Редкий Шэн Пуэр с дикорастущих деревьев. Свежий цветочно-медовый аромат с долгим послевкусием. Для истинных ценителей.',
+          pricePerGram: 28.00,
+          images: [],
+          teaType: 'Шэн Пуэр',
+          effects: ['Концентрирует', 'Расслабляет']
+        },
+        {
+          name: 'Белый Пуэр Лунный свет',
+          description: 'Деликатный белый пуэр с мягким сладковатым вкусом. Легкий цветочный аромат успокаивает и гармонизирует.',
+          pricePerGram: 22.50,
+          images: [],
+          teaType: 'Белый Пуэр',
+          effects: ['Успокаивает', 'Расслабляет']
+        },
+        {
+          name: 'Красный Пуэр Императорский',
+          description: 'Премиальный красный пуэр глубокой ферментации. Бархатистый вкус с нотками сухофруктов и специй.',
+          pricePerGram: 35.00,
+          images: [],
+          teaType: 'Красный Пуэр',
+          effects: ['Согревает', 'Тонизирует']
+        },
+        {
+          name: 'Чёрный Пуэр Старые головы',
+          description: 'Насыщенный чёрный пуэр из крупных листьев. Глубокий вкус с оттенками шоколада и карамели.',
+          pricePerGram: 18.75,
+          images: [],
+          teaType: 'Чёрный Пуэр',
+          effects: ['Бодрит', 'Согревает']
+        }
+      ];
+
+      for (const product of initialProducts) {
+        await this.createProduct(product);
+      }
+      
+      console.log(`✓ Seeded ${initialProducts.length} initial products`);
+    }
+  }
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
     return user;
