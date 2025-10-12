@@ -103,8 +103,15 @@ export default function AdminProductForm({
         formData.append('images', file);
       });
 
+      const adminPassword = sessionStorage.getItem('adminPassword');
+      const headers: HeadersInit = {};
+      if (adminPassword) {
+        headers['X-Admin-Password'] = adminPassword;
+      }
+
       const response = await fetch('/api/upload', {
         method: 'POST',
+        headers,
         body: formData,
       });
 

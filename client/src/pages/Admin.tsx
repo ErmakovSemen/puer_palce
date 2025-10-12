@@ -14,74 +14,166 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Plus, Pencil, Trash2, LogOut } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getTeaTypeColor } from "@/lib/teaColors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { QuizConfig } from "@shared/schema";
-
-// todo: remove mock functionality
-import teaImage1 from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
-
-interface Product {
-  id: number;
-  name: string;
-  price: number;
-  description: string;
-  imageUrl: string;
-  teaType: string;
-  effects: string[];
-}
-
-const mockInitialProducts: Product[] = [
-  { 
-    id: 1, 
-    name: "Шу Пуэр Императорский", 
-    price: 12, 
-    description: "Выдержанный темный пуэр с глубоким землистым вкусом и нотками сухофруктов", 
-    imageUrl: teaImage1,
-    teaType: "Шу Пуэр",
-    effects: ["Бодрит", "Согревает"]
-  },
-  { 
-    id: 2, 
-    name: "Шен Пуэр Дикий", 
-    price: 15, 
-    description: "Свежий зеленый пуэр с цветочными нотами и легкой сладостью", 
-    imageUrl: teaImage1,
-    teaType: "Шен Пуэр",
-    effects: ["Концентрирует", "Освежает"]
-  },
-];
+import type { QuizConfig, Product, InsertProduct } from "@shared/schema";
 
 export default function Admin() {
-  const [products, setProducts] = useState<Product[]>(mockInitialProducts);
+  const [adminPassword, setAdminPassword] = useState<string | null>(
+    sessionStorage.getItem("adminPassword")
+  );
+  const [passwordInput, setPasswordInput] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const { toast } = useToast();
 
+  // Check password
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    sessionStorage.setItem("adminPassword", passwordInput);
+    setAdminPassword(passwordInput);
+    setPasswordInput("");
+  };
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("adminPassword");
+    setAdminPassword(null);
+  };
+
+  // Create custom fetch with admin password header
+  const adminFetch = async (url: string, options: RequestInit = {}) => {
+    const headers = new Headers(options.headers);
+    if (adminPassword) {
+      headers.set("X-Admin-Password", adminPassword);
+    }
+    
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (response.status === 401) {
+      // Invalid password
+      handleLogout();
+      throw new Error("Неверный пароль");
+    }
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: "Unknown error" }));
+      throw new Error(error.error || "Request failed");
+    }
+
+    return response.json();
+  };
+
+  // Products
+  const { data: products = [], isLoading: productsLoading } = useQuery<Product[]>({
+    queryKey: ["/api/products"],
+    enabled: !!adminPassword,
+  });
+
   // Quiz config
   const { data: quizConfig } = useQuery<QuizConfig>({
     queryKey: ["/api/quiz/config"],
+    enabled: !!adminPassword,
+  });
+
+  const createProductMutation = useMutation({
+    mutationFn: async (product: InsertProduct) => {
+      return await adminFetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(product),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast({
+        title: "Товар добавлен",
+        description: "Новый товар добавлен в каталог",
+      });
+      setIsFormOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateProductMutation = useMutation({
+    mutationFn: async ({ id, product }: { id: number; product: InsertProduct }) => {
+      return await adminFetch(`/api/products/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(product),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast({
+        title: "Товар обновлен",
+        description: "Изменения сохранены",
+      });
+      setIsFormOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await adminFetch(`/api/products/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      toast({
+        title: "Товар удален",
+        description: "Товар успешно удален из каталога",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const updateQuizMutation = useMutation({
     mutationFn: async (config: QuizConfig) => {
-      const response = await fetch("/api/quiz/config", {
+      return await adminFetch("/api/quiz/config", {
         method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(config),
-        headers: {
-          "Content-Type": "application/json",
-        },
       });
-      if (!response.ok) throw new Error("Failed to update quiz config");
-      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/quiz/config"] });
       toast({
         title: "Конфигурация сохранена",
         description: "Настройки квиза успешно обновлены",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
       });
     },
   });
@@ -97,36 +189,52 @@ export default function Admin() {
   };
 
   const handleDeleteProduct = (id: number) => {
-    setProducts(prev => prev.filter(p => p.id !== id));
-    toast({
-      title: "Товар удален",
-      description: "Товар успешно удален из каталога",
-    });
+    if (confirm("Вы уверены, что хотите удалить этот товар?")) {
+      deleteProductMutation.mutate(id);
+    }
   };
 
   const handleFormSubmit = (data: any) => {
     if (editingProduct) {
-      setProducts(prev =>
-        prev.map(p => (p.id === editingProduct.id ? { ...p, ...data } : p))
-      );
-      toast({
-        title: "Товар обновлен",
-        description: "Изменения сохранены",
-      });
+      updateProductMutation.mutate({ id: editingProduct.id, product: data });
     } else {
-      const newProduct = {
-        id: Math.max(0, ...products.map(p => p.id)) + 1,
-        ...data,
-      };
-      setProducts(prev => [...prev, newProduct]);
-      toast({
-        title: "Товар добавлен",
-        description: "Новый товар добавлен в каталог",
-      });
+      createProductMutation.mutate(data);
     }
-    setIsFormOpen(false);
-    setEditingProduct(null);
   };
+
+  // Login screen
+  if (!adminPassword) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md p-8">
+          <h1 className="font-serif text-3xl font-bold mb-6 text-center">
+            Вход в админ-панель
+          </h1>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <Label htmlFor="password">Пароль</Label>
+              <Input
+                id="password"
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="Введите пароль"
+                required
+                data-testid="input-admin-password"
+              />
+            </div>
+            <Button 
+              type="submit" 
+              className="w-full"
+              data-testid="button-admin-login"
+            >
+              Войти
+            </Button>
+          </form>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -137,9 +245,19 @@ export default function Admin() {
       />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="font-serif text-4xl font-bold mb-8" data-testid="text-admin-title">
-          Панель управления
-        </h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="font-serif text-4xl font-bold" data-testid="text-admin-title">
+            Панель управления
+          </h1>
+          <Button
+            variant="outline"
+            onClick={handleLogout}
+            data-testid="button-admin-logout"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Выйти
+          </Button>
+        </div>
 
         <Tabs defaultValue="products">
           <TabsList className="grid w-full max-w-md grid-cols-2 mb-8">
@@ -160,76 +278,81 @@ export default function Admin() {
               </Button>
             </div>
 
-            <div className="space-y-4">
-              {products.length === 0 ? (
-                <Card className="p-8 text-center">
-                  <p className="text-muted-foreground" data-testid="text-no-products">
-                    Нет товаров. Добавьте первый товар.
-                  </p>
-                </Card>
-              ) : (
-                products.map((product) => (
-              <Card key={product.id} className="p-6" data-testid={`admin-product-${product.id}`}>
-                <div className="flex gap-6">
-                  <img
-                    src={product.imageUrl}
-                    alt={product.name}
-                    className="w-32 h-32 object-cover rounded-md"
-                    data-testid={`img-admin-product-${product.id}`}
-                  />
-                  <div className="flex-1 space-y-3">
-                    <div>
-                      <h3 className="font-serif text-2xl font-semibold mb-2" data-testid={`text-admin-product-name-${product.id}`}>
-                        {product.name}
-                      </h3>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        <Badge 
-                          className={getTeaTypeColor(product.teaType)}
-                          data-testid={`badge-admin-tea-type-${product.id}`}
+            {productsLoading ? (
+              <Card className="p-8 text-center">
+                <p className="text-muted-foreground">Загрузка товаров...</p>
+              </Card>
+            ) : products.length === 0 ? (
+              <Card className="p-8 text-center">
+                <p className="text-muted-foreground" data-testid="text-no-products">
+                  Нет товаров. Добавьте первый товар.
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {products.map((product) => (
+                  <Card key={product.id} className="p-6" data-testid={`admin-product-${product.id}`}>
+                    <div className="flex gap-6">
+                      <img
+                        src={product.images[0]}
+                        alt={product.name}
+                        className="w-32 h-32 object-cover rounded-md"
+                        data-testid={`img-admin-product-${product.id}`}
+                      />
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <h3 className="font-serif text-2xl font-semibold mb-2" data-testid={`text-admin-product-name-${product.id}`}>
+                            {product.name}
+                          </h3>
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            <Badge 
+                              className={getTeaTypeColor(product.teaType)}
+                              data-testid={`badge-admin-tea-type-${product.id}`}
+                            >
+                              {product.teaType}
+                            </Badge>
+                            {product.effects.map((effect) => (
+                              <Badge 
+                                key={effect} 
+                                variant="outline"
+                                data-testid={`badge-admin-effect-${product.id}-${effect}`}
+                              >
+                                {effect}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                        <p className="text-muted-foreground" data-testid={`text-admin-product-description-${product.id}`}>
+                          {product.description}
+                        </p>
+                        <p className="text-xl font-semibold text-primary" data-testid={`text-admin-product-price-${product.id}`}>
+                          {product.pricePerGram} ₽/г
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleEditProduct(product)}
+                          data-testid={`button-edit-product-${product.id}`}
                         >
-                          {product.teaType}
-                        </Badge>
-                        {product.effects.map((effect) => (
-                          <Badge 
-                            key={effect} 
-                            variant="outline"
-                            data-testid={`badge-admin-effect-${product.id}-${effect}`}
-                          >
-                            {effect}
-                          </Badge>
-                        ))}
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleDeleteProduct(product.id)}
+                          data-testid={`button-delete-product-${product.id}`}
+                          disabled={deleteProductMutation.isPending}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
-                    <p className="text-muted-foreground" data-testid={`text-admin-product-description-${product.id}`}>
-                      {product.description}
-                    </p>
-                    <p className="text-xl font-semibold text-primary" data-testid={`text-admin-product-price-${product.id}`}>
-                      {product.price} ₽/г
-                    </p>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleEditProduct(product)}
-                      data-testid={`button-edit-product-${product.id}`}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => handleDeleteProduct(product.id)}
-                      data-testid={`button-delete-product-${product.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-                ))
-              )}
-            </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="quiz">
@@ -266,6 +389,7 @@ export default function Admin() {
               setEditingProduct(null);
             }}
             defaultValues={editingProduct || undefined}
+            isSubmitting={createProductMutation.isPending || updateProductMutation.isPending}
           />
         </DialogContent>
       </Dialog>
