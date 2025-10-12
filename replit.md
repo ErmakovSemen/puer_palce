@@ -6,13 +6,21 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
 
 ## Recent Changes (October 2025)
 
-### Order Email Notifications via Resend
+### Order Email Notifications via Resend ✅
 - Integrated Resend email service for order notifications
-- Email sent to semen.learning@gmail.com on each order
+- **Smart sender selection:**
+  - Uses connector-configured email if it's a verified domain
+  - Auto-fallback to `onboarding@resend.dev` for public domains (gmail, yahoo, etc.) to avoid verification issues
+  - Logs which sender address is being used for transparency
+- Email sent to: **semen.learning@gmail.com** on each order
 - Email includes customer details (name, email, phone, address, comment)
 - Email shows order items with quantities in grams and total price
-- Proper error handling: 502 for email failures, 400 for validation errors
+- **Improved error handling:**
+  - 502 for email service failures with specific error messages
+  - 400 for validation errors
+  - Frontend properly extracts and displays error messages from JSON responses
 - Order items correctly converted from cart units (100g) to grams
+- Production-ready implementation
 
 ### Mobile-Responsive Product Cards
 - Optimized card layout for mobile: 2 cards per row on mobile devices (grid-cols-2)

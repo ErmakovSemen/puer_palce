@@ -38,9 +38,26 @@ async function getCredentials() {
 // Always call this function again to get a fresh client.
 export async function getUncachableResendClient() {
   const credentials = await getCredentials();
+  
+  // Use connector-configured email if it's a verified domain (not gmail/yahoo/etc)
+  // Otherwise fall back to Resend's test email to avoid verification issues
+  const configuredEmail = connectionSettings.settings.from_email;
+  const isPublicDomain = configuredEmail && (
+    configuredEmail.includes('@gmail.') || 
+    configuredEmail.includes('@yahoo.') || 
+    configuredEmail.includes('@hotmail.') ||
+    configuredEmail.includes('@outlook.')
+  );
+  
+  const fromEmail = (configuredEmail && !isPublicDomain) 
+    ? configuredEmail 
+    : 'onboarding@resend.dev';
+  
+  console.log('[Resend] Using from email:', fromEmail);
+  
   return {
     client: new Resend(credentials.apiKey),
-    fromEmail: connectionSettings.settings.from_email
+    fromEmail
   };
 }
 
