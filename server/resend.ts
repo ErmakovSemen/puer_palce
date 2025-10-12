@@ -3,6 +3,18 @@ import { Resend } from 'resend';
 let connectionSettings: any;
 
 async function getCredentials() {
+  // Try direct API key first (for production deployments)
+  const directApiKey = process.env.RESEND_API_KEY;
+  if (directApiKey) {
+    console.log('[Resend] Using direct API key from RESEND_API_KEY');
+    return {
+      apiKey: directApiKey,
+      fromEmail: process.env.RESEND_FROM_EMAIL || null
+    };
+  }
+
+  // Fall back to connector (for development)
+  console.log('[Resend] Attempting to use Resend connector');
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
@@ -11,7 +23,7 @@ async function getCredentials() {
     : null;
 
   if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+    throw new Error('Neither RESEND_API_KEY nor X_REPLIT_TOKEN found. Please set RESEND_API_KEY in deployment secrets.');
   }
 
   connectionSettings = await fetch(
@@ -25,7 +37,7 @@ async function getCredentials() {
   ).then(res => res.json()).then(data => data.items?.[0]);
 
   if (!connectionSettings || (!connectionSettings.settings.api_key)) {
-    throw new Error('Resend not connected');
+    throw new Error('Resend not connected via connector. Please set RESEND_API_KEY in deployment secrets.');
   }
   return {
     apiKey: connectionSettings.settings.api_key, 
@@ -39,9 +51,12 @@ async function getCredentials() {
 export async function getUncachableResendClient() {
   const credentials = await getCredentials();
   
-  // Use connector-configured email if it's a verified domain (not gmail/yahoo/etc)
+  // Get configured email from credentials or connector settings
+  const configuredEmail = credentials.fromEmail || 
+    (connectionSettings?.settings?.from_email);
+  
+  // Use configured email if it's a verified domain (not gmail/yahoo/etc)
   // Otherwise fall back to Resend's test email to avoid verification issues
-  const configuredEmail = connectionSettings.settings.from_email;
   const isPublicDomain = configuredEmail && (
     configuredEmail.includes('@gmail.') || 
     configuredEmail.includes('@yahoo.') || 

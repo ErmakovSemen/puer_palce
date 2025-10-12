@@ -8,6 +8,9 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
 
 ### Order Email Notifications via Resend ✅
 - Integrated Resend email service for order notifications
+- **Dual configuration support:**
+  - **Development:** Uses Resend connector automatically
+  - **Production:** Uses direct API key from deployment secrets (RESEND_API_KEY)
 - **Smart sender selection:**
   - Uses connector-configured email if it's a verified domain
   - Auto-fallback to `onboarding@resend.dev` for public domains (gmail, yahoo, etc.) to avoid verification issues
@@ -20,7 +23,18 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
   - 400 for validation errors
   - Frontend properly extracts and displays error messages from JSON responses
 - Order items correctly converted from cart units (100g) to grams
-- Production-ready implementation
+
+#### Setting up for Production Deployment
+To enable email notifications in production (puerpub.replit.app):
+1. Get your Resend API key from https://resend.com/api-keys
+2. Open "Deployments" tab in your Replit project
+3. Click on your active deployment (puerpub.replit.app)
+4. Find "Secrets" or "Environment Variables" section
+5. Add: `RESEND_API_KEY` = `re_xxxxxxxxxxxxx` (your API key)
+6. (Optional) Add: `RESEND_FROM_EMAIL` = your verified sender email
+7. Redeploy the application
+
+Without these secrets, production deployment cannot send emails.
 
 ### Mobile-Responsive Product Cards
 - Optimized card layout for mobile: 2 cards per row on mobile devices (grid-cols-2)
