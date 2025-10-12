@@ -6,6 +6,19 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
 
 ## Recent Changes (October 2025)
 
+### Database Seeding & Homepage Integration ✅
+- **Automatic product seeding** on first startup if database is empty
+- **5 initial products** seeded automatically via `DbStorage.seedInitialProducts()`:
+  - Шу Пуэр Мэнхай 2018 (15.50₽/г) - Бодрит, Концентрирует
+  - Шэн Пуэр Дикие деревья (28.00₽/г) - Концентрирует, Расслабляет
+  - Белый Пуэр Лунный свет (22.50₽/г) - Успокаивает, Расслабляет
+  - Красный Пуэр Императорский (35.00₽/г) - Согревает, Тонизирует
+  - Чёрный Пуэр Старые головы (18.75₽/г) - Бодрит, Согревает
+- **Homepage now uses live database**: Removed mock products, integrated TanStack Query to fetch from `/api/products`
+- **Filter system updated**: Tea type filters now use actual database values ("Шу Пуэр", "Шэн Пуэр", etc.)
+- **Fallback images**: Products without uploaded images display default tea image
+- **Social media links**: Added Telegram (@puerpub) and VK (https://vk.com/puerpab) icons to header
+
 ### Admin Panel with Authentication ✅
 - **Password-protected admin panel** at `/admin`
 - **Default password:** `admin123` (for development)
