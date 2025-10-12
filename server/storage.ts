@@ -130,4 +130,64 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+import { db } from "./db";
+import { users as usersTable, products as productsTable } from "@shared/schema";
+import { eq } from "drizzle-orm";
+
+export class DbStorage implements IStorage {
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, id));
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.username, username));
+    return user;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(usersTable).values(insertUser).returning();
+    return user;
+  }
+
+  async getQuizConfig(): Promise<QuizConfig> {
+    // For now, return default config (could be stored in DB later)
+    return defaultQuizConfig;
+  }
+
+  async updateQuizConfig(config: QuizConfig): Promise<QuizConfig> {
+    // For now, just return the config (could be persisted in DB later)
+    return config;
+  }
+
+  async getProducts(): Promise<Product[]> {
+    return await db.select().from(productsTable);
+  }
+
+  async getProduct(id: number): Promise<Product | undefined> {
+    const [product] = await db.select().from(productsTable).where(eq(productsTable.id, id));
+    return product;
+  }
+
+  async createProduct(insertProduct: InsertProduct): Promise<Product> {
+    const [product] = await db.insert(productsTable).values(insertProduct).returning();
+    return product;
+  }
+
+  async updateProduct(id: number, insertProduct: InsertProduct): Promise<Product | undefined> {
+    const [product] = await db
+      .update(productsTable)
+      .set(insertProduct)
+      .where(eq(productsTable.id, id))
+      .returning();
+    return product;
+  }
+
+  async deleteProduct(id: number): Promise<boolean> {
+    const result = await db.delete(productsTable).where(eq(productsTable.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+}
+
+// Use database storage instead of memory storage
+export const storage = new DbStorage();
