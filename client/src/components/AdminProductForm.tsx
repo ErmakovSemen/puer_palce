@@ -122,7 +122,11 @@ export default function AdminProductForm({
 
       const data = await response.json();
       const currentImages = form.getValues('images');
-      form.setValue('images', [...currentImages, ...data.urls]);
+      const newImages = [...currentImages, ...data.urls];
+      form.setValue('images', newImages);
+      
+      // Debug: show what was saved
+      alert(`Загружено! URLs: ${JSON.stringify(newImages)}`);
     } catch (error) {
       console.error('Upload error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Ошибка загрузки файлов';
