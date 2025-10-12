@@ -124,9 +124,6 @@ export default function AdminProductForm({
       const currentImages = form.getValues('images');
       const newImages = [...currentImages, ...data.urls];
       form.setValue('images', newImages);
-      
-      // Debug: show what was saved
-      alert(`Загружено! URLs: ${JSON.stringify(newImages)}`);
     } catch (error) {
       console.error('Upload error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Ошибка загрузки файлов';
@@ -140,12 +137,6 @@ export default function AdminProductForm({
     const currentImages = form.getValues('images');
     form.setValue('images', currentImages.filter((_, i) => i !== index));
   };
-
-  // Debug: log form state
-  const images = form.watch('images');
-  console.log('Images array:', images);
-  console.log('Images validation:', images.length > 0 ? 'Valid' : 'Invalid');
-  console.log('All form errors:', form.formState.errors);
 
   return (
     <Form {...form}>
@@ -321,15 +312,6 @@ export default function AdminProductForm({
                 </label>
               </div>
               <FormMessage />
-              
-              {/* Debug: Show validation error */}
-              {form.formState.errors.images && (
-                <div className="mt-2 p-2 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded text-sm">
-                  <strong>Ошибка валидации:</strong> {form.formState.errors.images.message}
-                  <br />
-                  <strong>Текущие изображения:</strong> {JSON.stringify(form.watch('images'))}
-                </div>
-              )}
             </FormItem>
           )}
         />

@@ -32,7 +32,7 @@ export const insertProductSchema = createInsertSchema(products, {
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
   pricePerGram: z.number().min(0, "Цена должна быть положительной"),
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
-  images: z.array(z.string().url()).min(1, "Добавьте хотя бы одно изображение"),
+  images: z.array(z.string().min(1)).min(1, "Добавьте хотя бы одно изображение"),
   teaType: z.string().min(1, "Выберите тип чая"),
   effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
 }).omit({ id: true });
