@@ -137,6 +137,12 @@ export default function AdminProductForm({
     form.setValue('images', currentImages.filter((_, i) => i !== index));
   };
 
+  // Debug: log form state
+  const images = form.watch('images');
+  console.log('Images array:', images);
+  console.log('Images validation:', images.length > 0 ? 'Valid' : 'Invalid');
+  console.log('All form errors:', form.formState.errors);
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
