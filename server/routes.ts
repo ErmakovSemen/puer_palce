@@ -119,24 +119,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Image upload route (protected - only for admin)
   app.post("/api/upload", requireAdminAuth, upload.array("images", 10), async (req, res) => {
     try {
+      console.log("[Upload] Received upload request");
+      
       if (!req.files || !Array.isArray(req.files)) {
+        console.log("[Upload] No files in request");
         res.status(400).json({ error: "No files uploaded" });
         return;
       }
 
+      console.log(`[Upload] Processing ${req.files.length} files`);
       const objectStorageService = new ObjectStorageService();
       const uploadedUrls: string[] = [];
 
       for (const file of req.files) {
         const ext = file.originalname.split('.').pop();
         const filename = `${randomUUID()}.${ext}`;
+        console.log(`[Upload] Uploading file: ${filename}`);
         const url = await objectStorageService.uploadPublicObject(file.buffer, filename);
+        console.log(`[Upload] File uploaded: ${url}`);
         uploadedUrls.push(url);
       }
 
+      console.log(`[Upload] Success! URLs:`, uploadedUrls);
       res.json({ urls: uploadedUrls });
     } catch (error) {
-      console.error("Upload error:", error);
+      console.error("[Upload] Error:", error);
       res.status(500).json({ error: "Failed to upload files" });
     }
   });
