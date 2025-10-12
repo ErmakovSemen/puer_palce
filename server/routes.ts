@@ -13,6 +13,19 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
+// Admin authentication middleware
+function requireAdminAuth(req: any, res: any, next: any) {
+  const adminPassword = process.env.ADMIN_PASSWORD || "admin123"; // Default for development
+  const providedPassword = req.headers["x-admin-password"];
+  
+  if (providedPassword !== adminPassword) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  
+  next();
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Quiz config routes
   app.get("/api/quiz/config", async (_req, res) => {
@@ -24,7 +37,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/quiz/config", async (req, res) => {
+  app.put("/api/quiz/config", requireAdminAuth, async (req, res) => {
     try {
       const config = quizConfigSchema.parse(req.body);
       const updated = await storage.updateQuizConfig(config);
@@ -58,7 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/products", async (req, res) => {
+  app.post("/api/products", requireAdminAuth, async (req, res) => {
     try {
       const product = insertProductSchema.parse(req.body);
       const created = await storage.createProduct(product);
@@ -68,7 +81,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/products/:id", async (req, res) => {
+  app.put("/api/products/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const product = insertProductSchema.parse(req.body);
@@ -83,7 +96,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/products/:id", async (req, res) => {
+  app.delete("/api/products/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const deleted = await storage.deleteProduct(id);
@@ -97,8 +110,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Image upload route
-  app.post("/api/upload", upload.array("images", 10), async (req, res) => {
+  // Image upload route (protected - only for admin)
+  app.post("/api/upload", requireAdminAuth, upload.array("images", 10), async (req, res) => {
     try {
       if (!req.files || !Array.isArray(req.files)) {
         res.status(400).json({ error: "No files uploaded" });
