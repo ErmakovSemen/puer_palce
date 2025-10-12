@@ -6,6 +6,27 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
 
 ## Recent Changes (October 2025)
 
+### Admin Panel with Authentication ✅
+- **Password-protected admin panel** at `/admin`
+- **Default password:** `admin123` (for development)
+- **Production setup:** Set `ADMIN_PASSWORD` environment variable in deployment secrets
+- **Features:**
+  - Full CRUD for products (Create, Read, Update, Delete)
+  - Quiz configuration editor
+  - Image upload with object storage
+  - Products stored in PostgreSQL database
+- **Security:**
+  - All admin routes protected by password middleware
+  - Password stored in sessionStorage (client-side)
+  - API requires X-Admin-Password header for admin operations
+
+### Database-Backed Product Management ✅
+- Products now stored in PostgreSQL instead of memory
+- Full CRUD API: GET, POST, PUT, DELETE `/api/products`
+- DbStorage class with Drizzle ORM
+- Initial products seeded in database
+- Products persist across server restarts
+
 ### Order Email Notifications via Resend ✅
 - Integrated Resend email service for order notifications
 - **Dual configuration support:**
