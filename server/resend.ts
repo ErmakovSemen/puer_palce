@@ -99,6 +99,14 @@ export async function sendOrderNotification(orderData: OrderData) {
     html: emailHtml,
   });
 
-  console.log('[Resend] Email sent successfully. Result:', result);
+  console.log('[Resend] Email send result:', JSON.stringify(result, null, 2));
+  
+  // Check if Resend returned an error
+  if ('error' in result && result.error) {
+    console.error('[Resend] Email sending failed with error:', result.error);
+    throw new Error(`Resend error: ${JSON.stringify(result.error)}`);
+  }
+  
+  console.log('[Resend] Email sent successfully. ID:', result.data?.id);
   return result;
 }
