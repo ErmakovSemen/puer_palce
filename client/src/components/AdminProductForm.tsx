@@ -30,7 +30,7 @@ const productSchema = z.object({
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
   pricePerGram: z.number().min(0, "Цена должна быть положительной"),
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
-  images: z.array(z.string().url()).min(1, "Добавьте хотя бы одно изображение"),
+  images: z.array(z.string().min(1)).min(1, "Добавьте хотя бы одно изображение"),
   teaType: z.string().min(1, "Выберите тип чая"),
   effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
 });
@@ -136,10 +136,6 @@ export default function AdminProductForm({
     const currentImages = form.getValues('images');
     form.setValue('images', currentImages.filter((_, i) => i !== index));
   };
-
-  // Log form errors for debugging
-  console.log('Form errors:', form.formState.errors);
-  console.log('Form values:', form.getValues());
 
   return (
     <Form {...form}>
