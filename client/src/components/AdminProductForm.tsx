@@ -317,6 +317,15 @@ export default function AdminProductForm({
                 </label>
               </div>
               <FormMessage />
+              
+              {/* Debug: Show validation error */}
+              {form.formState.errors.images && (
+                <div className="mt-2 p-2 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded text-sm">
+                  <strong>Ошибка валидации:</strong> {form.formState.errors.images.message}
+                  <br />
+                  <strong>Текущие изображения:</strong> {JSON.stringify(form.watch('images'))}
+                </div>
+              )}
             </FormItem>
           )}
         />
