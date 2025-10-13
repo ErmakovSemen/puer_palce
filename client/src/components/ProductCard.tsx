@@ -150,7 +150,7 @@ export default function ProductCard({
               onAddToCart(id);
             }}
             size="icon"
-            className="bg-primary text-primary-foreground border border-primary-border opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 h-8 w-8"
+            className="bg-black text-white hover:bg-black/90 border-0 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 h-8 w-8"
             data-testid={`button-add-to-cart-${id}`}
           >
             <ShoppingCart className="w-4 h-4" />
