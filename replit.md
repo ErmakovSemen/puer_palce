@@ -29,6 +29,11 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 - **Database Seeding**: Automatic seeding of 5 initial products on first startup if the database is empty.
 - **Filter Redesign**: Dynamic, collapsible filters for tea types and effects, styled as `Badge` components.
 - **Sharp Geometric Design**: Minimal border-radius (0.25rem for general elements, 0 for badges) for a modern, angular aesthetic.
+- **Chinese-Inspired Decorative Elements**:
+  - Tea type badges: Triple-frame effect (black-white-black layers using border + box-shadow inset) with colored backgrounds
+  - Effect badges: Double border (3px double black) with white background and black text
+  - Decorative divider line between filters and products with square corner elements
+  - Complete black & white color scheme (primary color changed from green to black)
 
 ### Order Processing Flow
 
