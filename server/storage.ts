@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 // modify the interface with any CRUD methods
@@ -18,6 +18,10 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   updateProduct(id: number, product: InsertProduct): Promise<Product | undefined>;
   deleteProduct(id: number): Promise<boolean>;
+  
+  // Settings
+  getSettings(): Promise<Settings>;
+  updateSettings(settings: UpdateSettings): Promise<Settings>;
 }
 
 const defaultQuizConfig: QuizConfig = {
@@ -67,12 +71,14 @@ export class MemStorage implements IStorage {
   private quizConfig: QuizConfig;
   private products: Map<number, Product>;
   private productIdCounter: number;
+  private settings: Settings;
 
   constructor() {
     this.users = new Map();
     this.quizConfig = defaultQuizConfig;
     this.products = new Map();
     this.productIdCounter = 1;
+    this.settings = { id: 1, designMode: "classic" };
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -128,13 +134,32 @@ export class MemStorage implements IStorage {
   async deleteProduct(id: number): Promise<boolean> {
     return this.products.delete(id);
   }
+
+  async getSettings(): Promise<Settings> {
+    return this.settings;
+  }
+
+  async updateSettings(updateData: UpdateSettings): Promise<Settings> {
+    this.settings = { ...this.settings, ...updateData };
+    return this.settings;
+  }
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable } from "@shared/schema";
+import { users as usersTable, products as productsTable, settings as settingsTable } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 export class DbStorage implements IStorage {
+  async seedInitialSettings(): Promise<void> {
+    const allSettings = await db.select().from(settingsTable);
+    
+    if (allSettings.length === 0) {
+      console.log('Initializing default settings...');
+      await db.insert(settingsTable).values({ designMode: "classic" });
+      console.log('✓ Default settings initialized');
+    }
+  }
+
   async seedInitialProducts(): Promise<void> {
     const existingProducts = await this.getProducts();
     
@@ -243,6 +268,31 @@ export class DbStorage implements IStorage {
   async deleteProduct(id: number): Promise<boolean> {
     const result = await db.delete(productsTable).where(eq(productsTable.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async getSettings(): Promise<Settings> {
+    const allSettings = await db.select().from(settingsTable);
+    
+    if (allSettings.length === 0) {
+      // If no settings exist, create default
+      const [settings] = await db.insert(settingsTable).values({ designMode: "classic" }).returning();
+      return settings;
+    }
+    
+    return allSettings[0];
+  }
+
+  async updateSettings(updateData: UpdateSettings): Promise<Settings> {
+    // Get current settings or create default
+    const currentSettings = await this.getSettings();
+    
+    const [settings] = await db
+      .update(settingsTable)
+      .set(updateData)
+      .where(eq(settingsTable.id, currentSettings.id))
+      .returning();
+    
+    return settings;
   }
 }
 

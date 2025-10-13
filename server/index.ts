@@ -38,7 +38,10 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Seed initial products if database is empty
+  // Initialize settings and seed initial products if database is empty
+  if ('seedInitialSettings' in storage) {
+    await storage.seedInitialSettings();
+  }
   if ('seedInitialProducts' in storage) {
     await storage.seedInitialProducts();
   }

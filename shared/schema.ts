@@ -87,6 +87,19 @@ export type InsertQuizQuestion = z.infer<typeof quizQuestionSchema>;
 export type InsertQuizRecommendationRule = z.infer<typeof quizRecommendationRuleSchema>;
 export type InsertQuizConfig = z.infer<typeof quizConfigSchema>;
 
+// Site settings
+export const settings = pgTable("settings", {
+  id: serial("id").primaryKey(),
+  designMode: text("design_mode").notNull().default("classic"), // "classic" or "minimalist"
+});
+
+export const updateSettingsSchema = z.object({
+  designMode: z.enum(["classic", "minimalist"]),
+});
+
+export type Settings = typeof settings.$inferSelect;
+export type UpdateSettings = z.infer<typeof updateSettingsSchema>;
+
 // Order schema
 export const orderItemSchema = z.object({
   id: z.number(),

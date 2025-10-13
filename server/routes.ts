@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { quizConfigSchema, insertProductSchema, orderSchema } from "@shared/schema";
+import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema } from "@shared/schema";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
@@ -50,6 +50,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(updated);
     } catch (error) {
       res.status(400).json({ error: "Invalid quiz config" });
+    }
+  });
+
+  // Settings routes
+  app.get("/api/settings", async (_req, res) => {
+    try {
+      const settings = await storage.getSettings();
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get settings" });
+    }
+  });
+
+  app.put("/api/settings", requireAdminAuth, async (req, res) => {
+    try {
+      const settingsData = updateSettingsSchema.parse(req.body);
+      const updated = await storage.updateSettings(settingsData);
+      res.json(updated);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid settings data" });
     }
   });
 
