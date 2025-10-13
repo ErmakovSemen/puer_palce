@@ -117,9 +117,10 @@ export default function ProductCard({
           </h3>
           <div className="flex flex-wrap gap-1">
             <Badge 
-              className="text-xs transition-all duration-300 text-white border-0"
+              className="text-xs transition-all duration-300 text-white border-2 border-black"
               style={{
-                backgroundColor: teaTypeColor
+                backgroundColor: teaTypeColor,
+                borderRadius: '0'
               }}
               data-testid={`badge-tea-type-${id}`}
             >

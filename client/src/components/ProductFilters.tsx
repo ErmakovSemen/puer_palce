@@ -141,6 +141,7 @@ export default function ProductFilters({
                         ? "bg-primary text-primary-foreground border-primary-border" 
                         : "opacity-70 hover:opacity-100"
                     }`}
+                    style={{ borderRadius: '0' }}
                     onClick={() => onTypeChange(selectedType === type.id ? "all" : type.id)}
                     data-testid={`button-filter-${type.id}`}
                   >
@@ -171,6 +172,7 @@ export default function ProductFilters({
                           ? "bg-primary text-primary-foreground border-primary-border"
                           : "opacity-70 hover:opacity-100"
                       }`}
+                      style={{ borderRadius: '0' }}
                       onClick={() => toggleEffect(effect.id)}
                       data-testid={`button-effect-${effect.id}`}
                     >
