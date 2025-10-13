@@ -184,6 +184,13 @@ export default function Home() {
           />
         </div>
 
+        {/* Decorative divider with Chinese meander elements */}
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-2 h-2 border-2 border-black" style={{ borderRadius: 0 }} />
+          <div className="flex-1 h-px bg-black" />
+          <div className="w-2 h-2 border-2 border-black" style={{ borderRadius: 0 }} />
+        </div>
+
         <div className="flex items-end justify-end mb-2">
           <p className="text-sm text-muted-foreground" data-testid="text-products-count">
             Найдено: {filteredProducts.length}

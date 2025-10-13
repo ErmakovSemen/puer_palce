@@ -117,10 +117,11 @@ export default function ProductCard({
           </h3>
           <div className="flex flex-wrap gap-1">
             <Badge 
-              className="text-xs transition-all duration-300 text-white border-2 border-black"
+              className="text-xs transition-all duration-300 text-white border-[3px] border-black"
               style={{
                 backgroundColor: teaTypeColor,
-                borderRadius: '0'
+                borderRadius: '0',
+                boxShadow: 'inset 0 0 0 2px white, inset 0 0 0 4px black'
               }}
               data-testid={`badge-tea-type-${id}`}
             >
@@ -130,8 +131,13 @@ export default function ProductCard({
               <Badge 
                 key={index} 
                 variant="outline" 
-                className="text-xs transition-all duration-300 border-2 border-black"
-                style={{ borderRadius: '0' }}
+                className="text-xs transition-all duration-300"
+                style={{ 
+                  borderRadius: '0',
+                  backgroundColor: 'white',
+                  color: 'black',
+                  border: '3px double black'
+                }}
                 data-testid={`badge-effect-${id}-${index}`}
               >
                 {effect}
