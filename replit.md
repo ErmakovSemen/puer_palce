@@ -6,6 +6,28 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
 
 ## Recent Changes (October 2025)
 
+### Theme System with Minimalist Design ✅
+- **Dual theme support**: Classic (warm tea-inspired) and Minimalist (black & white Chinese ink calligraphy)
+- **Admin theme toggle**: Button in admin panel switches between themes with database persistence
+- **Settings table**: New `settings` table stores design_mode preference ("classic" or "minimalist")
+- **Theme API**: GET/PUT `/api/settings` endpoints with admin authentication
+- **Automatic theme application**: `useDesignMode` hook fetches theme and applies class to body element
+- **Minimalist CSS theme**: 
+  - High contrast black text on white background
+  - Subtle borders and minimal decoration
+  - Color accents (jade/amber) revealed on hover
+  - Smooth transitions (300ms) for interactive elements
+- **Updated ProductCard**:
+  - Description hidden in card preview (visible only in detail modal)
+  - Compact add-to-cart button
+  - Hover effects revealing tea colors
+- **Redesigned ProductFilters**:
+  - Collapsible categories: "Тип чая" (open by default), "Эффекты" (closed by default)
+  - Uses Shadcn Collapsible component
+  - Cleaner visual hierarchy with category labels
+  - Search button expands to full input field
+- **Explicit theme classes**: Body element gets "classic" or "minimalist" class for programmatic theme detection
+
 ### Dynamic Tag Management System ✅
 - **Fully dynamic tea types and effects**: Admins can create new categories directly from the product form
 - **API-driven filters**: Homepage filters automatically update when new tags are added
