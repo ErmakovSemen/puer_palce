@@ -69,7 +69,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const products = await storage.getProducts();
       
       // Extract unique types
-      const types = Array.from(new Set(products.map(p => p.type).filter(Boolean)));
+      const types = Array.from(new Set(products.map(p => p.teaType).filter(Boolean)));
       
       // Extract unique effects
       const effectsSet = new Set<string>();

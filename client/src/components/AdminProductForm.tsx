@@ -23,8 +23,10 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Upload, X } from "lucide-react";
-import { useState } from "react";
+import { Upload, X, Plus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
 
 const productSchema = z.object({
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
@@ -44,25 +46,6 @@ interface AdminProductFormProps {
   isSubmitting?: boolean;
 }
 
-const teaTypes = [
-  { value: "Шу Пуэр", label: "Шу Пуэр" },
-  { value: "Шен Пуэр", label: "Шен Пуэр" },
-  { value: "Габа", label: "Габа" },
-  { value: "Красный", label: "Красный" },
-  { value: "Выдержанный", label: "Выдержанный" },
-];
-
-const availableEffects = [
-  { id: "Бодрит", label: "Бодрит" },
-  { id: "Успокаивает", label: "Успокаивает" },
-  { id: "Концентрирует", label: "Концентрирует" },
-  { id: "Согревает", label: "Согревает" },
-  { id: "Расслабляет", label: "Расслабляет" },
-  { id: "Тонизирует", label: "Тонизирует" },
-  { id: "Освежает", label: "Освежает" },
-  { id: "Медитативный", label: "Медитативный" },
-];
-
 export default function AdminProductForm({ 
   onSubmit, 
   onCancel, 
@@ -70,6 +53,15 @@ export default function AdminProductForm({
   isSubmitting = false 
 }: AdminProductFormProps) {
   const [isUploading, setIsUploading] = useState(false);
+  const [showNewTypeInput, setShowNewTypeInput] = useState(false);
+  const [newType, setNewType] = useState("");
+  const [showNewEffectInput, setShowNewEffectInput] = useState(false);
+  const [newEffect, setNewEffect] = useState("");
+
+  // Fetch available tags from API
+  const { data: tags } = useQuery<{ types: string[], effects: string[] }>({
+    queryKey: ['/api/tags'],
+  });
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -186,20 +178,68 @@ export default function AdminProductForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Тип чая</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger data-testid="select-tea-type">
-                    <SelectValue placeholder="Выберите тип чая" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {teaTypes.map((type) => (
-                    <SelectItem key={type.value} value={type.value} data-testid={`option-tea-type-${type.value}`}>
-                      {type.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {showNewTypeInput ? (
+                <div className="flex gap-2">
+                  <Input
+                    value={newType}
+                    onChange={(e) => setNewType(e.target.value)}
+                    placeholder="Введите новый тип чая"
+                    data-testid="input-new-tea-type"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (newType.trim()) {
+                        field.onChange(newType.trim());
+                        setNewType("");
+                        setShowNewTypeInput(false);
+                      }
+                    }}
+                    data-testid="button-save-new-type"
+                  >
+                    Сохранить
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowNewTypeInput(false);
+                      setNewType("");
+                    }}
+                    data-testid="button-cancel-new-type"
+                  >
+                    Отмена
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-tea-type">
+                        <SelectValue placeholder="Выберите тип чая" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {tags?.types.map((type) => (
+                        <SelectItem key={type} value={type} data-testid={`option-tea-type-${type}`}>
+                          {type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowNewTypeInput(true)}
+                    className="mt-2"
+                    data-testid="button-add-new-type"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Создать новый тип
+                  </Button>
+                </>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -214,24 +254,94 @@ export default function AdminProductForm({
               <FormDescription className="text-sm text-muted-foreground">
                 Выберите один или несколько эффектов
               </FormDescription>
+              
+              {/* Selected effects badges */}
+              {form.watch("effects").length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {form.watch("effects").map((effect) => (
+                    <Badge 
+                      key={effect} 
+                      variant="secondary"
+                      className="cursor-pointer"
+                      onClick={() => toggleEffect(effect)}
+                      data-testid={`badge-effect-${effect}`}
+                    >
+                      {effect}
+                      <X className="h-3 w-3 ml-1" />
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Available effects checkboxes */}
               <div className="grid grid-cols-2 gap-3 mt-2">
-                {availableEffects.map((effect) => (
-                  <div key={effect.id} className="flex items-center space-x-2">
+                {tags?.effects.map((effect) => (
+                  <div key={effect} className="flex items-center space-x-2">
                     <Checkbox
-                      id={effect.id}
-                      checked={form.watch("effects").includes(effect.id)}
-                      onCheckedChange={() => toggleEffect(effect.id)}
-                      data-testid={`checkbox-effect-${effect.id}`}
+                      id={effect}
+                      checked={form.watch("effects").includes(effect)}
+                      onCheckedChange={() => toggleEffect(effect)}
+                      data-testid={`checkbox-effect-${effect}`}
                     />
                     <Label
-                      htmlFor={effect.id}
+                      htmlFor={effect}
                       className="text-sm font-normal cursor-pointer"
                     >
-                      {effect.label}
+                      {effect}
                     </Label>
                   </div>
                 ))}
               </div>
+
+              {/* Add new effect */}
+              {showNewEffectInput ? (
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    value={newEffect}
+                    onChange={(e) => setNewEffect(e.target.value)}
+                    placeholder="Введите новый эффект"
+                    data-testid="input-new-effect"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (newEffect.trim()) {
+                        const currentEffects = form.getValues("effects");
+                        form.setValue("effects", [...currentEffects, newEffect.trim()]);
+                        setNewEffect("");
+                        setShowNewEffectInput(false);
+                      }
+                    }}
+                    data-testid="button-save-new-effect"
+                  >
+                    Добавить
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowNewEffectInput(false);
+                      setNewEffect("");
+                    }}
+                    data-testid="button-cancel-new-effect"
+                  >
+                    Отмена
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowNewEffectInput(true)}
+                  className="mt-2"
+                  data-testid="button-add-new-effect"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Создать новый эффект
+                </Button>
+              )}
+
               <FormMessage />
             </FormItem>
           )}
