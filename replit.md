@@ -6,6 +6,21 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea. The application
 
 ## Recent Changes (October 2025)
 
+### Dynamic Tag Management System ✅
+- **Fully dynamic tea types and effects**: Admins can create new categories directly from the product form
+- **API-driven filters**: Homepage filters automatically update when new tags are added
+- **Inline tag creation**:
+  - Tea type: Select existing OR click "Создать новый тип" → enter name → shown as Badge
+  - Effects: Select existing OR click "Создать новый эффект" → add to product
+- **Real-time synchronization**: 
+  - New tags appear in filters immediately after product save
+  - Cache invalidation ensures fresh data across admin and storefront
+- **Implementation**:
+  - GET `/api/tags` endpoint extracts unique types/effects from all products
+  - AdminProductForm uses Badge-based UI for selected values
+  - ProductFilters fetches tags dynamically via TanStack Query
+  - All product mutations invalidate both `/api/products` and `/api/tags` caches
+
 ### Database Seeding & Homepage Integration ✅
 - **Automatic product seeding** on first startup if database is empty
 - **5 initial products** seeded automatically via `DbStorage.seedInitialProducts()`:

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useQuery } from "@tanstack/react-query";
 
 interface ProductFiltersProps {
   searchTerm: string;
@@ -13,24 +14,6 @@ interface ProductFiltersProps {
   onEffectsChange: (effects: string[]) => void;
   onQuizClick: () => void;
 }
-
-const teaTypes = [
-  { id: "all", label: "Все виды" },
-  { id: "Шу Пуэр", label: "Шу Пуэр" },
-  { id: "Шэн Пуэр", label: "Шэн Пуэр" },
-  { id: "Белый Пуэр", label: "Белый Пуэр" },
-  { id: "Красный Пуэр", label: "Красный Пуэр" },
-  { id: "Чёрный Пуэр", label: "Чёрный Пуэр" },
-];
-
-const effects = [
-  { id: "бодрит", label: "Бодрит" },
-  { id: "успокаивает", label: "Успокаивает" },
-  { id: "концентрирует", label: "Концентрирует" },
-  { id: "согревает", label: "Согревает" },
-  { id: "расслабляет", label: "Расслабляет" },
-  { id: "тонизирует", label: "Тонизирует" },
-];
 
 export default function ProductFilters({
   searchTerm,
@@ -44,6 +27,11 @@ export default function ProductFilters({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch dynamic tags from API
+  const { data: tags, isLoading: isLoadingTags } = useQuery<{ types: string[], effects: string[] }>({
+    queryKey: ['/api/tags'],
+  });
 
   useEffect(() => {
     if (isSearchOpen && inputRef.current) {
@@ -59,9 +47,32 @@ export default function ProductFilters({
     }
   };
 
+  // Build tea types array with "all" option
+  const teaTypes = [
+    { id: "all", label: "Все виды" },
+    ...(tags?.types || []).map(type => ({ id: type, label: type }))
+  ];
+
+  // Build effects array - case-insensitive matching
+  const effectsList = (tags?.effects || []).map(effect => ({
+    id: effect.toLowerCase(),
+    label: effect
+  }));
+
   // Разделим эффекты на основные и дополнительные
-  const primaryEffects = effects.slice(0, 3);
-  const secondaryEffects = effects.slice(3);
+  const primaryEffects = effectsList.slice(0, 3);
+  const secondaryEffects = effectsList.slice(3);
+
+  // Show loading state
+  if (isLoadingTags) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          Загрузка фильтров...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">

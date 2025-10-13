@@ -59,7 +59,7 @@ export default function AdminProductForm({
   const [newEffect, setNewEffect] = useState("");
 
   // Fetch available tags from API
-  const { data: tags } = useQuery<{ types: string[], effects: string[] }>({
+  const { data: tags, isLoading: isLoadingTags } = useQuery<{ types: string[], effects: string[] }>({
     queryKey: ['/api/tags'],
   });
 
@@ -178,7 +178,23 @@ export default function AdminProductForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Тип чая</FormLabel>
-              {showNewTypeInput ? (
+              
+              {field.value ? (
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-base px-3 py-1" data-testid="badge-selected-tea-type">
+                    {field.value}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => field.onChange("")}
+                    data-testid="button-clear-tea-type"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : showNewTypeInput ? (
                 <div className="flex gap-2">
                   <Input
                     value={newType}

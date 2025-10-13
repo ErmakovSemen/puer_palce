@@ -124,6 +124,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
       toast({
         title: "Товар добавлен",
         description: "Новый товар добавлен в каталог",
@@ -149,6 +150,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
       toast({
         title: "Товар обновлен",
         description: "Изменения сохранены",
@@ -172,6 +174,7 @@ export default function Admin() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
       toast({
         title: "Товар удален",
         description: "Товар успешно удален из каталога",
