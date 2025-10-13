@@ -1,9 +1,14 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, Sparkles, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface ProductFiltersProps {
   searchTerm: string;
@@ -25,7 +30,6 @@ export default function ProductFilters({
   onQuizClick,
 }: ProductFiltersProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Fetch dynamic tags from API
@@ -59,10 +63,6 @@ export default function ProductFilters({
     label: effect
   }));
 
-  // Разделим эффекты на основные и дополнительные
-  const primaryEffects = effectsList.slice(0, 3);
-  const secondaryEffects = effectsList.slice(3);
-
   // Show loading state
   if (isLoadingTags) {
     return (
@@ -75,26 +75,26 @@ export default function ProductFilters({
   }
 
   return (
-    <div className="space-y-2">
-      {/* Первая строка: поиск, квиз + типы чая (без gap), основные эффекты */}
-      <div className="flex items-center flex-wrap gap-2">
+    <div className="space-y-4">
+      {/* Поиск и квиз */}
+      <div className="flex items-center gap-2 flex-wrap">
         {/* Поиск */}
         {!isSearchOpen ? (
           <Button
             variant="outline"
-            size="icon"
-            className="h-7 w-7"
+            size="sm"
             onClick={() => setIsSearchOpen(true)}
             data-testid="button-open-search"
           >
-            <Search className="w-3.5 h-3.5" />
+            <Search className="w-4 h-4 mr-2" />
+            Поиск
           </Button>
         ) : (
-          <div className="relative w-60">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <div className="relative flex-1 max-w-xs">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               ref={inputRef}
-              placeholder="Поиск..."
+              placeholder="Поиск чая..."
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
               onBlur={() => {
@@ -102,93 +102,85 @@ export default function ProductFilters({
                   setIsSearchOpen(false);
                 }
               }}
-              className="pl-8 h-7 text-sm"
+              className="pl-9"
               data-testid="input-search"
             />
           </div>
         )}
 
-        {/* Кнопка квиза + типы чая (без пробела между ними) */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge
-            onClick={onQuizClick}
-            className="cursor-pointer bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover-elevate active-elevate-2 gap-1.5 -mr-1"
-            data-testid="button-open-quiz"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Подобрать чай
-          </Badge>
-
-          {teaTypes.map((type) => (
-            <Badge
-              key={type.id}
-              variant={selectedType === type.id ? "default" : "outline"}
-              className={`cursor-pointer hover-elevate active-elevate-2 ${
-                selectedType === type.id 
-                  ? "bg-primary text-primary-foreground border-primary-border" 
-                  : ""
-              }`}
-              onClick={() => onTypeChange(selectedType === type.id ? "all" : type.id)}
-              data-testid={`button-filter-${type.id}`}
-            >
-              # {type.label}
-            </Badge>
-          ))}
-        </div>
-
-        {/* Основные эффекты */}
-        {primaryEffects.map((effect) => (
-          <Badge
-            key={effect.id}
-            variant={selectedEffects.includes(effect.id) ? "default" : "outline"}
-            className={`cursor-pointer hover-elevate active-elevate-2 ${
-              selectedEffects.includes(effect.id)
-                ? "bg-primary text-primary-foreground border-primary-border"
-                : ""
-            }`}
-            onClick={() => toggleEffect(effect.id)}
-            data-testid={`button-effect-${effect.id}`}
-          >
-            # {effect.label}
-          </Badge>
-        ))}
-
-        {/* Кнопка разворачивания */}
-        <Button
-          variant="outline"
-          size="icon"
-          className="h-7 w-7 ml-auto"
-          onClick={() => setIsExpanded(!isExpanded)}
-          data-testid="button-toggle-filters"
+        {/* Квиз */}
+        <Badge
+          onClick={onQuizClick}
+          className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary border-primary/20 hover-elevate active-elevate-2 gap-1.5 transition-all duration-300"
+          data-testid="button-open-quiz"
         >
-          {isExpanded ? (
-            <ChevronUp className="w-3.5 h-3.5" />
-          ) : (
-            <ChevronDown className="w-3.5 h-3.5" />
-          )}
-        </Button>
+          <Sparkles className="w-3.5 h-3.5" />
+          Подобрать чай
+        </Badge>
       </div>
 
-      {/* Вторая строка: дополнительные эффекты (collapsible) */}
-      {isExpanded && (
-        <div className="flex items-center gap-2 flex-wrap">
-          {secondaryEffects.map((effect) => (
-            <Badge
-              key={effect.id}
-              variant={selectedEffects.includes(effect.id) ? "default" : "outline"}
-              className={`cursor-pointer hover-elevate active-elevate-2 ${
-                selectedEffects.includes(effect.id)
-                  ? "bg-primary text-primary-foreground border-primary-border"
-                  : ""
-              }`}
-              onClick={() => toggleEffect(effect.id)}
-              data-testid={`button-effect-${effect.id}`}
-            >
-              # {effect.label}
-            </Badge>
-          ))}
-        </div>
-      )}
+      {/* Категории фильтров */}
+      <div className="space-y-3">
+        {/* Типы чая */}
+        <Collapsible defaultOpen>
+          <div className="space-y-2">
+            <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group">
+              <span>Тип чая</span>
+              <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="flex items-center gap-2 flex-wrap">
+                {teaTypes.map((type) => (
+                  <Badge
+                    key={type.id}
+                    variant={selectedType === type.id ? "default" : "outline"}
+                    className={`cursor-pointer hover-elevate active-elevate-2 transition-all duration-300 ${
+                      selectedType === type.id 
+                        ? "bg-primary text-primary-foreground border-primary-border" 
+                        : "opacity-70 hover:opacity-100"
+                    }`}
+                    onClick={() => onTypeChange(selectedType === type.id ? "all" : type.id)}
+                    data-testid={`button-filter-${type.id}`}
+                  >
+                    {type.label}
+                  </Badge>
+                ))}
+              </div>
+            </CollapsibleContent>
+          </div>
+        </Collapsible>
+
+        {/* Эффекты */}
+        {effectsList.length > 0 && (
+          <Collapsible defaultOpen={false}>
+            <div className="space-y-2">
+              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors group">
+                <span>Эффекты</span>
+                <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {effectsList.map((effect) => (
+                    <Badge
+                      key={effect.id}
+                      variant={selectedEffects.includes(effect.id) ? "default" : "outline"}
+                      className={`cursor-pointer hover-elevate active-elevate-2 transition-all duration-300 ${
+                        selectedEffects.includes(effect.id)
+                          ? "bg-primary text-primary-foreground border-primary-border"
+                          : "opacity-70 hover:opacity-100"
+                      }`}
+                      onClick={() => toggleEffect(effect.id)}
+                      data-testid={`button-effect-${effect.id}`}
+                    >
+                      {effect.label}
+                    </Badge>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        )}
+      </div>
     </div>
   );
 }

@@ -49,7 +49,7 @@ export default function ProductCard({
 
   return (
     <Card 
-      className="overflow-hidden hover-elevate transition-all duration-200 cursor-pointer" 
+      className="overflow-hidden hover-elevate transition-all duration-300 cursor-pointer group/card" 
       data-testid={`card-product-${id}`}
       onClick={() => onClick(id)}
     >
@@ -59,7 +59,7 @@ export default function ProductCard({
             <img 
               src={imageList[currentImageIndex]} 
               alt={name}
-              className="w-full h-full object-cover transition-opacity"
+              className="w-full h-full object-cover transition-all duration-300 group-hover/card:scale-105 group-hover/card:brightness-105"
               data-testid={`img-product-${id}`}
             />
             
@@ -115,7 +115,7 @@ export default function ProductCard({
           </h3>
           <div className="flex flex-wrap gap-1">
             <Badge 
-              className={`text-xs ${getTeaTypeColor(teaType)}`}
+              className={`text-xs transition-all duration-300 ${getTeaTypeColor(teaType)} group-hover/card:opacity-100 opacity-70`}
               data-testid={`badge-tea-type-${id}`}
             >
               {teaType}
@@ -124,7 +124,7 @@ export default function ProductCard({
               <Badge 
                 key={index} 
                 variant="outline" 
-                className="text-xs"
+                className="text-xs transition-all duration-300 group-hover/card:opacity-100 opacity-60"
                 data-testid={`badge-effect-${id}-${index}`}
               >
                 {effect}
@@ -132,11 +132,11 @@ export default function ProductCard({
             ))}
           </div>
         </div>
-        <p className="hidden sm:block text-muted-foreground text-sm leading-relaxed line-clamp-2" data-testid={`text-product-description-${id}`}>
+        <p className="hidden text-muted-foreground text-sm leading-relaxed line-clamp-2" data-testid={`text-product-description-${id}`}>
           {description}
         </p>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-lg sm:text-xl font-semibold text-primary" data-testid={`text-product-price-${id}`}>
+          <span className="text-lg sm:text-xl font-semibold transition-colors duration-300 text-foreground group-hover/card:text-primary" data-testid={`text-product-price-${id}`}>
             {pricePerGram} ₽/г
           </span>
           <Button
@@ -144,7 +144,8 @@ export default function ProductCard({
               e.stopPropagation();
               onAddToCart(id);
             }}
-            className="bg-primary text-primary-foreground border border-primary-border min-h-11"
+            size="sm"
+            className="bg-primary text-primary-foreground border border-primary-border"
             data-testid={`button-add-to-cart-${id}`}
           >
             <ShoppingCart className="w-4 h-4" />
