@@ -25,6 +25,7 @@ export const products = pgTable("products", {
   description: text("description").notNull(),
   images: text("images").array().notNull().default(sql`ARRAY[]::text[]`),
   teaType: text("tea_type").notNull(),
+  teaTypeColor: text("tea_type_color").notNull().default("#8B4513"), // Default brown color
   effects: text("effects").array().notNull().default(sql`ARRAY[]::text[]`),
 });
 
@@ -34,6 +35,7 @@ export const insertProductSchema = createInsertSchema(products, {
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
   images: z.array(z.string().min(1)).min(1, "Добавьте хотя бы одно изображение"),
   teaType: z.string().min(1, "Выберите тип чая"),
+  teaTypeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
   effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
 }).omit({ id: true });
 

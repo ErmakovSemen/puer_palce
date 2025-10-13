@@ -34,6 +34,7 @@ const productSchema = z.object({
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
   images: z.array(z.string().min(1)).min(1, "Добавьте хотя бы одно изображение"),
   teaType: z.string().min(1, "Выберите тип чая"),
+  teaTypeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
   effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
 });
 
@@ -71,6 +72,7 @@ export default function AdminProductForm({
       description: defaultValues?.description || "",
       images: defaultValues?.images || [],
       teaType: defaultValues?.teaType || "",
+      teaTypeColor: defaultValues?.teaTypeColor || "#8B4513",
       effects: defaultValues?.effects || [],
     },
   });
@@ -256,6 +258,44 @@ export default function AdminProductForm({
                   </Button>
                 </>
               )}
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="teaTypeColor"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Цвет тега типа чая</FormLabel>
+              <div className="flex items-center gap-3">
+                <FormControl>
+                  <Input 
+                    type="color"
+                    {...field}
+                    className="w-20 h-10 cursor-pointer"
+                    data-testid="input-tea-type-color"
+                  />
+                </FormControl>
+                <FormControl>
+                  <Input 
+                    type="text"
+                    {...field}
+                    placeholder="#8B4513"
+                    className="font-mono"
+                    data-testid="input-tea-type-color-text"
+                  />
+                </FormControl>
+                <div 
+                  className="w-10 h-10 rounded border border-border"
+                  style={{ backgroundColor: field.value }}
+                  data-testid="preview-tea-type-color"
+                />
+              </div>
+              <FormDescription className="text-sm text-muted-foreground">
+                Цвет будет виден при наведении мыши на карточку товара
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}

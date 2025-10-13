@@ -14,6 +14,7 @@ interface ProductCardProps {
   image?: string;  // Keep for backwards compatibility
   images?: string[];
   teaType: string;
+  teaTypeColor?: string;
   effects: string[];
   onAddToCart: (id: number) => void;
   onClick: (id: number) => void;
@@ -26,7 +27,8 @@ export default function ProductCard({
   description, 
   image,
   images,
-  teaType, 
+  teaType,
+  teaTypeColor = "#8B4513",
   effects, 
   onAddToCart, 
   onClick 
@@ -115,8 +117,23 @@ export default function ProductCard({
           </h3>
           <div className="flex flex-wrap gap-1">
             <Badge 
-              className={`text-xs transition-all duration-300 ${getTeaTypeColor(teaType)} group-hover/card:opacity-100 opacity-70`}
+              className="text-xs transition-all duration-300"
+              style={{
+                backgroundColor: 'transparent',
+                color: 'hsl(var(--muted-foreground))',
+                borderColor: 'hsl(var(--border))'
+              }}
               data-testid={`badge-tea-type-${id}`}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = teaTypeColor;
+                e.currentTarget.style.color = 'white';
+                e.currentTarget.style.borderColor = teaTypeColor;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
+                e.currentTarget.style.borderColor = 'hsl(var(--border))';
+              }}
             >
               {teaType}
             </Badge>
