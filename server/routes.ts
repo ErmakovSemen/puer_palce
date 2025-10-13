@@ -63,6 +63,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all unique tags (types and effects) from products
+  app.get("/api/tags", async (_req, res) => {
+    try {
+      const products = await storage.getProducts();
+      
+      // Extract unique types
+      const types = Array.from(new Set(products.map(p => p.type).filter(Boolean)));
+      
+      // Extract unique effects
+      const effectsSet = new Set<string>();
+      products.forEach(p => {
+        if (p.effects) {
+          p.effects.forEach(effect => effectsSet.add(effect));
+        }
+      });
+      const effects = Array.from(effectsSet);
+      
+      res.json({ types, effects });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get tags" });
+    }
+  });
+
   app.get("/api/products/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
