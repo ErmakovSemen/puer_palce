@@ -122,6 +122,91 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+/* MINIMALIST MODE - Black & White with ink calligraphy aesthetic */
+.minimalist {
+  --button-outline: rgba(0,0,0, .08);
+  --badge-outline: rgba(0,0,0, .04);
+
+  --opaque-button-border-intensity: -5;
+
+  /* Subtle hover effects */
+  --elevate-1: rgba(0,0,0, .02);
+  --elevate-2: rgba(0,0,0, .04);
+
+  /* Pure white background */
+  --background: 0 0% 100%;
+
+  /* Deep black text */
+  --foreground: 0 0% 10%;
+
+  /* Very subtle borders */
+  --border: 0 0% 92%;
+
+  /* Cards barely distinguished from background */
+  --card: 0 0% 98%;
+
+  --card-foreground: 0 0% 10%;
+
+  --card-border: 0 0% 90%;
+
+  --sidebar: 0 0% 97%;
+
+  --sidebar-foreground: 0 0% 15%;
+
+  --sidebar-border: 0 0% 88%;
+
+  /* Jade green accent (tea color) - only shows on hover */
+  --sidebar-primary: 150 35% 45%;
+
+  --sidebar-primary-foreground: 0 0% 100%;
+
+  --sidebar-accent: 0 0% 94%;
+
+  --sidebar-accent-foreground: 0 0% 15%;
+
+  --sidebar-ring: 150 35% 45%;
+
+  --popover: 0 0% 98%;
+
+  --popover-foreground: 0 0% 15%;
+
+  --popover-border: 0 0% 88%;
+
+  /* Amber/jade tea colors for accents */
+  --primary: 150 35% 45%;
+
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 0 0% 95%;
+
+  --secondary-foreground: 0 0% 15%;
+
+  --muted: 0 0% 94%;
+
+  --muted-foreground: 0 0% 50%;
+
+  --accent: 0 0% 96%;
+
+  --accent-foreground: 0 0% 15%;
+
+  --destructive: 0 65% 45%;
+
+  --destructive-foreground: 0 0% 100%;
+
+  --input: 0 0% 88%;
+  --ring: 150 35% 45%;
+  
+  /* Minimal shadows - ink brush effect */
+  --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.03);
+  --shadow-xs: 0px 1px 3px 0px hsl(0 0% 0% / 0.04);
+  --shadow-sm: 0px 2px 4px 0px hsl(0 0% 0% / 0.03), 0px 1px 2px -1px hsl(0 0% 0% / 0.04);
+  --shadow: 0px 4px 6px -1px hsl(0 0% 0% / 0.04), 0px 2px 4px -2px hsl(0 0% 0% / 0.03);
+  --shadow-md: 0px 6px 12px -2px hsl(0 0% 0% / 0.05), 0px 3px 6px -3px hsl(0 0% 0% / 0.04);
+  --shadow-lg: 0px 10px 20px -3px hsl(0 0% 0% / 0.06), 0px 4px 8px -4px hsl(0 0% 0% / 0.04);
+  --shadow-xl: 0px 20px 25px -5px hsl(0 0% 0% / 0.07), 0px 8px 10px -6px hsl(0 0% 0% / 0.04);
+  --shadow-2xl: 0px 25px 50px -12px hsl(0 0% 0% / 0.08);
+}
+
 .dark {
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);

@@ -16,11 +16,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, LogOut } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Palette } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getTeaTypeColor } from "@/lib/teaColors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { QuizConfig, Product, InsertProduct } from "@shared/schema";
+import type { QuizConfig, Product, InsertProduct, Settings, UpdateSettings } from "@shared/schema";
 
 export default function Admin() {
   const [adminPassword, setAdminPassword] = useState<string | null>(
@@ -111,6 +111,12 @@ export default function Admin() {
   const { data: quizConfig } = useQuery<QuizConfig>({
     queryKey: ["/api/quiz/config"],
     queryFn: () => adminFetch("/api/quiz/config"),
+    enabled: !!adminPassword,
+  });
+
+  // Settings
+  const { data: settings } = useQuery<Settings>({
+    queryKey: ["/api/settings"],
     enabled: !!adminPassword,
   });
 
@@ -213,6 +219,30 @@ export default function Admin() {
     },
   });
 
+  const updateDesignModeMutation = useMutation({
+    mutationFn: async (designMode: "classic" | "minimalist") => {
+      return await adminFetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ designMode }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings"] });
+      toast({
+        title: "Дизайн обновлён",
+        description: "Настройки дизайна успешно применены",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAddProduct = () => {
     setEditingProduct(null);
     setIsFormOpen(true);
@@ -284,14 +314,27 @@ export default function Admin() {
           <h1 className="font-serif text-4xl font-bold" data-testid="text-admin-title">
             Панель управления
           </h1>
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            data-testid="button-admin-logout"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Выйти
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                const newMode = settings?.designMode === "minimalist" ? "classic" : "minimalist";
+                updateDesignModeMutation.mutate(newMode);
+              }}
+              data-testid="button-toggle-design"
+            >
+              <Palette className="w-4 h-4 mr-2" />
+              {settings?.designMode === "minimalist" ? "Классический" : "Минималистичный"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleLogout}
+              data-testid="button-admin-logout"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Выйти
+            </Button>
+          </div>
         </div>
 
         <Tabs defaultValue="products">

@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Admin from "@/pages/Admin";
+import { useDesignMode } from "@/hooks/use-design-mode";
 
 function Router() {
   return (
@@ -17,12 +18,22 @@ function Router() {
   );
 }
 
+function AppContent() {
+  useDesignMode(); // Apply design mode class to body
+  
+  return (
+    <>
+      <Toaster />
+      <Router />
+    </>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Toaster />
-        <Router />
+        <AppContent />
       </TooltipProvider>
     </QueryClientProvider>
   );
