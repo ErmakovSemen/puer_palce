@@ -39,9 +39,9 @@ export default function CartDrawer({
         onClick={onClose}
         data-testid="overlay-cart"
       />
-      <div className="fixed right-0 top-0 h-full w-full md:w-96 bg-background border-l z-50 flex flex-col" data-testid="drawer-cart">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="font-serif text-2xl font-semibold" data-testid="text-cart-title">Корзина</h2>
+      <div className="fixed right-0 top-0 h-full w-full md:w-96 bg-black text-white border-l border-white/10 z-50 flex flex-col" data-testid="drawer-cart">
+        <div className="flex items-center justify-between p-6 border-b border-white/10">
+          <h2 className="font-serif text-2xl font-semibold text-white" data-testid="text-cart-title">Корзина</h2>
           <Button
             variant="ghost"
             size="icon"
@@ -54,7 +54,7 @@ export default function CartDrawer({
 
         {items.length === 0 ? (
           <div className="flex-1 flex items-center justify-center p-6">
-            <p className="text-muted-foreground text-center" data-testid="text-empty-cart">
+            <p className="text-white/60 text-center" data-testid="text-empty-cart">
               Ваша корзина пуста
             </p>
           </div>
@@ -63,7 +63,7 @@ export default function CartDrawer({
             <ScrollArea className="flex-1 p-6">
               <div className="space-y-4">
                 {items.map((item) => (
-                  <Card key={item.id} className="p-4" data-testid={`cart-item-${item.id}`}>
+                  <Card key={item.id} className="p-4 bg-white/5 border-white/10" data-testid={`cart-item-${item.id}`}>
                     <div className="flex gap-4">
                       <img 
                         src={item.image} 
@@ -72,8 +72,8 @@ export default function CartDrawer({
                         data-testid={`img-cart-item-${item.id}`}
                       />
                       <div className="flex-1 space-y-2">
-                        <h3 className="font-semibold text-sm" data-testid={`text-cart-item-name-${item.id}`}>{item.name}</h3>
-                        <p className="text-primary font-semibold" data-testid={`text-cart-item-price-${item.id}`}>{item.price} ₽</p>
+                        <h3 className="font-semibold text-sm text-white" data-testid={`text-cart-item-name-${item.id}`}>{item.name}</h3>
+                        <p className="text-white font-semibold" data-testid={`text-cart-item-price-${item.id}`}>{item.price} ₽</p>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
@@ -111,13 +111,13 @@ export default function CartDrawer({
               </div>
             </ScrollArea>
 
-            <div className="border-t p-6 space-y-4">
+            <div className="border-t border-white/10 p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-lg font-semibold">Итого:</span>
-                <span className="text-2xl font-bold text-primary" data-testid="text-cart-total">{total} ₽</span>
+                <span className="text-lg font-semibold text-white">Итого:</span>
+                <span className="text-2xl font-bold text-white" data-testid="text-cart-total">{total} ₽</span>
               </div>
               <Button
-                className="w-full bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
+                className="w-full bg-white text-black hover:bg-white/90 border-0"
                 onClick={onCheckout}
                 data-testid="button-checkout"
               >

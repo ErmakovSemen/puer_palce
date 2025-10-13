@@ -117,23 +117,11 @@ export default function ProductCard({
           </h3>
           <div className="flex flex-wrap gap-1">
             <Badge 
-              className="text-xs transition-all duration-300"
+              className="text-xs transition-all duration-300 text-white border-0"
               style={{
-                backgroundColor: 'transparent',
-                color: 'hsl(var(--muted-foreground))',
-                borderColor: 'hsl(var(--border))'
+                backgroundColor: teaTypeColor
               }}
               data-testid={`badge-tea-type-${id}`}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = teaTypeColor;
-                e.currentTarget.style.color = 'white';
-                e.currentTarget.style.borderColor = teaTypeColor;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-                e.currentTarget.style.color = 'hsl(var(--muted-foreground))';
-                e.currentTarget.style.borderColor = 'hsl(var(--border))';
-              }}
             >
               {teaType}
             </Badge>
