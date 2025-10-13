@@ -38,7 +38,7 @@ export default function Home() {
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedType, setSelectedType] = useState("all");
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const { toast } = useToast();
 
@@ -50,7 +50,7 @@ export default function Home() {
     return products.filter((product) => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesType = selectedType === "all" || product.teaType === selectedType;
+      const matchesType = selectedTypes.length === 0 || selectedTypes.includes(product.teaType);
       const matchesEffects = selectedEffects.length === 0 || 
         selectedEffects.some(effect => 
           product.effects.some(productEffect => 
@@ -59,7 +59,7 @@ export default function Home() {
         );
       return matchesSearch && matchesType && matchesEffects;
     });
-  }, [products, searchTerm, selectedType, selectedEffects]);
+  }, [products, searchTerm, selectedTypes, selectedEffects]);
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
@@ -154,7 +154,7 @@ export default function Home() {
 
   const handleQuizRecommend = (teaType: string) => {
     // Устанавливаем фильтр по типу чая (используем название напрямую)
-    setSelectedType(teaType);
+    setSelectedTypes([teaType]);
     
     toast({
       title: "Подбор завершён!",
@@ -176,8 +176,8 @@ export default function Home() {
           <ProductFilters
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
-            selectedType={selectedType}
-            onTypeChange={setSelectedType}
+            selectedTypes={selectedTypes}
+            onTypesChange={setSelectedTypes}
             selectedEffects={selectedEffects}
             onEffectsChange={setSelectedEffects}
             onQuizClick={() => setIsQuizOpen(true)}
