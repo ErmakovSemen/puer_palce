@@ -27,7 +27,12 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 - **Mobile Responsiveness**: Optimized product cards and filters for mobile devices, ensuring a compact and touch-friendly experience.
 - **Admin Panel**: Password-protected at `/admin` with full product CRUD, quiz configuration, and image upload.
 - **Database Seeding**: Automatic seeding of 5 initial products on first startup if the database is empty.
-- **Filter Redesign**: Dynamic, collapsible filters for tea types and effects, styled as `Badge` components.
+- **Compact Filter System**: Space-efficient dropdown filters in a single row alongside search and quiz buttons
+  - Multiple selection with OR logic for tea types (can select multiple types, products matching any selected type are shown)
+  - Multiple selection with OR logic for effects (products with any selected effect are shown)
+  - Only one filter dropdown open at a time for cleaner UX
+  - Selected items display in collapsed state with ellipsis truncation (shows up to 2 items, then "...")
+  - "Очистить" (Clear) button appears when selections are active
 - **Sharp Geometric Design**: Minimal border-radius (0.25rem for general elements, 0 for badges) for a modern, angular aesthetic.
 - **Chinese-Inspired Decorative Elements**:
   - Tea type badges: Triple-frame effect (black-white-black layers using border + box-shadow inset) with colored backgrounds
