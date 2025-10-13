@@ -144,12 +144,11 @@ export default function ProductCard({
               e.stopPropagation();
               onAddToCart(id);
             }}
-            size="sm"
-            className="bg-primary text-primary-foreground border border-primary-border"
+            size="icon"
+            className="bg-primary text-primary-foreground border border-primary-border opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 h-8 w-8"
             data-testid={`button-add-to-cart-${id}`}
           >
             <ShoppingCart className="w-4 h-4" />
-            <span className="hidden sm:inline ml-2">В корзину</span>
           </Button>
         </div>
       </div>
