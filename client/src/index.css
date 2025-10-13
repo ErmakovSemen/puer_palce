@@ -79,7 +79,7 @@
   --font-sans: 'Inter', Open Sans, sans-serif;
   --font-serif: 'Playfair Display', Georgia, serif;
   --font-mono: Menlo, monospace;
-  --radius: .5rem; /* 8px */
+  --radius: 0.25rem; /* 4px - sharper design */
   --shadow-2xs: 0px 1px 2px 0px hsl(25 35% 25% / 0.05);
   --shadow-xs: 0px 1px 3px 0px hsl(25 35% 25% / 0.08);
   --shadow-sm: 0px 2px 4px 0px hsl(25 35% 25% / 0.06), 0px 1px 2px -1px hsl(25 35% 25% / 0.08);
@@ -409,5 +409,10 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
+  }
+
+  /* Sharp design - remove border radius from badges */
+  [data-testid^="badge-"] {
+    border-radius: 0 !important;
   }
 }

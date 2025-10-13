@@ -28,6 +28,7 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 - **Admin Panel**: Password-protected at `/admin` with full product CRUD, quiz configuration, and image upload.
 - **Database Seeding**: Automatic seeding of 5 initial products on first startup if the database is empty.
 - **Filter Redesign**: Dynamic, collapsible filters for tea types and effects, styled as `Badge` components.
+- **Sharp Geometric Design**: Minimal border-radius (0.25rem for general elements, 0 for badges) for a modern, angular aesthetic.
 
 ### Order Processing Flow
 
