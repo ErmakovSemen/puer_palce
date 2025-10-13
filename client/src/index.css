@@ -155,8 +155,8 @@
 
   --sidebar-border: 0 0% 88%;
 
-  /* Jade green accent (tea color) - only shows on hover */
-  --sidebar-primary: 150 35% 45%;
+  /* Black accent for minimalist design */
+  --sidebar-primary: 0 0% 10%;
 
   --sidebar-primary-foreground: 0 0% 100%;
 
@@ -164,7 +164,7 @@
 
   --sidebar-accent-foreground: 0 0% 15%;
 
-  --sidebar-ring: 150 35% 45%;
+  --sidebar-ring: 0 0% 10%;
 
   --popover: 0 0% 98%;
 
@@ -172,8 +172,8 @@
 
   --popover-border: 0 0% 88%;
 
-  /* Amber/jade tea colors for accents */
-  --primary: 150 35% 45%;
+  /* Black primary color for minimalist design */
+  --primary: 0 0% 10%;
 
   --primary-foreground: 0 0% 100%;
 
@@ -194,7 +194,7 @@
   --destructive-foreground: 0 0% 100%;
 
   --input: 0 0% 88%;
-  --ring: 150 35% 45%;
+  --ring: 0 0% 10%;
   
   /* Minimal shadows - ink brush effect */
   --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.03);

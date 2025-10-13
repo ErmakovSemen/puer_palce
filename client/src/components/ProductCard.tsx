@@ -130,7 +130,8 @@ export default function ProductCard({
               <Badge 
                 key={index} 
                 variant="outline" 
-                className="text-xs transition-all duration-300 group-hover/card:opacity-100 opacity-60"
+                className="text-xs transition-all duration-300 group-hover/card:opacity-100 opacity-60 border-2 border-black"
+                style={{ borderRadius: '0' }}
                 data-testid={`badge-effect-${id}-${index}`}
               >
                 {effect}
