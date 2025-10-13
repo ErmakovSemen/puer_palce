@@ -78,7 +78,7 @@ export class MemStorage implements IStorage {
     this.quizConfig = defaultQuizConfig;
     this.products = new Map();
     this.productIdCounter = 1;
-    this.settings = { id: 1, designMode: "classic" };
+    this.settings = { id: 1, designMode: "minimalist" };
   }
 
   async getUser(id: string): Promise<User | undefined> {
@@ -155,7 +155,7 @@ export class DbStorage implements IStorage {
     
     if (allSettings.length === 0) {
       console.log('Initializing default settings...');
-      await db.insert(settingsTable).values({ designMode: "classic" });
+      await db.insert(settingsTable).values({ designMode: "minimalist" });
       console.log('✓ Default settings initialized');
     }
   }
@@ -275,7 +275,7 @@ export class DbStorage implements IStorage {
     
     if (allSettings.length === 0) {
       // If no settings exist, create default
-      const [settings] = await db.insert(settingsTable).values({ designMode: "classic" }).returning();
+      const [settings] = await db.insert(settingsTable).values({ designMode: "minimalist" }).returning();
       return settings;
     }
     

@@ -8,7 +8,7 @@ export function useDesignMode() {
   });
 
   useEffect(() => {
-    const designMode = settings?.designMode || "classic";
+    const designMode = settings?.designMode || "minimalist";
     
     // Remove both theme classes first
     document.body.classList.remove("minimalist", "classic");
@@ -17,5 +17,5 @@ export function useDesignMode() {
     document.body.classList.add(designMode);
   }, [settings?.designMode]);
 
-  return settings?.designMode || "classic";
+  return settings?.designMode || "minimalist";
 }
