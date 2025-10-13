@@ -109,14 +109,16 @@ export default function ProductFilters({
         )}
 
         {/* Квиз */}
-        <Badge
+        <Button
           onClick={onQuizClick}
-          className="cursor-pointer bg-primary/10 hover:bg-primary/20 text-primary border-primary/20 hover-elevate active-elevate-2 gap-1.5 transition-all duration-300"
+          variant="outline"
+          size="sm"
+          className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/20 gap-1.5 transition-all duration-300"
           data-testid="button-open-quiz"
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Sparkles className="w-4 h-4" />
           Подобрать чай
-        </Badge>
+        </Button>
       </div>
 
       {/* Категории фильтров */}
