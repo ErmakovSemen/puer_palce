@@ -10,11 +10,11 @@ export function useDesignMode() {
   useEffect(() => {
     const designMode = settings?.designMode || "classic";
     
-    if (designMode === "minimalist") {
-      document.body.classList.add("minimalist");
-    } else {
-      document.body.classList.remove("minimalist");
-    }
+    // Remove both theme classes first
+    document.body.classList.remove("minimalist", "classic");
+    
+    // Add the current theme class
+    document.body.classList.add(designMode);
   }, [settings?.designMode]);
 
   return settings?.designMode || "classic";

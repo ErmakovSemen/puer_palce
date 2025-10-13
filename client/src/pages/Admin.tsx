@@ -117,6 +117,7 @@ export default function Admin() {
   // Settings
   const { data: settings } = useQuery<Settings>({
     queryKey: ["/api/settings"],
+    queryFn: () => adminFetch("/api/settings"),
     enabled: !!adminPassword,
   });
 
