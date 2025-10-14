@@ -33,6 +33,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
               variant="ghost"
               size="icon"
               asChild
+              className="hidden md:inline-flex"
               data-testid="link-telegram"
             >
               <a href="https://t.me/puerpub" target="_blank" rel="noopener noreferrer">
@@ -43,6 +44,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
               variant="ghost"
               size="icon"
               asChild
+              className="hidden md:inline-flex"
               data-testid="link-vk"
             >
               <a href="https://vk.com/puerpab" target="_blank" rel="noopener noreferrer">
