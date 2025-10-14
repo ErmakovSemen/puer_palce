@@ -170,7 +170,7 @@ export default function ProductDetail({
               {(selectedQuantity || customQuantity) && (
                 <div className="text-right">
                   <span className="text-lg font-semibold" data-testid="text-total-price">
-                    Итого: {pricePerGram * parseInt(customQuantity || selectedQuantity || "0")} ₽
+                    Итого: {pricePerGram * parseInt(customQuantity || selectedQuantity || "0", 10)} ₽
                   </span>
                 </div>
               )}
@@ -178,7 +178,7 @@ export default function ProductDetail({
 
             <Button
               onClick={() => {
-                const quantity = parseInt(customQuantity || selectedQuantity || "0");
+                const quantity = parseInt(customQuantity || selectedQuantity || "0", 10);
                 if (quantity > 0) {
                   onAddToCart(id, quantity);
                   onClose();

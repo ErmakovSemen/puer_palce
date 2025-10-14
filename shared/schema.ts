@@ -119,7 +119,7 @@ export const orderSchema = z.object({
   address: z.string().min(10, "Введите полный адрес доставки"),
   comment: z.string().optional(),
   items: z.array(orderItemSchema).min(1, "Корзина не может быть пустой"),
-  total: z.number().min(0),
+  total: z.number().min(500, "Минимальная сумма заказа 500₽"),
 });
 
 export type OrderItem = z.infer<typeof orderItemSchema>;

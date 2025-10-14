@@ -112,6 +112,17 @@ export default function Home() {
   };
 
   const handleCheckout = () => {
+    const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    
+    if (total < 500) {
+      toast({
+        title: "Минимальная сумма заказа 500₽",
+        description: `Текущая сумма: ${Math.round(total)}₽. Добавьте товаров еще на ${Math.round(500 - total)}₽`,
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsCartOpen(false);
     setIsCheckoutOpen(true);
   };
@@ -145,7 +156,7 @@ export default function Home() {
         id: item.id,
         name: item.name,
         pricePerGram: product?.pricePerGram || 0,
-        quantity: item.quantity * 100, // Convert units to grams (each unit is 100g)
+        quantity: item.quantity, // Already in grams
       };
     });
 

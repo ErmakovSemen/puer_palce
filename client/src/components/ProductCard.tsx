@@ -157,7 +157,7 @@ export default function ProductCard({
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              const defaultQuantity = parseInt(availableQuantities[0] || "100");
+              const defaultQuantity = parseInt(availableQuantities[0] || "100", 10);
               onAddToCart(id, defaultQuantity);
             }}
             size="icon"

@@ -43,11 +43,12 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 
 ### Order Processing Flow
 
-1.  **Cart System**: Items are stored in 100g units.
-2.  **Order Submission**: Frontend converts units to grams and sends data to `POST /api/orders`.
-3.  **Backend Validation**: Zod schema validates order and customer details.
-4.  **Email Notification**: Resend service sends formatted email to `semen.learning@gmail.com` with order details.
-5.  **Error Handling**: Specific HTTP status codes (400, 502, 500) for validation, email service, or internal errors.
+1.  **Cart System**: Items are stored with quantity in grams, and price is stored as pricePerGram. Each product has configurable available quantities (e.g., 25g, 50g, 100g, 357g) with custom input option.
+2.  **Minimum Order**: Orders require a minimum total of 500 RUB. Validation occurs on checkout attempt.
+3.  **Order Submission**: Frontend sends cart data with items already in grams to `POST /api/orders`.
+4.  **Backend Validation**: Zod schema validates order and customer details.
+5.  **Email Notification**: Resend service sends formatted email to `semen.learning@gmail.com` with order details.
+6.  **Error Handling**: Specific HTTP status codes (400, 502, 500) for validation, email service, or internal errors.
 
 ## External Dependencies
 
