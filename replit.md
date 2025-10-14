@@ -22,7 +22,7 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 
 - **Theme System**: Dual theme support (Classic and Minimalist) with an admin toggle, dynamically applied via CSS classes. The Minimalist theme is the default.
 - **Dynamic Tag Management**: Admins can create new tea types and effects directly from the product form. Homepage filters automatically update with new tags, fetching data dynamically via `GET /api/tags`.
-- **Product Management**: Full CRUD operations for products via the admin panel, stored in PostgreSQL. Includes multi-image upload using Replit Object Storage, with images stored as URLs.
+- **Product Management**: Full CRUD operations for products via the admin panel, stored in PostgreSQL. Includes multi-image upload using Replit Object Storage, with images stored as URLs. Supports fixed-quantity-only mode where products can be sold exclusively in specific amounts (e.g., 357g tea cakes).
 - **Order Processing**: Cart items (1 unit = 100g) are converted to grams on order submission. Backend validates order data using Zod.
 - **Mobile Responsiveness**: Optimized product cards and filters for mobile devices, ensuring a compact and touch-friendly experience.
 - **Admin Panel**: Password-protected at `/admin` with full product CRUD, quiz configuration, and image upload.
@@ -44,11 +44,12 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 ### Order Processing Flow
 
 1.  **Cart System**: Items are stored with quantity in grams, and price is stored as pricePerGram. Each product has configurable available quantities (e.g., 25g, 50g, 100g, 357g) with custom input option.
-2.  **Minimum Order**: Orders require a minimum total of 500 RUB. Validation occurs on checkout attempt.
-3.  **Order Submission**: Frontend sends cart data with items already in grams to `POST /api/orders`.
-4.  **Backend Validation**: Zod schema validates order and customer details.
-5.  **Email Notification**: Resend service sends formatted email to `semen.learning@gmail.com` with order details.
-6.  **Error Handling**: Specific HTTP status codes (400, 502, 500) for validation, email service, or internal errors.
+2.  **Fixed Quantity Mode**: Products can be marked as fixed-quantity-only (e.g., tea cakes sold only in 357g portions). When enabled, admins must specify the fixed quantity, and customers cannot select different amounts. Zod validation enforces that fixedQuantity must be a positive integer when fixedQuantityOnly is true.
+3.  **Minimum Order**: Orders require a minimum total of 500 RUB. Validation occurs on checkout attempt.
+4.  **Order Submission**: Frontend sends cart data with items already in grams to `POST /api/orders`.
+5.  **Backend Validation**: Zod schema validates order and customer details.
+6.  **Email Notification**: Resend service sends formatted email to `semen.learning@gmail.com` with order details.
+7.  **Error Handling**: Specific HTTP status codes (400, 502, 500) for validation, email service, or internal errors.
 
 ## External Dependencies
 
