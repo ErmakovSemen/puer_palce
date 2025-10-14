@@ -105,6 +105,12 @@ export default function Home() {
     setCartItems(prev => prev.filter(item => item.id !== id));
   };
 
+  const resetFilters = () => {
+    setSearchTerm("");
+    setSelectedTypes([]);
+    setSelectedEffects([]);
+  };
+
   const handleCheckout = () => {
     setIsCartOpen(false);
     setIsCheckoutOpen(true);
@@ -169,6 +175,7 @@ export default function Home() {
       <Header
         cartItemCount={cartItemCount}
         onCartClick={() => setIsCartOpen(true)}
+        onLogoClick={resetFilters}
       />
       
       <div className="max-w-7xl mx-auto px-4 py-4">

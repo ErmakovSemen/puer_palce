@@ -2,21 +2,27 @@ import { ShoppingCart } from "lucide-react";
 import { SiTelegram, SiVk } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import ThemeToggle from "./ThemeToggle";
 import { Link } from "wouter";
 
 interface HeaderProps {
   cartItemCount: number;
   onCartClick: () => void;
+  onLogoClick?: () => void;
   isAdmin?: boolean;
 }
 
-export default function Header({ cartItemCount, onCartClick, isAdmin = false }: HeaderProps) {
+export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmin = false }: HeaderProps) {
+  const handleLogoClick = () => {
+    if (onLogoClick) {
+      onLogoClick();
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          <Link href="/" data-testid="link-home">
+          <Link href="/" onClick={handleLogoClick} data-testid="link-home">
             <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground cursor-pointer hover-elevate px-4 py-2 rounded-md transition-all">
               Пуэр Паб
             </h1>
@@ -62,7 +68,6 @@ export default function Header({ cartItemCount, onCartClick, isAdmin = false }: 
                 )}
               </Button>
             )}
-            <ThemeToggle />
           </div>
         </div>
       </div>
