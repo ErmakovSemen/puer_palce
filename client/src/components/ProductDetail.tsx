@@ -45,11 +45,11 @@ export default function ProductDetail({
               <img
                 src={imageList[selectedImageIndex]}
                 alt={name}
-                className="w-full h-auto object-cover"
+                className="w-full h-auto max-h-64 md:max-h-none object-contain"
                 data-testid={`img-detail-product-${id}`}
               />
             ) : (
-              <div className="w-full h-96 bg-muted flex items-center justify-center rounded-md">
+              <div className="w-full h-64 md:h-96 bg-muted flex items-center justify-center rounded-md">
                 <p className="text-muted-foreground">Нет изображения</p>
               </div>
             )}
