@@ -35,8 +35,9 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
   - "Очистить" (Clear) button appears when selections are active
 - **Sharp Geometric Design**: Minimal border-radius (0.25rem for general elements, 0 for badges) for a modern, angular aesthetic.
 - **Chinese-Inspired Decorative Elements**:
-  - Tea type badges: Triple-frame effect (black-white-black layers using border + box-shadow inset) with colored backgrounds
-  - Effect badges: Double border (3px double black) with white background and black text
+  - All badges: Uniform double border (3px double black) for consistent minimalist aesthetic
+  - Tea type badges: Colored backgrounds with white text
+  - Effect badges: White background with black text
   - Decorative divider line between filters and products with square corner elements
   - Complete black & white color scheme (primary color changed from green to black)
 
