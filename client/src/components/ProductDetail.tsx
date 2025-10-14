@@ -15,6 +15,8 @@ interface ProductDetailProps {
   teaType: string;
   effects: string[];
   availableQuantities?: string[];
+  fixedQuantityOnly?: boolean;
+  fixedQuantity?: number | null;
   onAddToCart: (id: number, quantity: number) => void;
   onClose: () => void;
 }
@@ -29,11 +31,15 @@ export default function ProductDetail({
   teaType,
   effects,
   availableQuantities = ["25", "50", "100"],
+  fixedQuantityOnly = false,
+  fixedQuantity = null,
   onAddToCart,
   onClose,
 }: ProductDetailProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [selectedQuantity, setSelectedQuantity] = useState<string>(availableQuantities[0] || "100");
+  const [selectedQuantity, setSelectedQuantity] = useState<string>(
+    fixedQuantityOnly && fixedQuantity ? String(fixedQuantity) : (availableQuantities[0] || "100")
+  );
   const [customQuantity, setCustomQuantity] = useState<string>("");
   
   // Use images array if available, otherwise fallback to single image
@@ -129,62 +135,87 @@ export default function ProductDetail({
             <div className="space-y-3">
               <label className="text-sm font-medium">Количество</label>
               
-              {/* Preset quantities */}
-              <div className="flex flex-wrap gap-2">
-                {availableQuantities.map((qty) => (
-                  <Button
-                    key={qty}
-                    type="button"
-                    variant={selectedQuantity === qty && !customQuantity ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setSelectedQuantity(qty);
-                      setCustomQuantity("");
-                    }}
-                    data-testid={`button-quantity-${qty}`}
-                  >
-                    {qty}г
-                  </Button>
-                ))}
-              </div>
+              {fixedQuantityOnly && fixedQuantity ? (
+                <>
+                  {/* Fixed quantity only - show as info */}
+                  <div className="p-4 bg-muted rounded-md">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Данный чай продаётся только в фиксированном количестве:
+                    </p>
+                    <p className="text-2xl font-bold text-primary" data-testid="text-fixed-quantity">
+                      {fixedQuantity}г
+                    </p>
+                  </div>
+                  
+                  {/* Total price */}
+                  <div className="text-right">
+                    <span className="text-lg font-semibold" data-testid="text-total-price">
+                      Итого: {pricePerGram * fixedQuantity} ₽
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Preset quantities */}
+                  <div className="flex flex-wrap gap-2">
+                    {availableQuantities.map((qty) => (
+                      <Button
+                        key={qty}
+                        type="button"
+                        variant={selectedQuantity === qty && !customQuantity ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => {
+                          setSelectedQuantity(qty);
+                          setCustomQuantity("");
+                        }}
+                        data-testid={`button-quantity-${qty}`}
+                      >
+                        {qty}г
+                      </Button>
+                    ))}
+                  </div>
 
-              {/* Custom quantity input */}
-              <div className="flex gap-2 items-end">
-                <div className="flex-1">
-                  <label className="text-sm text-muted-foreground">Своё количество (г)</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    placeholder="Введите количество"
-                    value={customQuantity}
-                    onChange={(e) => {
-                      setCustomQuantity(e.target.value);
-                      setSelectedQuantity("");
-                    }}
-                    data-testid="input-custom-quantity"
-                  />
-                </div>
-              </div>
+                  {/* Custom quantity input */}
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <label className="text-sm text-muted-foreground">Своё количество (г)</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        placeholder="Введите количество"
+                        value={customQuantity}
+                        onChange={(e) => {
+                          setCustomQuantity(e.target.value);
+                          setSelectedQuantity("");
+                        }}
+                        data-testid="input-custom-quantity"
+                      />
+                    </div>
+                  </div>
 
-              {/* Total price */}
-              {(selectedQuantity || customQuantity) && (
-                <div className="text-right">
-                  <span className="text-lg font-semibold" data-testid="text-total-price">
-                    Итого: {pricePerGram * parseInt(customQuantity || selectedQuantity || "0", 10)} ₽
-                  </span>
-                </div>
+                  {/* Total price */}
+                  {(selectedQuantity || customQuantity) && (
+                    <div className="text-right">
+                      <span className="text-lg font-semibold" data-testid="text-total-price">
+                        Итого: {pricePerGram * parseInt(customQuantity || selectedQuantity || "0", 10)} ₽
+                      </span>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
             <Button
               onClick={() => {
-                const quantity = parseInt(customQuantity || selectedQuantity || "0", 10);
+                const quantity = fixedQuantityOnly && fixedQuantity 
+                  ? fixedQuantity 
+                  : parseInt(customQuantity || selectedQuantity || "0", 10);
                 if (quantity > 0) {
                   onAddToCart(id, quantity);
                   onClose();
                 }
               }}
-              disabled={!selectedQuantity && !customQuantity}
+              disabled={!fixedQuantityOnly && !selectedQuantity && !customQuantity}
               className="w-full bg-primary text-primary-foreground border border-primary-border"
               size="lg"
               data-testid={`button-detail-add-to-cart-${id}`}

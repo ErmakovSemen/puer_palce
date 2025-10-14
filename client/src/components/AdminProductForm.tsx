@@ -37,6 +37,16 @@ const productSchema = z.object({
   teaTypeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
   effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
+  fixedQuantityOnly: z.boolean(),
+  fixedQuantity: z.number().int().positive().optional().nullable(),
+}).refine((data) => {
+  if (data.fixedQuantityOnly && !data.fixedQuantity) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Укажите фиксированное количество, если включен режим фиксированного количества",
+  path: ["fixedQuantity"],
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -78,6 +88,8 @@ export default function AdminProductForm({
       teaTypeColor: defaultValues?.teaTypeColor || "#8B4513",
       effects: defaultValues?.effects || [],
       availableQuantities: defaultValues?.availableQuantities || ["25", "50", "100"],
+      fixedQuantityOnly: defaultValues?.fixedQuantityOnly || false,
+      fixedQuantity: defaultValues?.fixedQuantity || null,
     },
   });
 
@@ -494,6 +506,56 @@ export default function AdminProductForm({
             </FormItem>
           )}
         />
+
+        <FormField
+          control={form.control}
+          name="fixedQuantityOnly"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  data-testid="checkbox-fixed-quantity-only"
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Продаётся только в фиксированном количестве
+                </FormLabel>
+                <FormDescription>
+                  Включите эту опцию, если чай продаётся только в одном количестве (например, только блинами по 357г)
+                </FormDescription>
+              </div>
+            </FormItem>
+          )}
+        />
+
+        {form.watch("fixedQuantityOnly") && (
+          <FormField
+            control={form.control}
+            name="fixedQuantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Фиксированное количество (г)</FormLabel>
+                <FormDescription className="text-sm text-muted-foreground">
+                  Укажите количество в граммах (например, 357 для блина пуэра)
+                </FormDescription>
+                <FormControl>
+                  <Input
+                    type="number"
+                    placeholder="357"
+                    {...field}
+                    value={field.value || ""}
+                    onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value, 10) : null)}
+                    data-testid="input-fixed-quantity"
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           control={form.control}

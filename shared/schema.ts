@@ -43,7 +43,15 @@ export const insertProductSchema = createInsertSchema(products, {
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
-}).omit({ id: true });
+}).omit({ id: true }).refine((data) => {
+  if (data.fixedQuantityOnly && !data.fixedQuantity) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Укажите фиксированное количество, если включен режим фиксированного количества",
+  path: ["fixedQuantity"],
+});
 
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;

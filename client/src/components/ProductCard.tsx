@@ -17,6 +17,8 @@ interface ProductCardProps {
   teaTypeColor?: string;
   effects: string[];
   availableQuantities?: string[];
+  fixedQuantityOnly?: boolean;
+  fixedQuantity?: number | null;
   onAddToCart: (id: number, quantity: number) => void;
   onClick: (id: number) => void;
 }
@@ -32,6 +34,8 @@ export default function ProductCard({
   teaTypeColor = "#8B4513",
   effects,
   availableQuantities = ["25", "50", "100"],
+  fixedQuantityOnly = false,
+  fixedQuantity = null,
   onAddToCart, 
   onClick 
 }: ProductCardProps) {
@@ -157,7 +161,9 @@ export default function ProductCard({
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              const defaultQuantity = parseInt(availableQuantities[0] || "100", 10);
+              const defaultQuantity = fixedQuantityOnly && fixedQuantity 
+                ? fixedQuantity 
+                : parseInt(availableQuantities[0] || "100", 10);
               onAddToCart(id, defaultQuantity);
             }}
             size="icon"
