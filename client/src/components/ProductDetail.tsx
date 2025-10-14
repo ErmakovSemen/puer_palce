@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { ShoppingCart } from "lucide-react";
 import { getTeaTypeColor } from "@/lib/teaColors";
 import { useState } from "react";
@@ -13,7 +14,8 @@ interface ProductDetailProps {
   images?: string[];
   teaType: string;
   effects: string[];
-  onAddToCart: (id: number) => void;
+  availableQuantities?: string[];
+  onAddToCart: (id: number, quantity: number) => void;
   onClose: () => void;
 }
 
@@ -26,10 +28,13 @@ export default function ProductDetail({
   images,
   teaType,
   effects,
+  availableQuantities = ["25", "50", "100"],
   onAddToCart,
   onClose,
 }: ProductDetailProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [selectedQuantity, setSelectedQuantity] = useState<string>(availableQuantities[0] || "100");
+  const [customQuantity, setCustomQuantity] = useState<string>("");
   
   // Use images array if available, otherwise fallback to single image
   const imageList = images && images.length > 0 ? images : (image ? [image] : []);
@@ -120,11 +125,66 @@ export default function ProductDetail({
               </span>
             </div>
 
+            {/* Quantity Selection */}
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Количество</label>
+              
+              {/* Preset quantities */}
+              <div className="flex flex-wrap gap-2">
+                {availableQuantities.map((qty) => (
+                  <Button
+                    key={qty}
+                    type="button"
+                    variant={selectedQuantity === qty && !customQuantity ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setSelectedQuantity(qty);
+                      setCustomQuantity("");
+                    }}
+                    data-testid={`button-quantity-${qty}`}
+                  >
+                    {qty}г
+                  </Button>
+                ))}
+              </div>
+
+              {/* Custom quantity input */}
+              <div className="flex gap-2 items-end">
+                <div className="flex-1">
+                  <label className="text-sm text-muted-foreground">Своё количество (г)</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    placeholder="Введите количество"
+                    value={customQuantity}
+                    onChange={(e) => {
+                      setCustomQuantity(e.target.value);
+                      setSelectedQuantity("");
+                    }}
+                    data-testid="input-custom-quantity"
+                  />
+                </div>
+              </div>
+
+              {/* Total price */}
+              {(selectedQuantity || customQuantity) && (
+                <div className="text-right">
+                  <span className="text-lg font-semibold" data-testid="text-total-price">
+                    Итого: {pricePerGram * parseInt(customQuantity || selectedQuantity || "0")} ₽
+                  </span>
+                </div>
+              )}
+            </div>
+
             <Button
               onClick={() => {
-                onAddToCart(id);
-                onClose();
+                const quantity = parseInt(customQuantity || selectedQuantity || "0");
+                if (quantity > 0) {
+                  onAddToCart(id, quantity);
+                  onClose();
+                }
               }}
+              disabled={!selectedQuantity && !customQuantity}
               className="w-full bg-primary text-primary-foreground border border-primary-border"
               size="lg"
               data-testid={`button-detail-add-to-cart-${id}`}

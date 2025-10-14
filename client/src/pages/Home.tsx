@@ -63,7 +63,7 @@ export default function Home() {
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
-  const addToCart = (productId: number) => {
+  const addToCart = (productId: number, quantityInGrams: number) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
@@ -72,22 +72,22 @@ export default function Home() {
       if (existing) {
         return prev.map(item =>
           item.id === productId
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: item.quantity + quantityInGrams }
             : item
         );
       }
       return [...prev, { 
         id: product.id,
         name: product.name, 
-        price: product.pricePerGram * 100,
-        quantity: 1,
+        price: product.pricePerGram,
+        quantity: quantityInGrams,
         image: product.images[0]
       }];
     });
 
     toast({
       title: "Добавлено в корзину",
-      description: product.name,
+      description: `${product.name} (${quantityInGrams}г)`,
     });
   };
 

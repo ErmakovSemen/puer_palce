@@ -16,7 +16,8 @@ interface ProductCardProps {
   teaType: string;
   teaTypeColor?: string;
   effects: string[];
-  onAddToCart: (id: number) => void;
+  availableQuantities?: string[];
+  onAddToCart: (id: number, quantity: number) => void;
   onClick: (id: number) => void;
 }
 
@@ -29,7 +30,8 @@ export default function ProductCard({
   images,
   teaType,
   teaTypeColor = "#8B4513",
-  effects, 
+  effects,
+  availableQuantities = ["25", "50", "100"],
   onAddToCart, 
   onClick 
 }: ProductCardProps) {
@@ -155,7 +157,8 @@ export default function ProductCard({
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              onAddToCart(id);
+              const defaultQuantity = parseInt(availableQuantities[0] || "100");
+              onAddToCart(id, defaultQuantity);
             }}
             size="icon"
             className="bg-black text-white hover:bg-black/90 border-0 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 h-8 w-8"

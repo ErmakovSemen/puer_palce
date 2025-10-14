@@ -73,23 +73,23 @@ export default function CartDrawer({
                       />
                       <div className="flex-1 space-y-2">
                         <h3 className="font-semibold text-sm text-white" data-testid={`text-cart-item-name-${item.id}`}>{item.name}</h3>
-                        <p className="text-white font-semibold" data-testid={`text-cart-item-price-${item.id}`}>{item.price} ₽</p>
+                        <p className="text-white font-semibold" data-testid={`text-cart-item-price-${item.id}`}>{Math.round(item.price * item.quantity)} ₽</p>
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => onUpdateQuantity(item.id, Math.max(0, item.quantity - 1))}
+                            onClick={() => onUpdateQuantity(item.id, Math.max(0, item.quantity - 25))}
                             data-testid={`button-decrease-${item.id}`}
                           >
                             <Minus className="w-3 h-3" />
                           </Button>
-                          <span className="w-8 text-center" data-testid={`text-quantity-${item.id}`}>{item.quantity}</span>
+                          <span className="w-16 text-center text-sm" data-testid={`text-quantity-${item.id}`}>{item.quantity}г</span>
                           <Button
                             variant="outline"
                             size="icon"
                             className="h-8 w-8"
-                            onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                            onClick={() => onUpdateQuantity(item.id, item.quantity + 25)}
                             data-testid={`button-increase-${item.id}`}
                           >
                             <Plus className="w-3 h-3" />
