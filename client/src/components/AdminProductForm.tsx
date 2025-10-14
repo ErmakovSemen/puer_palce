@@ -36,6 +36,7 @@ const productSchema = z.object({
   teaType: z.string().min(1, "Выберите тип чая"),
   teaTypeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
   effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
+  availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -58,6 +59,8 @@ export default function AdminProductForm({
   const [newType, setNewType] = useState("");
   const [showNewEffectInput, setShowNewEffectInput] = useState(false);
   const [newEffect, setNewEffect] = useState("");
+  const [showNewQuantityInput, setShowNewQuantityInput] = useState(false);
+  const [newQuantity, setNewQuantity] = useState("");
 
   // Fetch available tags from API
   const { data: tags, isLoading: isLoadingTags } = useQuery<{ types: string[], effects: string[] }>({
@@ -74,6 +77,7 @@ export default function AdminProductForm({
       teaType: defaultValues?.teaType || "",
       teaTypeColor: defaultValues?.teaTypeColor || "#8B4513",
       effects: defaultValues?.effects || [],
+      availableQuantities: defaultValues?.availableQuantities || ["25", "50", "100"],
     },
   });
 
@@ -395,6 +399,94 @@ export default function AdminProductForm({
                 >
                   <Plus className="h-4 w-4 mr-1" />
                   Создать новый эффект
+                </Button>
+              )}
+
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="availableQuantities"
+          render={() => (
+            <FormItem>
+              <FormLabel>Доступные количества (г)</FormLabel>
+              <FormDescription className="text-sm text-muted-foreground">
+                Укажите доступные количества для заказа (например: 25, 50, 100, 357 грамм)
+              </FormDescription>
+              
+              {/* Selected quantities badges */}
+              {form.watch("availableQuantities").length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {form.watch("availableQuantities").sort((a, b) => parseInt(a) - parseInt(b)).map((qty) => (
+                    <Badge 
+                      key={qty} 
+                      variant="secondary"
+                      className="cursor-pointer"
+                      onClick={() => {
+                        const current = form.getValues("availableQuantities");
+                        form.setValue("availableQuantities", current.filter(q => q !== qty));
+                      }}
+                      data-testid={`badge-quantity-${qty}`}
+                    >
+                      {qty}г
+                      <X className="h-3 w-3 ml-1" />
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new quantity */}
+              {showNewQuantityInput ? (
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    type="number"
+                    value={newQuantity}
+                    onChange={(e) => setNewQuantity(e.target.value)}
+                    placeholder="Введите количество в граммах (например: 357)"
+                    data-testid="input-new-quantity"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (newQuantity.trim() && /^\d+$/.test(newQuantity)) {
+                        const currentQuantities = form.getValues("availableQuantities");
+                        if (!currentQuantities.includes(newQuantity.trim())) {
+                          form.setValue("availableQuantities", [...currentQuantities, newQuantity.trim()]);
+                        }
+                        setNewQuantity("");
+                        setShowNewQuantityInput(false);
+                      }
+                    }}
+                    data-testid="button-save-new-quantity"
+                  >
+                    Добавить
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setShowNewQuantityInput(false);
+                      setNewQuantity("");
+                    }}
+                    data-testid="button-cancel-new-quantity"
+                  >
+                    Отмена
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowNewQuantityInput(true)}
+                  className="mt-2"
+                  data-testid="button-add-new-quantity"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Добавить количество
                 </Button>
               )}
 
