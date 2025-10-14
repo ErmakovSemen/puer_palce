@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, real, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -28,6 +28,8 @@ export const products = pgTable("products", {
   teaTypeColor: text("tea_type_color").notNull().default("#8B4513"), // Default brown color
   effects: text("effects").array().notNull().default(sql`ARRAY[]::text[]`),
   availableQuantities: text("available_quantities").array().notNull().default(sql`ARRAY['25', '50', '100']::text[]`), // Available quantities in grams
+  fixedQuantityOnly: boolean("fixed_quantity_only").notNull().default(false), // If true, only sell in fixed quantity
+  fixedQuantity: integer("fixed_quantity"), // Fixed quantity in grams (e.g., 357g for tea cake)
 });
 
 export const insertProductSchema = createInsertSchema(products, {
@@ -39,6 +41,8 @@ export const insertProductSchema = createInsertSchema(products, {
   teaTypeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
   effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
+  fixedQuantityOnly: z.boolean(),
+  fixedQuantity: z.number().int().positive().optional().nullable(),
 }).omit({ id: true });
 
 export type InsertProduct = z.infer<typeof insertProductSchema>;
