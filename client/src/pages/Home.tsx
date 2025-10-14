@@ -256,7 +256,7 @@ export default function Home() {
       </Dialog>
 
       <Dialog open={selectedProductId !== null} onOpenChange={(open) => !open && setSelectedProductId(null)}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="sr-only">Детали товара</DialogTitle>
             <DialogDescription className="sr-only">
