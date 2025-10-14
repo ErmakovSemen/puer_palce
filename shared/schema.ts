@@ -27,6 +27,7 @@ export const products = pgTable("products", {
   teaType: text("tea_type").notNull(),
   teaTypeColor: text("tea_type_color").notNull().default("#8B4513"), // Default brown color
   effects: text("effects").array().notNull().default(sql`ARRAY[]::text[]`),
+  availableQuantities: text("available_quantities").array().notNull().default(sql`ARRAY['25', '50', '100']::text[]`), // Available quantities in grams
 });
 
 export const insertProductSchema = createInsertSchema(products, {
@@ -37,6 +38,7 @@ export const insertProductSchema = createInsertSchema(products, {
   teaType: z.string().min(1, "Выберите тип чая"),
   teaTypeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
   effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
+  availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
 }).omit({ id: true });
 
 export type InsertProduct = z.infer<typeof insertProductSchema>;
