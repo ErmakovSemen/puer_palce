@@ -174,7 +174,7 @@ export default function Profile() {
 
       {/* Profile Details Modal */}
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
-        <DialogContent data-testid="dialog-profile-details">
+        <DialogContent className="max-w-xl" data-testid="dialog-profile-details">
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="flex items-center gap-2">
