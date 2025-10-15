@@ -18,8 +18,13 @@ The frontend is built with **React 18 and TypeScript**, utilizing **Vite** for f
 
 The backend is powered by **Express.js and TypeScript**, providing a **RESTful API** (`/api` prefix). It uses **Drizzle ORM** for interaction with a **PostgreSQL database (Neon serverless)**. A storage abstraction layer (`IStorage` interface) is in place, currently using Drizzle with initial product seeding on first startup. Admin routes are password-protected, requiring `X-Admin-Password` header.
 
+**Authentication System**: Email/password authentication using **Passport.js** local strategy with session storage in PostgreSQL via **connect-pg-simple**. Sessions are persisted across server restarts. User passwords are hashed using bcrypt and sanitized from all API responses for security.
+
 ### Key Features & Implementations
 
+- **User Authentication (Optional)**: Email/password registration and login system for customer accounts. Authentication is completely optional - guest checkout remains available for quick purchases. Authenticated users benefit from auto-filled checkout forms and order history tracking. Passwords are hashed with bcrypt and never exposed in API responses.
+- **User Profiles & Order History**: Personal cabinet (`/profile`) for authenticated users displaying account information and complete order history with detailed order information.
+- **Guest Checkout Conversion**: After successful guest orders, users see a registration prompt with hyperlink encouraging account creation for loyalty program benefits.
 - **Theme System**: Dual theme support (Classic and Minimalist) with an admin toggle, dynamically applied via CSS classes. The Minimalist theme is the default.
 - **Dynamic Tag Management**: Admins can create new tea types and effects directly from the product form. Homepage filters automatically update with new tags, fetching data dynamically via `GET /api/tags`.
 - **Product Management**: Full CRUD operations for products via the admin panel, stored in PostgreSQL. Includes multi-image upload using Replit Object Storage, with images stored as URLs. Supports fixed-quantity-only mode where products can be sold exclusively in specific amounts (e.g., 357g tea cakes).
@@ -48,8 +53,10 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 3.  **Minimum Order**: Orders require a minimum total of 500 RUB. Validation occurs on checkout attempt.
 4.  **Order Submission**: Frontend sends cart data with items already in grams to `POST /api/orders`.
 5.  **Backend Validation**: Zod schema validates order and customer details.
-6.  **Email Notification**: Resend service sends formatted email to `semen.learning@gmail.com` with order details.
-7.  **Error Handling**: Specific HTTP status codes (400, 502, 500) for validation, email service, or internal errors.
+6.  **Database Storage**: Orders are saved to PostgreSQL with nullable userId field - links to users.id when user is authenticated, null for guest orders.
+7.  **Email Notification**: Resend service sends formatted email to `semen.learning@gmail.com` with order details.
+8.  **Success Response**: Authenticated users see standard confirmation, guests see registration prompt with loyalty program messaging.
+9.  **Error Handling**: Specific HTTP status codes (400, 502, 500) for validation, email service, or internal errors.
 
 ## External Dependencies
 
