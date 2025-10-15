@@ -45,6 +45,18 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
   - Effect badges: White background with black text
   - Decorative divider line between filters and products with square corner elements
   - Complete black & white color scheme (primary color changed from green to black)
+- **Progressive Web App (PWA)**: Installable mobile app experience with offline support
+  - **Manifest**: Configured with Russian localization, black theme color, standalone display mode
+  - **Icons**: Custom app icons (192x192, 512x512) for Android and iOS home screen
+  - **Service Worker**: Intelligent caching strategy
+    - Network-first for navigation/HTML requests - always fetches latest when online, caches for offline use
+    - Cache-first for static assets (images, icons, fonts)
+    - Network-first with cache fallback for API calls
+    - Automatic HTML updates - users receive fresh content without manual cache clearing
+  - **iOS Support**: Apple-specific meta tags for optimal PWA experience on iOS devices
+  - **Offline Mode**: Graceful degradation when network is unavailable (requires at least one prior online visit)
+  - **Installation**: Browser prompts users to "Add to Home Screen" on mobile devices
+  - **Dual Usage**: PWA installation is optional - website remains fully functional in browser
 
 ### Order Processing Flow
 
