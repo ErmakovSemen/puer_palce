@@ -16,8 +16,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { Link } from "wouter";
 import type { Product } from "@shared/schema";
 
 // Fallback image for products without images
@@ -37,10 +39,12 @@ export default function Home() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [isQuizOpen, setIsQuizOpen] = useState(false);
+  const [isSuccessDialogOpen, setIsSuccessDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ['/api/products'],
@@ -49,7 +53,7 @@ export default function Home() {
   const filteredProducts = useMemo(() => {
     return products.filter((product) => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchTerm.toLowerCase());
+        (product.description?.toLowerCase() ?? "").includes(searchTerm.toLowerCase());
       const matchesType = selectedTypes.length === 0 || selectedTypes.includes(product.teaType);
       const matchesEffects = selectedEffects.length === 0 || 
         selectedEffects.some(effect => 
@@ -132,12 +136,9 @@ export default function Home() {
       return await apiRequest("POST", "/api/orders", orderData);
     },
     onSuccess: () => {
-      toast({
-        title: "Заказ оформлен!",
-        description: "Мы свяжемся с вами в ближайшее время",
-      });
       setCartItems([]);
       setIsCheckoutOpen(false);
+      setIsSuccessDialogOpen(true);
     },
     onError: (error: any) => {
       toast({
@@ -262,6 +263,7 @@ export default function Home() {
             onSubmit={handleOrderSubmit}
             onCancel={() => setIsCheckoutOpen(false)}
             isSubmitting={orderMutation.isPending}
+            user={user}
           />
         </DialogContent>
       </Dialog>
@@ -296,6 +298,59 @@ export default function Home() {
             onClose={() => setIsQuizOpen(false)}
             onRecommend={handleQuizRecommend}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog */}
+      <Dialog open={isSuccessDialogOpen} onOpenChange={setIsSuccessDialogOpen}>
+        <DialogContent className="max-w-md" data-testid="dialog-order-success">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl text-center">
+              Заказ успешно оформлен!
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              Мы свяжемся с вами в ближайшее время для подтверждения заказа
+            </DialogDescription>
+          </DialogHeader>
+          
+          {!user && (
+            <div className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground text-center">
+                Создайте аккаунт, чтобы отслеживать заказы и получать бонусы в программе лояльности
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setIsSuccessDialogOpen(false)}
+                  className="flex-1"
+                  data-testid="button-close-success"
+                >
+                  Закрыть
+                </Button>
+                <Button
+                  asChild
+                  className="flex-1 bg-primary text-primary-foreground border border-primary-border"
+                  data-testid="button-goto-register"
+                >
+                  <Link href="/auth">
+                    Создать аккаунт
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {user && (
+            <div className="pt-4">
+              <Button
+                onClick={() => setIsSuccessDialogOpen(false)}
+                className="w-full bg-primary text-primary-foreground border border-primary-border"
+                data-testid="button-close-success"
+              >
+                Отлично
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

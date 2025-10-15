@@ -28,6 +28,12 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+// Remove password from user object before sending to client
+function sanitizeUser(user: SelectUser) {
+  const { password, ...sanitized } = user;
+  return sanitized;
+}
+
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
@@ -75,12 +81,12 @@ export function setupAuth(app: Express) {
 
     req.login(user, (err) => {
       if (err) return next(err);
-      res.status(201).json(user);
+      res.status(201).json(sanitizeUser(user));
     });
   });
 
   app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+    res.status(200).json(sanitizeUser(req.user!));
   });
 
   app.post("/api/logout", (req, res, next) => {
@@ -92,6 +98,6 @@ export function setupAuth(app: Express) {
 
   app.get("/api/user", (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json(req.user);
+    res.json(sanitizeUser(req.user!));
   });
 }

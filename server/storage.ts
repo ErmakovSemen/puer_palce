@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 // modify the interface with any CRUD methods
@@ -22,6 +22,19 @@ export interface IStorage {
   // Settings
   getSettings(): Promise<Settings>;
   updateSettings(settings: UpdateSettings): Promise<Settings>;
+  
+  // Orders
+  getUserOrders(userId: string): Promise<DbOrder[]>;
+  createOrder(orderData: { 
+    userId?: string | null; 
+    name: string; 
+    email: string; 
+    phone: string; 
+    address: string; 
+    comment?: string; 
+    items: string; 
+    total: number; 
+  }): Promise<DbOrder>;
   
   // Session store for auth
   sessionStore: any;
@@ -168,11 +181,41 @@ export class MemStorage implements IStorage {
     this.settings = { ...this.settings, ...updateData };
     return this.settings;
   }
+
+  async getUserOrders(userId: string): Promise<DbOrder[]> {
+    // MemStorage doesn't persist orders, return empty array
+    return [];
+  }
+
+  async createOrder(orderData: { 
+    userId?: string | null; 
+    name: string; 
+    email: string; 
+    phone: string; 
+    address: string; 
+    comment?: string; 
+    items: string; 
+    total: number; 
+  }): Promise<DbOrder> {
+    // MemStorage doesn't persist orders, return mock order
+    return {
+      id: 1,
+      userId: orderData.userId ?? null,
+      name: orderData.name,
+      email: orderData.email,
+      phone: orderData.phone,
+      address: orderData.address,
+      comment: orderData.comment ?? null,
+      items: orderData.items,
+      total: orderData.total,
+      createdAt: new Date().toISOString(),
+    };
+  }
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable, settings as settingsTable } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
 const PostgresSessionStore = connectPg(session);
@@ -344,6 +387,40 @@ export class DbStorage implements IStorage {
       .returning();
     
     return settings;
+  }
+
+  async getUserOrders(userId: string): Promise<DbOrder[]> {
+    const orders = await db
+      .select()
+      .from(ordersTable)
+      .where(eq(ordersTable.userId, userId))
+      .orderBy(desc(ordersTable.createdAt));
+    
+    return orders;
+  }
+
+  async createOrder(orderData: { 
+    userId?: string | null; 
+    name: string; 
+    email: string; 
+    phone: string; 
+    address: string; 
+    comment?: string; 
+    items: string; 
+    total: number; 
+  }): Promise<DbOrder> {
+    const [order] = await db.insert(ordersTable).values({
+      userId: orderData.userId ?? null,
+      name: orderData.name,
+      email: orderData.email,
+      phone: orderData.phone,
+      address: orderData.address,
+      comment: orderData.comment ?? null,
+      items: orderData.items,
+      total: orderData.total,
+    }).returning();
+    
+    return order;
   }
 }
 

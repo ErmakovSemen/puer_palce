@@ -27,15 +27,20 @@ interface CheckoutFormProps {
   onSubmit: (data: CheckoutFormValues) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  user?: {
+    email: string;
+    name?: string | null;
+    phone?: string | null;
+  } | null;
 }
 
-export default function CheckoutForm({ onSubmit, onCancel, isSubmitting }: CheckoutFormProps) {
+export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, user }: CheckoutFormProps) {
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
-      name: "",
-      email: "",
-      phone: "",
+      name: user?.name || "",
+      email: user?.email || "",
+      phone: user?.phone || "",
       address: "",
       comment: "",
     },

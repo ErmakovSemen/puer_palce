@@ -218,6 +218,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get user orders (requires auth)
+  app.get("/api/orders", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Необходима авторизация" });
+    }
+    
+    try {
+      const userId = (req.user as any).id;
+      const orders = await storage.getUserOrders(userId);
+      res.json(orders);
+    } catch (error) {
+      console.error("[Orders] Failed to get user orders:", error);
+      res.status(500).json({ error: "Ошибка получения заказов" });
+    }
+  });
+
   // Order placement route
   app.post("/api/orders", async (req, res) => {
     try {
@@ -228,6 +244,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         itemCount: orderData.items.length,
         total: orderData.total
       });
+      
+      // Get userId if user is authenticated
+      const userId = req.isAuthenticated() ? (req.user as any).id : null;
+      
+      // Save order to database
+      const savedOrder = await storage.createOrder({
+        userId,
+        name: orderData.name,
+        email: orderData.email,
+        phone: orderData.phone,
+        address: orderData.address,
+        comment: orderData.comment,
+        items: JSON.stringify(orderData.items),
+        total: orderData.total,
+      });
+      console.log("[Order] Order saved to database, ID:", savedOrder.id);
       
       // Send email notification
       try {
@@ -242,7 +274,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.status(201).json({ 
         success: true, 
-        message: "Заказ успешно оформлен" 
+        message: "Заказ успешно оформлен",
+        orderId: savedOrder.id,
       });
     } catch (error) {
       console.error("[Order] Order processing error:", error);

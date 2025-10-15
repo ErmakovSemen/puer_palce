@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/Home";
 import Admin from "@/pages/Admin";
 import Auth from "@/pages/Auth";
+import Profile from "@/pages/Profile";
 import { useDesignMode } from "@/hooks/use-design-mode";
 import { AuthProvider } from "@/hooks/use-auth";
 
@@ -16,6 +17,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/admin" component={Admin} />
       <Route path="/auth" component={Auth} />
+      <Route path="/profile" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );
