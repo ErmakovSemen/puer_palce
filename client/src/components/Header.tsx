@@ -1,8 +1,17 @@
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, User, LogOut } from "lucide-react";
 import { SiTelegram, SiVk } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface HeaderProps {
   cartItemCount: number;
@@ -12,10 +21,16 @@ interface HeaderProps {
 }
 
 export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmin = false }: HeaderProps) {
+  const { user, logoutMutation } = useAuth();
+  
   const handleLogoClick = () => {
     if (onLogoClick) {
       onLogoClick();
     }
+  };
+
+  const handleLogout = () => {
+    logoutMutation.mutate();
   };
 
   return (
@@ -51,6 +66,55 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                 <SiVk className="w-5 h-5" />
               </a>
             </Button>
+            
+            {/* User auth button */}
+            {!isAdmin && (
+              <>
+                {user ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-12 w-12"
+                        data-testid="button-user-menu"
+                      >
+                        <User className="w-6 h-6" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>
+                        {user.name || user.email}
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href="/profile" data-testid="link-profile">
+                          Личный кабинет
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={handleLogout}
+                        data-testid="button-logout"
+                      >
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Выйти
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    asChild
+                    data-testid="button-login"
+                  >
+                    <Link href="/auth">
+                      Войти
+                    </Link>
+                  </Button>
+                )}
+              </>
+            )}
+            
             {!isAdmin && (
               <Button
                 variant="ghost"
