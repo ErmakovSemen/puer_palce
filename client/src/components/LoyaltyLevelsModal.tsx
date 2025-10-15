@@ -6,7 +6,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Trophy, Check, Lock } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 
 interface LoyaltyLevelsModalProps {
   open: boolean;
@@ -17,88 +17,86 @@ interface LoyaltyLevelsModalProps {
 export function LoyaltyLevelsModal({ open, onOpenChange, currentXP }: LoyaltyLevelsModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto" data-testid="modal-loyalty-levels">
+      <DialogContent className="max-w-6xl max-h-[80vh] overflow-y-auto" data-testid="modal-loyalty-levels">
         <DialogHeader>
           <DialogTitle className="text-2xl">Программа лояльности</DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4 mt-4">
-          {LOYALTY_LEVELS.map((level) => {
+        <div className="flex gap-6 mt-6 overflow-x-auto pb-4">
+          {LOYALTY_LEVELS.map((level, index) => {
             const isUnlocked = currentXP >= level.minXP;
             const isCurrent = currentXP >= level.minXP && (level.maxXP === null || currentXP <= level.maxXP);
             
             return (
-              <Card 
-                key={level.level} 
-                className={`p-4 ${isCurrent ? 'ring-2' : ''}`}
-                style={isCurrent ? { borderColor: level.color } : undefined}
-                data-testid={`card-level-${level.level}`}
-              >
-                <div className="flex items-start gap-4">
-                  <div 
-                    className="w-12 h-12 rounded flex items-center justify-center flex-shrink-0"
-                    style={{ backgroundColor: level.color }}
-                  >
-                    {isUnlocked ? (
-                      <Trophy className="w-6 h-6 text-white" />
-                    ) : (
-                      <Lock className="w-6 h-6 text-white" />
-                    )}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-lg" data-testid={`text-level-${level.level}-name`}>
-                        {level.name}
-                      </h3>
-                      {isCurrent && (
-                        <span className="text-xs px-2 py-0.5 bg-primary text-primary-foreground rounded">
-                          Текущий
-                        </span>
+              <div key={level.level} className="flex items-start">
+                <div 
+                  className={`flex-shrink-0 p-4 ${isCurrent ? 'ring-2 ring-primary rounded' : ''}`}
+                  style={{ minWidth: '280px' }}
+                  data-testid={`card-level-${level.level}`}
+                >
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-10 h-10 rounded border-2 border-border bg-background flex items-center justify-center flex-shrink-0">
+                      {isUnlocked ? (
+                        <Trophy className="w-5 h-5" />
+                      ) : (
+                        <Lock className="w-5 h-5 text-muted-foreground" />
                       )}
                     </div>
                     
-                    <p className="text-sm text-muted-foreground mb-3" data-testid={`text-level-${level.level}-xp`}>
-                      {level.minXP.toLocaleString()} XP
-                      {level.maxXP !== null && ` - ${level.maxXP.toLocaleString()} XP`}
-                      {level.maxXP === null && '+'}
-                    </p>
-                    
-                    {level.discount > 0 && (
-                      <div className="mb-3">
-                        <span 
-                          className="inline-block px-3 py-1 rounded text-sm font-medium"
-                          style={{ 
-                            backgroundColor: level.color + '20',
-                            color: level.color 
-                          }}
-                          data-testid={`text-level-${level.level}-discount`}
-                        >
-                          Скидка {level.discount}%
-                        </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-base" data-testid={`text-level-${level.level}-name`}>
+                          {level.name}
+                        </h3>
+                        {isCurrent && (
+                          <span className="text-xs px-2 py-0.5 bg-foreground text-background rounded">
+                            Текущий
+                          </span>
+                        )}
                       </div>
-                    )}
-                    
-                    <ul className="space-y-2">
-                      {level.benefits.map((benefit, index) => (
-                        <li 
-                          key={index} 
-                          className="flex items-start gap-2 text-sm"
-                          data-testid={`text-level-${level.level}-benefit-${index}`}
-                        >
-                          <Check className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: level.color }} />
-                          <span>{benefit}</span>
-                        </li>
-                      ))}
-                    </ul>
+                      
+                      <p className="text-xs text-muted-foreground" data-testid={`text-level-${level.level}-xp`}>
+                        {level.minXP.toLocaleString()} XP
+                        {level.maxXP !== null && ` - ${level.maxXP.toLocaleString()} XP`}
+                        {level.maxXP === null && '+'}
+                      </p>
+                    </div>
                   </div>
+                  
+                  {level.discount > 0 && (
+                    <div className="mb-3">
+                      <span 
+                        className="inline-block px-2 py-1 border border-border rounded text-sm"
+                        data-testid={`text-level-${level.level}-discount`}
+                      >
+                        Скидка {level.discount}%
+                      </span>
+                    </div>
+                  )}
+                  
+                  <ul className="space-y-2">
+                    {level.benefits.map((benefit, benefitIndex) => (
+                      <li 
+                        key={benefitIndex} 
+                        className="flex items-start gap-2 text-sm"
+                        data-testid={`text-level-${level.level}-benefit-${benefitIndex}`}
+                      >
+                        <Check className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <span className="text-sm">{benefit}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </Card>
+                
+                {index < LOYALTY_LEVELS.length - 1 && (
+                  <Separator orientation="vertical" className="h-auto self-stretch mx-2" />
+                )}
+              </div>
             );
           })}
         </div>
         
-        <div className="mt-6 p-4 bg-muted rounded-md">
+        <div className="mt-4 p-4 border border-border rounded">
           <p className="text-sm text-muted-foreground">
             <strong>Как получить XP:</strong> За каждый рубль покупки вы получаете 1 XP. 
             Накапливайте опыт, повышайте уровень и получайте всё больше привилегий!
