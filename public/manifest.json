@@ -1,0 +1,28 @@
+{
+  "name": "Пуэр Паб",
+  "short_name": "Пуэр Паб",
+  "description": "Интернет-магазин премиального китайского чая Пуэр",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["shopping", "lifestyle"],
+  "lang": "ru",
+  "dir": "ltr",
+  "prefer_related_applications": false
+}
