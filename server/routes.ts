@@ -6,6 +6,7 @@ import multer from "multer";
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
+import { setupAuth } from "./auth";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -27,6 +28,8 @@ function requireAdminAuth(req: any, res: any, next: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Setup user authentication (email/password)
+  setupAuth(app);
   // Admin auth verification endpoint
   app.post("/api/auth/verify", requireAdminAuth, async (_req, res) => {
     // If middleware passes, password is correct

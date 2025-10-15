@@ -6,7 +6,7 @@ import { randomUUID } from "crypto";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
   getQuizConfig(): Promise<QuizConfig>;
@@ -22,6 +22,9 @@ export interface IStorage {
   // Settings
   getSettings(): Promise<Settings>;
   updateSettings(settings: UpdateSettings): Promise<Settings>;
+  
+  // Session store for auth
+  sessionStore: any;
 }
 
 const defaultQuizConfig: QuizConfig = {
@@ -66,12 +69,18 @@ const defaultQuizConfig: QuizConfig = {
   ],
 };
 
+import createMemoryStore from "memorystore";
+import session from "express-session";
+
+const MemoryStore = createMemoryStore(session);
+
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private quizConfig: QuizConfig;
   private products: Map<number, Product>;
   private productIdCounter: number;
   private settings: Settings;
+  sessionStore: any;
 
   constructor() {
     this.users = new Map();
@@ -79,21 +88,29 @@ export class MemStorage implements IStorage {
     this.products = new Map();
     this.productIdCounter = 1;
     this.settings = { id: 1, designMode: "minimalist" };
+    this.sessionStore = new MemoryStore({
+      checkPeriod: 86400000,
+    });
   }
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
+  async getUserByEmail(email: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find(
-      (user) => user.username === username,
+      (user) => user.email === email,
     );
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
+    const user: User = { 
+      ...insertUser, 
+      id,
+      name: insertUser.name ?? null,
+      phone: insertUser.phone ?? null,
+    };
     this.users.set(id, user);
     return user;
   }
@@ -117,7 +134,11 @@ export class MemStorage implements IStorage {
 
   async createProduct(insertProduct: InsertProduct): Promise<Product> {
     const id = this.productIdCounter++;
-    const product: Product = { ...insertProduct, id };
+    const product: Product = { 
+      ...insertProduct, 
+      id,
+      fixedQuantity: insertProduct.fixedQuantity ?? null,
+    };
     this.products.set(id, product);
     return product;
   }
@@ -126,7 +147,11 @@ export class MemStorage implements IStorage {
     const existing = this.products.get(id);
     if (!existing) return undefined;
     
-    const updated: Product = { ...insertProduct, id };
+    const updated: Product = { 
+      ...insertProduct, 
+      id,
+      fixedQuantity: insertProduct.fixedQuantity ?? null,
+    };
     this.products.set(id, updated);
     return updated;
   }
@@ -148,8 +173,19 @@ export class MemStorage implements IStorage {
 import { db } from "./db";
 import { users as usersTable, products as productsTable, settings as settingsTable } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import connectPg from "connect-pg-simple";
+
+const PostgresSessionStore = connectPg(session);
 
 export class DbStorage implements IStorage {
+  sessionStore: any;
+
+  constructor() {
+    this.sessionStore = new PostgresSessionStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: true,
+    });
+  }
   async seedInitialSettings(): Promise<void> {
     const allSettings = await db.select().from(settingsTable);
     
@@ -173,7 +209,10 @@ export class DbStorage implements IStorage {
           pricePerGram: 15.50,
           images: [],
           teaType: 'Шу Пуэр',
-          effects: ['Бодрит', 'Концентрирует']
+          teaTypeColor: '#8B4513',
+          effects: ['Бодрит', 'Концентрирует'],
+          availableQuantities: ['25', '50', '100'],
+          fixedQuantityOnly: false,
         },
         {
           name: 'Шэн Пуэр Дикие деревья',
@@ -181,7 +220,10 @@ export class DbStorage implements IStorage {
           pricePerGram: 28.00,
           images: [],
           teaType: 'Шэн Пуэр',
-          effects: ['Концентрирует', 'Расслабляет']
+          teaTypeColor: '#228B22',
+          effects: ['Концентрирует', 'Расслабляет'],
+          availableQuantities: ['25', '50', '100'],
+          fixedQuantityOnly: false,
         },
         {
           name: 'Белый Пуэр Лунный свет',
@@ -189,7 +231,10 @@ export class DbStorage implements IStorage {
           pricePerGram: 22.50,
           images: [],
           teaType: 'Белый Пуэр',
-          effects: ['Успокаивает', 'Расслабляет']
+          teaTypeColor: '#F5DEB3',
+          effects: ['Успокаивает', 'Расслабляет'],
+          availableQuantities: ['25', '50', '100'],
+          fixedQuantityOnly: false,
         },
         {
           name: 'Красный Пуэр Императорский',
@@ -197,7 +242,10 @@ export class DbStorage implements IStorage {
           pricePerGram: 35.00,
           images: [],
           teaType: 'Красный Пуэр',
-          effects: ['Согревает', 'Тонизирует']
+          teaTypeColor: '#DC143C',
+          effects: ['Согревает', 'Тонизирует'],
+          availableQuantities: ['25', '50', '100'],
+          fixedQuantityOnly: false,
         },
         {
           name: 'Чёрный Пуэр Старые головы',
@@ -205,7 +253,10 @@ export class DbStorage implements IStorage {
           pricePerGram: 18.75,
           images: [],
           teaType: 'Чёрный Пуэр',
-          effects: ['Бодрит', 'Согревает']
+          teaTypeColor: '#2F4F4F',
+          effects: ['Бодрит', 'Согревает'],
+          availableQuantities: ['25', '50', '100'],
+          fixedQuantityOnly: false,
         }
       ];
 
@@ -222,8 +273,8 @@ export class DbStorage implements IStorage {
     return user;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.username, username));
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email));
     return user;
   }
 

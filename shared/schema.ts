@@ -3,15 +3,25 @@ import { pgTable, text, varchar, serial, real, boolean, integer } from "drizzle-
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Users table for authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+  email: text("email").notNull().unique(),
   password: text("password").notNull(),
+  name: text("name"),
+  phone: text("phone"),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
+export const insertUserSchema = createInsertSchema(users, {
+  email: z.string().email("Введите корректный email"),
+  password: z.string().min(6, "Пароль должен содержать минимум 6 символов"),
+  name: z.string().min(2, "Имя должно содержать минимум 2 символа").optional(),
+  phone: z.string().min(10, "Введите корректный номер телефона").optional(),
+}).pick({
+  email: true,
   password: true,
+  name: true,
+  phone: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -116,7 +126,21 @@ export const updateSettingsSchema = z.object({
 export type Settings = typeof settings.$inferSelect;
 export type UpdateSettings = z.infer<typeof updateSettingsSchema>;
 
-// Order schema
+// Orders table
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id), // nullable - for guest orders
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  address: text("address").notNull(),
+  comment: text("comment"),
+  items: text("items").notNull(), // JSON string of order items
+  total: real("total").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Order validation schemas
 export const orderItemSchema = z.object({
   id: z.number(),
   name: z.string(),
@@ -136,3 +160,4 @@ export const orderSchema = z.object({
 
 export type OrderItem = z.infer<typeof orderItemSchema>;
 export type Order = z.infer<typeof orderSchema>;
+export type DbOrder = typeof orders.$inferSelect;
