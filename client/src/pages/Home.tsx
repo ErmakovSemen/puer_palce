@@ -6,6 +6,7 @@ import ProductFilters from "@/components/ProductFilters";
 import CartDrawer from "@/components/CartDrawer";
 import CheckoutForm from "@/components/CheckoutForm";
 import TeaQuiz from "@/components/TeaQuiz";
+import { getLoyaltyDiscount } from "@shared/loyalty";
 import {
   Dialog,
   DialogContent,
@@ -67,6 +68,10 @@ export default function Home() {
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
+  const cartTotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  }, [cartItems]);
+
   const addToCart = (productId: number, quantityInGrams: number) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
@@ -116,12 +121,10 @@ export default function Home() {
   };
 
   const handleCheckout = () => {
-    const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    
-    if (total < 500) {
+    if (cartTotal < 500) {
       toast({
         title: "Минимальная сумма заказа 500₽",
-        description: `Текущая сумма: ${Math.round(total)}₽. Добавьте товаров еще на ${Math.round(500 - total)}₽`,
+        description: `Текущая сумма: ${Math.round(cartTotal)}₽. Добавьте товаров еще на ${Math.round(500 - cartTotal)}₽`,
         variant: "destructive",
       });
       return;
@@ -161,12 +164,15 @@ export default function Home() {
       };
     });
 
-    const total = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    // Apply loyalty discount if user is authenticated
+    const discount = user ? getLoyaltyDiscount(user.xp) : 0;
+    const discountAmount = (cartTotal * discount) / 100;
+    const finalTotal = cartTotal - discountAmount;
 
     orderMutation.mutate({
       ...data,
       items: orderItems,
-      total,
+      total: finalTotal,
     });
   };
 
@@ -263,6 +269,7 @@ export default function Home() {
             onSubmit={handleOrderSubmit}
             onCancel={() => setIsCheckoutOpen(false)}
             isSubmitting={orderMutation.isPending}
+            total={cartTotal}
             user={user}
           />
         </DialogContent>

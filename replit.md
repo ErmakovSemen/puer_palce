@@ -54,9 +54,44 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 4.  **Order Submission**: Frontend sends cart data with items already in grams to `POST /api/orders`.
 5.  **Backend Validation**: Zod schema validates order and customer details.
 6.  **Database Storage**: Orders are saved to PostgreSQL with nullable userId field - links to users.id when user is authenticated, null for guest orders.
-7.  **Email Notification**: Resend service sends formatted email to `semen.learning@gmail.com` with order details.
-8.  **Success Response**: Authenticated users see standard confirmation, guests see registration prompt with loyalty program messaging.
-9.  **Error Handling**: Specific HTTP status codes (400, 502, 500) for validation, email service, or internal errors.
+7.  **XP Award**: Authenticated users receive XP equal to their order total (1 RUB = 1 XP). This happens automatically after order creation before email notification.
+8.  **Email Notification**: Resend service sends formatted email to `semen.learning@gmail.com` with order details.
+9.  **Success Response**: Authenticated users see standard confirmation, guests see registration prompt with loyalty program messaging.
+10.  **Error Handling**: Specific HTTP status codes (400, 502, 500) for validation, email service, or internal errors.
+
+### Loyalty Program
+
+**XP-Based Progression System**: 1 RUB spent = 1 XP earned. XP accumulates automatically for authenticated users with each purchase.
+
+**Tier Structure**:
+- **Level 1: Новичок** (0-2,999 XP)
+  - Discount: 0%
+  - Benefits: Access to base catalog
+  
+- **Level 2: Ценитель** (3,000-6,999 XP)
+  - Discount: 5%
+  - Benefits: 5% discount on all purchases
+  
+- **Level 3: Чайный мастер** (7,000-14,999 XP)
+  - Discount: 10%
+  - Benefits: 10% discount, personal chat support, private tea events access, custom tea requests
+  
+- **Level 4: Чайный Гуру** (15,000+ XP)
+  - Discount: 15%
+  - Benefits: 15% discount, all Level 3 benefits, priority service, exclusive offers
+
+**Technical Implementation**:
+- **Database**: User XP stored in `users.xp` (integer, default 0)
+- **XP Calculation**: Automatic award via `storage.addUserXP()` after order creation
+- **Discount Application**: Calculated via `getLoyaltyDiscount(xp)` utility, applied at checkout
+- **UI Components**:
+  - `LoyaltyProgressBar`: Shows current level, XP, and progress to next level in profile
+  - `LoyaltyLevelsModal`: Displays all tier information when progress bar is clicked
+  - Checkout form displays discount amount and final total for authenticated users
+- **Shared Utilities** (`shared/loyalty.ts`):
+  - `getLoyaltyLevel(xp)`: Returns current loyalty tier
+  - `getLoyaltyDiscount(xp)`: Returns discount percentage
+  - `getLoyaltyProgress(xp)`: Returns progress data for UI
 
 ## External Dependencies
 

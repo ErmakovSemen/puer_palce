@@ -261,6 +261,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       console.log("[Order] Order saved to database, ID:", savedOrder.id);
       
+      // Award XP to authenticated users (1 RUB = 1 XP)
+      if (userId) {
+        const xpToAward = Math.floor(orderData.total);
+        await storage.addUserXP(userId, xpToAward);
+        console.log(`[Order] Awarded ${xpToAward} XP to user ${userId}`);
+      }
+      
       // Send email notification
       try {
         await sendOrderNotification(orderData);

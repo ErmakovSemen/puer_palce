@@ -14,6 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { updateUserSchema, type UpdateUser } from "@shared/schema";
+import { LoyaltyProgressBar } from "@/components/LoyaltyProgressBar";
+import { LoyaltyLevelsModal } from "@/components/LoyaltyLevelsModal";
 
 interface DbOrder {
   id: number;
@@ -39,6 +41,7 @@ export default function Profile() {
   const { user, isLoading: isAuthLoading } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [showLoyaltyModal, setShowLoyaltyModal] = useState(false);
 
   const form = useForm<UpdateUser>({
     resolver: zodResolver(updateUserSchema),
@@ -221,6 +224,14 @@ export default function Profile() {
           </CardContent>
         </Card>
 
+        {/* Loyalty Program Section */}
+        {user && (
+          <LoyaltyProgressBar 
+            xp={user.xp} 
+            onClick={() => setShowLoyaltyModal(true)}
+          />
+        )}
+
         {/* Orders Section */}
         <div>
           <h2 className="font-serif text-2xl font-bold mb-4 flex items-center gap-2">
@@ -325,6 +336,15 @@ export default function Profile() {
           )}
         </div>
       </div>
+
+      {/* Loyalty Levels Modal */}
+      {user && (
+        <LoyaltyLevelsModal
+          open={showLoyaltyModal}
+          onOpenChange={setShowLoyaltyModal}
+          currentXP={user.xp}
+        />
+      )}
     </div>
   );
 }

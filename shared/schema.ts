@@ -10,6 +10,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   name: text("name"),
   phone: text("phone"),
+  xp: integer("xp").notNull().default(0),
 });
 
 export const insertUserSchema = createInsertSchema(users, {

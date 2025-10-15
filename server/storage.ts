@@ -9,6 +9,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: { name?: string; phone?: string }): Promise<User | undefined>;
+  addUserXP(userId: string, xpAmount: number): Promise<User | undefined>;
   
   getQuizConfig(): Promise<QuizConfig>;
   updateQuizConfig(config: QuizConfig): Promise<QuizConfig>;
@@ -124,6 +125,7 @@ export class MemStorage implements IStorage {
       id,
       name: insertUser.name ?? null,
       phone: insertUser.phone ?? null,
+      xp: 0,
     };
     this.users.set(id, user);
     return user;
@@ -135,6 +137,15 @@ export class MemStorage implements IStorage {
     
     const updated: User = { ...user, ...data };
     this.users.set(id, updated);
+    return updated;
+  }
+
+  async addUserXP(userId: string, xpAmount: number): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { ...user, xp: user.xp + xpAmount };
+    this.users.set(userId, updated);
     return updated;
   }
 
@@ -343,6 +354,18 @@ export class DbStorage implements IStorage {
       .where(eq(usersTable.id, id))
       .returning();
     return user;
+  }
+
+  async addUserXP(userId: string, xpAmount: number): Promise<User | undefined> {
+    const user = await this.getUser(userId);
+    if (!user) return undefined;
+    
+    const [updatedUser] = await db
+      .update(usersTable)
+      .set({ xp: user.xp + xpAmount })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    return updatedUser;
   }
 
   async getQuizConfig(): Promise<QuizConfig> {

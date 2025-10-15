@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { getLoyaltyDiscount } from "@shared/loyalty";
+import { Separator } from "@/components/ui/separator";
 
 const checkoutSchema = z.object({
   name: z.string().min(2, "Имя должно содержать минимум 2 символа"),
@@ -27,14 +29,19 @@ interface CheckoutFormProps {
   onSubmit: (data: CheckoutFormValues) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
+  total: number;
   user?: {
     email: string;
     name?: string | null;
     phone?: string | null;
+    xp: number;
   } | null;
 }
 
-export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, user }: CheckoutFormProps) {
+export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, user }: CheckoutFormProps) {
+  const discount = user ? getLoyaltyDiscount(user.xp) : 0;
+  const discountAmount = (total * discount) / 100;
+  const finalTotal = total - discountAmount;
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
@@ -126,6 +133,39 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, user }:
             </FormItem>
           )}
         />
+
+        {/* Order Summary */}
+        <div className="space-y-2 pt-4">
+          <Separator />
+          <div className="space-y-2 py-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Сумма заказа:</span>
+              <span data-testid="text-order-subtotal">{Math.round(total)} ₽</span>
+            </div>
+            {discount > 0 && (
+              <>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Скидка ({discount}%):</span>
+                  <span className="text-green-600" data-testid="text-discount-amount">
+                    -{Math.round(discountAmount)} ₽
+                  </span>
+                </div>
+                <Separator />
+                <div className="flex justify-between font-semibold">
+                  <span>Итого к оплате:</span>
+                  <span data-testid="text-final-total">{Math.round(finalTotal)} ₽</span>
+                </div>
+              </>
+            )}
+            {discount === 0 && (
+              <div className="flex justify-between font-semibold">
+                <span>Итого:</span>
+                <span data-testid="text-total">{Math.round(total)} ₽</span>
+              </div>
+            )}
+          </div>
+          <Separator />
+        </div>
 
         <div className="flex gap-4">
           <Button
