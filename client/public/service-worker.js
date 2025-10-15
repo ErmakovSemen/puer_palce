@@ -1,4 +1,4 @@
-const CACHE_NAME = 'puer-pub-v1';
+const CACHE_NAME = 'puer-pub-v2';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
