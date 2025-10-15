@@ -66,6 +66,12 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
     - `npm run build` - builds web assets to `dist/public`
     - `npx cap sync` - copies assets to Android project
     - Android project located in `android/` directory (excluded from git)
+  - **Automated APK Build**: GitHub Actions workflow (`.github/workflows/android-build.yml`)
+    - Triggers automatically on push to main/master branch
+    - Manual trigger available via GitHub Actions UI
+    - Builds APK in ~5-10 minutes using cloud infrastructure
+    - Downloads APK from GitHub Actions → Artifacts tab
+    - Free tier: 2000 build minutes/month
   - **Distribution**: Ready for Google Play Store submission
   - **Future iOS**: iOS support possible with macOS development environment
 
