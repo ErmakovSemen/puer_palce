@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["imagemagick", "libheif"]
+packages = ["imagemagick", "libheif", "jdk17"]
 
 [deployment]
 deploymentTarget = "autoscale"
@@ -22,10 +22,6 @@ externalPort = 3002
 [[ports]]
 localPort = 34077
 externalPort = 6800
-
-[[ports]]
-localPort = 37021
-externalPort = 9000
 
 [[ports]]
 localPort = 37449
