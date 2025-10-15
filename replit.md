@@ -57,6 +57,17 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
   - **Offline Mode**: Graceful degradation when network is unavailable (requires at least one prior online visit)
   - **Installation**: Browser prompts users to "Add to Home Screen" on mobile devices
   - **Dual Usage**: PWA installation is optional - website remains fully functional in browser
+- **Native Mobile App (Capacitor)**: Android application built from the same codebase
+  - **Technology**: Capacitor 7.x wraps the web application in native Android container
+  - **Package ID**: `com.puerpub.app`
+  - **App Name**: "Пуэр Паб"
+  - **Shared Codebase**: 100% code reuse - same React app runs in web, PWA, and native Android
+  - **Build Process**: 
+    - `npm run build` - builds web assets to `dist/public`
+    - `npx cap sync` - copies assets to Android project
+    - Android project located in `android/` directory (excluded from git)
+  - **Distribution**: Ready for Google Play Store submission
+  - **Future iOS**: iOS support possible with macOS development environment
 
 ### Order Processing Flow
 
