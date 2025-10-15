@@ -24,7 +24,13 @@ export const insertUserSchema = createInsertSchema(users, {
   phone: true,
 });
 
+export const updateUserSchema = z.object({
+  name: z.string().min(2, "Имя должно содержать минимум 2 символа").optional(),
+  phone: z.string().min(10, "Введите корректный номер телефона").optional(),
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // Products

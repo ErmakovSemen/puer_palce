@@ -1,11 +1,19 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Redirect, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { User, Package, Mail, Phone, Home } from "lucide-react";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { User, Package, Mail, Phone, Home, Edit, Save, X } from "lucide-react";
+import { useState } from "react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { updateUserSchema, type UpdateUser } from "@shared/schema";
 
 interface DbOrder {
   id: number;
@@ -29,11 +37,59 @@ interface OrderItem {
 
 export default function Profile() {
   const { user, isLoading: isAuthLoading } = useAuth();
+  const { toast } = useToast();
+  const [isEditing, setIsEditing] = useState(false);
+
+  const form = useForm<UpdateUser>({
+    resolver: zodResolver(updateUserSchema),
+    defaultValues: {
+      name: user?.name || "",
+      phone: user?.phone || "",
+    },
+  });
 
   const { data: orders = [], isLoading: isOrdersLoading } = useQuery<DbOrder[]>({
     queryKey: ['/api/orders'],
     enabled: !!user,
   });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: UpdateUser) => {
+      return await apiRequest('PUT', '/api/user', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user'] });
+      setIsEditing(false);
+      toast({
+        title: "Профиль обновлен",
+        description: "Ваши данные успешно сохранены",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось обновить профиль",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleEditClick = () => {
+    form.reset({
+      name: user?.name || "",
+      phone: user?.phone || "",
+    });
+    setIsEditing(true);
+  };
+
+  const handleSaveClick = form.handleSubmit((data) => {
+    updateProfileMutation.mutate(data);
+  });
+
+  const handleCancelClick = () => {
+    setIsEditing(false);
+    form.reset();
+  };
 
   // Redirect to auth if not logged in
   if (!isAuthLoading && !user) {
@@ -51,43 +107,117 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center gap-4 mb-8">
+        <div className="mb-8">
           <Link href="/">
             <Button variant="outline" size="default" data-testid="button-home">
               <Home className="w-4 h-4 mr-2" />
               Пуэр Паб
             </Button>
           </Link>
-          <h1 className="font-serif text-3xl md:text-4xl font-bold" data-testid="text-profile-title">
-            Личный кабинет
-          </h1>
         </div>
 
         {/* User Profile Card */}
         <Card className="mb-8" data-testid="card-user-profile">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="w-5 h-5" />
-              Профиль
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <User className="w-5 h-5" />
+                Профиль
+              </CardTitle>
+              {!isEditing ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEditClick}
+                  data-testid="button-edit-profile"
+                >
+                  <Edit className="w-4 h-4 mr-2" />
+                  Редактировать
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelClick}
+                    data-testid="button-cancel-edit"
+                  >
+                    <X className="w-4 h-4 mr-2" />
+                    Отмена
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleSaveClick}
+                    disabled={updateProfileMutation.isPending}
+                    data-testid="button-save-profile"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {updateProfileMutation.isPending ? "Сохранение..." : "Сохранить"}
+                  </Button>
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-3">
               <Mail className="w-4 h-4 text-muted-foreground" />
               <span data-testid="text-user-email">{user?.email}</span>
             </div>
-            {user?.name && (
-              <div className="flex items-center gap-3">
-                <User className="w-4 h-4 text-muted-foreground" />
-                <span data-testid="text-user-name">{user.name}</span>
-              </div>
-            )}
-            {user?.phone && (
-              <div className="flex items-center gap-3">
-                <Phone className="w-4 h-4 text-muted-foreground" />
-                <span data-testid="text-user-phone">{user.phone}</span>
-              </div>
-            )}
+            
+            {/* Name - editable */}
+            <div className="flex items-center gap-3">
+              <User className="w-4 h-4 text-muted-foreground" />
+              {isEditing ? (
+                <Form {...form}>
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Введите имя"
+                            data-testid="input-edit-name"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </Form>
+              ) : (
+                <span data-testid="text-user-name">{user?.name || "Не указано"}</span>
+              )}
+            </div>
+            
+            {/* Phone - editable */}
+            <div className="flex items-center gap-3">
+              <Phone className="w-4 h-4 text-muted-foreground" />
+              {isEditing ? (
+                <Form {...form}>
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem className="flex-1">
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Введите телефон"
+                            data-testid="input-edit-phone"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </Form>
+              ) : (
+                <span data-testid="text-user-phone">{user?.phone || "Не указано"}</span>
+              )}
+            </div>
           </CardContent>
         </Card>
 
