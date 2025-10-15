@@ -1,10 +1,11 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
-import { Redirect } from "wouter";
+import { Redirect, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { User, Package, Mail, Phone } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { User, Package, Mail, Phone, Home } from "lucide-react";
 
 interface DbOrder {
   id: number;
@@ -50,9 +51,17 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="font-serif text-3xl md:text-4xl font-bold mb-8" data-testid="text-profile-title">
-          Личный кабинет
-        </h1>
+        <div className="flex items-center gap-4 mb-8">
+          <Link href="/">
+            <Button variant="outline" size="default" data-testid="button-home">
+              <Home className="w-4 h-4 mr-2" />
+              Пуэр Паб
+            </Button>
+          </Link>
+          <h1 className="font-serif text-3xl md:text-4xl font-bold" data-testid="text-profile-title">
+            Личный кабинет
+          </h1>
+        </div>
 
         {/* User Profile Card */}
         <Card className="mb-8" data-testid="card-user-profile">
