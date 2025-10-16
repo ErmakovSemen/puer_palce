@@ -1,23 +1,30 @@
-import { Capacitor } from '@capacitor/core';
-
 /**
  * Determines the correct API base URL based on the platform
  * - Web/PWA: Uses relative paths (same origin)
  * - Native (Android/iOS): Uses production server URL
  */
 export function getApiBaseUrl(): string {
-  // Check if running in native Capacitor app
-  if (Capacitor.isNativePlatform()) {
-    // Use production URL from environment variable
-    const productionUrl = import.meta.env.VITE_API_URL;
-    
-    if (!productionUrl) {
-      console.error('VITE_API_URL not set for native platform!');
-      // Fallback to empty string will cause requests to fail visibly
-      return '';
+  // Safely check if running in native Capacitor app
+  try {
+    // Dynamic import to avoid errors in web builds
+    if (typeof window !== 'undefined' && (window as any).Capacitor) {
+      const { Capacitor } = (window as any);
+      if (Capacitor.isNativePlatform && Capacitor.isNativePlatform()) {
+        // Use production URL from environment variable
+        const productionUrl = import.meta.env.VITE_API_URL;
+        
+        if (!productionUrl) {
+          console.error('VITE_API_URL not set for native platform!');
+          // Fallback to empty string will cause requests to fail visibly
+          return '';
+        }
+        
+        return productionUrl;
+      }
     }
-    
-    return productionUrl;
+  } catch (e) {
+    // Capacitor not available, continue with web mode
+    console.debug('Running in web mode');
   }
   
   // Web/PWA: use relative paths (same origin)
