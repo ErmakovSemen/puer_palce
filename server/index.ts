@@ -54,6 +54,14 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Allow embedding in Replit preview iframe
+app.use((req, res, next) => {
+  // Allow Replit preview iframe
+  res.setHeader('X-Frame-Options', 'ALLOWALL');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.replit.com https://*.replit.dev");
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
