@@ -62,13 +62,21 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
   - **Package ID**: `com.puerpub.app`
   - **App Name**: "Пуэр Паб"
   - **Shared Codebase**: 100% code reuse - same React app runs in web, PWA, and native Android
+  - **API Configuration** (CRITICAL for Android):
+    - Web/PWA: Uses same-origin API (no config needed)
+    - Android: Requires `VITE_API_URL` env variable pointing to production backend
+    - Platform detection via `Capacitor.isNativePlatform()` in `client/src/lib/api-config.ts`
+    - All API requests automatically use correct URL via `getApiUrl()` utility
+    - **Setup**: Set `VITE_API_URL=https://your-app.replit.app` in `.env` before Android build
   - **Build Process**: 
     - `npm run build` - builds web assets to `dist/public`
     - `npx cap sync` - copies assets to Android project
     - Android project located in `android/` directory (excluded from git)
   - **Automated APK Build**: GitHub Actions workflow (`.github/workflows/android-build.yml`)
+    - Requires JDK 21 (not 17) for Capacitor compatibility
     - Triggers automatically on push to main/master branch
     - Manual trigger available via GitHub Actions UI
+    - Recreates Android project from scratch (`npx cap add android` then sync)
     - Builds APK in ~5-10 minutes using cloud infrastructure
     - Downloads APK from GitHub Actions → Artifacts tab
     - Free tier: 2000 build minutes/month

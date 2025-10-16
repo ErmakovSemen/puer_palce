@@ -5,6 +5,10 @@ server/public
 vite.config.ts.*
 *.tar.gz
 
+# Environment variables
+.env
+.env.local
+
 # Capacitor
 android/
 ios/

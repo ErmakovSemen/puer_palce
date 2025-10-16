@@ -28,6 +28,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
+      - name: Create .env file
+        run: |
+          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env
+          echo "✅ Created .env with API URL"
+      
       - name: Build web application
         run: npm run build
       
