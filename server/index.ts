@@ -1,9 +1,56 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
 
 const app = express();
+
+// CORS configuration for native apps (Capacitor) and web
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Allow same-origin requests (no origin header means same-origin)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    
+    // Parse origin URL to check protocol and hostname
+    try {
+      const url = new URL(origin);
+      const protocol = url.protocol.replace(':', '');
+      const hostname = url.hostname;
+      
+      // Allow requests from Capacitor/Ionic native apps (with any port)
+      if (protocol === 'capacitor' || protocol === 'ionic') {
+        callback(null, true);
+        return;
+      }
+      
+      // Allow localhost (for development and Capacitor)
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        callback(null, true);
+        return;
+      }
+    } catch (e) {
+      // Invalid URL, fall through to default behavior
+      log(`Invalid origin URL: ${origin}`);
+    }
+    
+    // In development, allow all origins
+    if (process.env.NODE_ENV === 'development') {
+      callback(null, true);
+      return;
+    }
+    
+    // In production, reject other origins (don't throw error, just return false)
+    log(`CORS blocked origin: ${origin}`);
+    callback(null, false);
+  },
+  credentials: true, // Allow cookies and sessions for authentication
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
