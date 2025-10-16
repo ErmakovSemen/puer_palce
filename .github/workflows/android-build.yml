@@ -28,19 +28,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Create .env file
+      - name: Verify VITE_API_URL secret
         run: |
-          echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env
-          echo "✅ Created .env file"
           if [ -n "${{ secrets.VITE_API_URL }}" ]; then
             echo "✅ VITE_API_URL is set: ${{ secrets.VITE_API_URL }}"
           else
-            echo "⚠️ WARNING: VITE_API_URL is empty!"
+            echo "⚠️ CRITICAL ERROR: VITE_API_URL is empty!"
             exit 1
           fi
       
-      - name: Build web application
-        run: npm run build
+      - name: Build web application with API URL
+        run: VITE_API_URL=${{ secrets.VITE_API_URL }} npm run build
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
       
       - name: Create Android project
         run: npx cap add android
