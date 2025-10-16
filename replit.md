@@ -12,7 +12,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Frontend Architecture
 
-The frontend is built with **React 18 and TypeScript**, utilizing **Vite** for fast development and optimized builds. **Wouter** handles client-side routing. UI components are developed using **shadcn/ui** (based on Radix UI) styled with **Tailwind CSS**, and **Class Variance Authority (CVA)** for component variants. A custom theme system supports dual themes ("Classic" and "Minimalist") with dynamic switching and persistence. State management leverages **TanStack Query** for server state and `useState` for local UI state. The design system features a custom tea-inspired color palette, Google Fonts (Playfair Display, Inter, Noto Serif SC), and a mobile-first responsive grid.
+The frontend is built with **React 18 and TypeScript**, utilizing **Vite** for fast development and optimized builds. **Wouter** handles client-side routing. UI components are developed using **shadcn/ui** (based on Radix UI) styled with **Tailwind CSS**, and **Class Variance Authority (CVA)** for component variants. A custom theme system supports dual themes ("Classic" and "Minimalist") with dynamic switching and persistence. State management leverages **TanStack Query** for server state and `useState` for local UI state. The design system features a custom tea-inspired color palette, Google Fonts (Montserrat, Playfair Display, Noto Serif SC), and a mobile-first responsive grid.
 
 ### Backend Architecture
 
@@ -38,12 +38,12 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
   - Only one filter dropdown open at a time for cleaner UX
   - Selected items display in collapsed state with ellipsis truncation (shows up to 2 items, then "...")
   - "Очистить" (Clear) button appears when selections are active
-- **Sharp Geometric Design**: Minimal border-radius (0.25rem for general elements, 0 for badges) for a modern, angular aesthetic.
+- **Design System**: Clean, modern aesthetic with rounded corners for badges and UI elements, creating a softer, more approachable look
 - **Chinese-Inspired Decorative Elements**:
-  - All badges: Uniform double border (3px double black) for consistent minimalist aesthetic
+  - All badges: Uniform double border (3px double black) for consistent minimalist aesthetic with rounded corners
   - Tea type badges: Colored backgrounds with white text
   - Effect badges: White background with black text
-  - Decorative divider line between filters and products with square corner elements
+  - Decorative divider line between filters and products with rounded corner elements
   - Complete black & white color scheme (primary color changed from green to black)
 - **Progressive Web App (PWA)**: Installable mobile app experience with offline support
   - **Manifest**: Configured with Russian localization, black theme color, standalone display mode
