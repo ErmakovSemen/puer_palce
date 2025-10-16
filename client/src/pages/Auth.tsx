@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2 } from "lucide-react";
+import { Loader2, Home } from "lucide-react";
 
 export default function Auth() {
   const { user, isLoading, loginMutation, registerMutation } = useAuth();
@@ -44,6 +44,15 @@ export default function Auth() {
       {/* Form Section */}
       <div className="flex items-center justify-center p-8">
         <div className="w-full max-w-md">
+          {/* Home Button */}
+          <div className="mb-6">
+            <Link href="/">
+              <Button variant="ghost" size="sm" data-testid="button-home">
+                <Home className="h-4 w-4 mr-2" />
+                На главную
+              </Button>
+            </Link>
+          </div>
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8">
               <TabsTrigger value="login" data-testid="tab-login">Вход</TabsTrigger>
