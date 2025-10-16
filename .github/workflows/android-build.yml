@@ -31,7 +31,13 @@ jobs:
       - name: Create .env file
         run: |
           echo "VITE_API_URL=${{ secrets.VITE_API_URL }}" > .env
-          echo "✅ Created .env with API URL"
+          echo "✅ Created .env file"
+          if [ -n "${{ secrets.VITE_API_URL }}" ]; then
+            echo "✅ VITE_API_URL is set: ${{ secrets.VITE_API_URL }}"
+          else
+            echo "⚠️ WARNING: VITE_API_URL is empty!"
+            exit 1
+          fi
       
       - name: Build web application
         run: npm run build
