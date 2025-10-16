@@ -76,7 +76,7 @@
   --chart-4: 30 40% 60%;
   --chart-5: 160 25% 50%;
 
-  --font-sans: 'Inter', Open Sans, sans-serif;
+  --font-sans: 'Montserrat', Open Sans, sans-serif;
   --font-serif: 'Playfair Display', Georgia, serif;
   --font-mono: Menlo, monospace;
   --radius: 0.25rem; /* 4px - sharper design */
@@ -409,10 +409,5 @@
   .border.active-elevate-2:not(.no-active-interaction-elevate)::after,
   .border.hover-elevate:not(.no-hover-interaction-elevate)::after {
     inset: -1px;
-  }
-
-  /* Sharp design - remove border radius from badges */
-  [data-testid^="badge-"] {
-    border-radius: 0 !important;
   }
 }

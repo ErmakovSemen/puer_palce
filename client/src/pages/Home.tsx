@@ -211,9 +211,9 @@ export default function Home() {
 
         {/* Decorative divider with Chinese meander elements */}
         <div className="flex items-center gap-2 mb-6">
-          <div className="w-2 h-2 border-2 border-black" style={{ borderRadius: 0 }} />
+          <div className="w-2 h-2 border-2 border-black rounded-sm" />
           <div className="flex-1 h-px bg-black" />
-          <div className="w-2 h-2 border-2 border-black" style={{ borderRadius: 0 }} />
+          <div className="w-2 h-2 border-2 border-black rounded-sm" />
         </div>
 
         <div className="flex items-end justify-end mb-2">

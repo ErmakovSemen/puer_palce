@@ -138,7 +138,6 @@ export default function ProductCard({
               className="text-xs transition-all duration-300 text-white"
               style={{
                 backgroundColor: teaTypeColor,
-                borderRadius: '0',
                 border: '3px double black'
               }}
               data-testid={`badge-tea-type-${id}`}
@@ -151,7 +150,6 @@ export default function ProductCard({
                 variant="outline" 
                 className="text-xs transition-all duration-300"
                 style={{ 
-                  borderRadius: '0',
                   backgroundColor: 'white',
                   color: 'black',
                   border: '3px double black'
