@@ -10,24 +10,29 @@ export function getApiBaseUrl(): string {
     if (typeof window !== 'undefined' && (window as any).Capacitor) {
       const { Capacitor } = (window as any);
       if (Capacitor.isNativePlatform && Capacitor.isNativePlatform()) {
+        console.log('[API Config] Running on NATIVE platform (Android/iOS)');
+        
         // Use production URL from environment variable
         const productionUrl = import.meta.env.VITE_API_URL;
         
         if (!productionUrl) {
-          console.error('VITE_API_URL not set for native platform!');
-          // Fallback to empty string will cause requests to fail visibly
+          const errorMsg = 'КРИТИЧЕСКАЯ ОШИБКА: VITE_API_URL не установлен!\n\nПриложение не может подключиться к серверу.\n\nПроверьте что при сборке APK был установлен секрет VITE_API_URL в GitHub Actions.';
+          console.error(errorMsg);
+          alert(errorMsg);
           return '';
         }
         
+        console.log('[API Config] API URL установлен:', productionUrl);
         return productionUrl;
       }
     }
   } catch (e) {
     // Capacitor not available, continue with web mode
-    console.debug('Running in web mode');
+    console.log('[API Config] Running in WEB mode (not Capacitor)');
   }
   
   // Web/PWA: use relative paths (same origin)
+  console.log('[API Config] Using relative paths (web/PWA mode)');
   return '';
 }
 
@@ -41,6 +46,7 @@ export function getApiUrl(path: string): string {
   
   // If no base URL (web/PWA), return path as-is
   if (!baseUrl) {
+    console.log(`[API] Request: ${path} (relative)`);
     return path;
   }
   
@@ -49,5 +55,7 @@ export function getApiUrl(path: string): string {
   const normalizedBase = baseUrl.replace(/\/$/, '');
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   
-  return `${normalizedBase}${normalizedPath}`;
+  const fullUrl = `${normalizedBase}${normalizedPath}`;
+  console.log(`[API] Request: ${fullUrl}`);
+  return fullUrl;
 }
