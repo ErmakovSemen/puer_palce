@@ -113,7 +113,7 @@ export default function ProductFilters({
           Поиск
         </Button>
       ) : (
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative flex-1 min-w-[280px] sm:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             ref={inputRef}
@@ -125,7 +125,7 @@ export default function ProductFilters({
                 setIsSearchOpen(false);
               }
             }}
-            className="pl-9"
+            className="pl-9 text-base h-9"
             data-testid="input-search"
           />
         </div>

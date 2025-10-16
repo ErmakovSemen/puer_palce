@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
 import { getTeaTypeColor } from "@/lib/teaColors";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
 
 interface ProductCardProps {
@@ -40,10 +40,20 @@ export default function ProductCard({
   onClick 
 }: ProductCardProps) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [imageError, setImageError] = useState(false);
   
   // Use images array if available, otherwise fallback to single image or default
   const imageList = images && images.length > 0 ? images : (image ? [image] : [fallbackImage]);
   const hasMultipleImages = imageList.length > 1;
+  
+  // Reset error when image index changes or product changes
+  useEffect(() => {
+    setImageError(false);
+  }, [currentImageIndex, id]);
+  
+  const handleImageError = () => {
+    setImageError(true);
+  };
 
   const nextImage = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -65,9 +75,11 @@ export default function ProductCard({
         {imageList.length > 0 ? (
           <>
             <img 
-              src={imageList[currentImageIndex]} 
+              src={imageError ? fallbackImage : imageList[currentImageIndex]} 
               alt={name}
               className="w-full h-full object-cover transition-all duration-300 group-hover/card:scale-105 group-hover/card:brightness-105"
+              onError={handleImageError}
+              crossOrigin="anonymous"
               data-testid={`img-product-${id}`}
             />
             

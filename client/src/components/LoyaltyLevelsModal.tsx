@@ -17,12 +17,12 @@ interface LoyaltyLevelsModalProps {
 export function LoyaltyLevelsModal({ open, onOpenChange, currentXP }: LoyaltyLevelsModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl p-4" data-testid="modal-loyalty-levels">
+      <DialogContent className="max-w-6xl p-4 max-h-[90vh]" data-testid="modal-loyalty-levels">
         <DialogHeader className="pb-3">
           <DialogTitle className="text-xl">Программа лояльности</DialogTitle>
         </DialogHeader>
         
-        <div className="flex gap-3">
+        <div className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2">
           {LOYALTY_LEVELS.map((level, index) => {
             const isUnlocked = currentXP >= level.minXP;
             const isCurrent = currentXP >= level.minXP && (level.maxXP === null || currentXP <= level.maxXP);
