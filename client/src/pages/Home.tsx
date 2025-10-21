@@ -196,7 +196,7 @@ export default function Home() {
         onLogoClick={resetFilters}
       />
       
-      <div className="max-w-7xl mx-auto px-4 py-4">
+      <div className="max-w-7xl mx-auto px-6 md:px-8 py-4">
         <div className="mb-6">
           <ProductFilters
             searchTerm={searchTerm}

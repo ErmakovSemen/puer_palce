@@ -310,7 +310,7 @@ export default function Admin() {
         isAdmin={true}
       />
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-6 md:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="font-serif text-4xl font-bold" data-testid="text-admin-title">
             Панель управления
