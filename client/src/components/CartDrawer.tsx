@@ -78,9 +78,25 @@ export default function CartDrawer({
                         <div className="flex items-center gap-2">
                           {item.category === "teaware" ? (
                             <>
-                              <span className="text-sm text-white" data-testid={`text-quantity-${item.id}`}>
-                                Количество: {item.quantity} шт
-                              </span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => onUpdateQuantity(item.id, Math.max(0, item.quantity - 1))}
+                                data-testid={`button-decrease-${item.id}`}
+                              >
+                                <Minus className="w-3 h-3" />
+                              </Button>
+                              <span className="w-16 text-center text-sm" data-testid={`text-quantity-${item.id}`}>{item.quantity} шт</span>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+                                data-testid={`button-increase-${item.id}`}
+                              >
+                                <Plus className="w-3 h-3" />
+                              </Button>
                             </>
                           ) : (
                             <>
