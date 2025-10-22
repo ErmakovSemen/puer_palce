@@ -38,7 +38,8 @@ export type User = typeof users.$inferSelect;
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  pricePerGram: real("price_per_gram").notNull(),
+  category: text("category").notNull().default("tea"), // "tea" or "teaware"
+  pricePerGram: real("price_per_gram").notNull(), // For teaware, this is price per piece
   description: text("description").notNull(),
   images: text("images").array().notNull().default(sql`ARRAY[]::text[]`),
   teaType: text("tea_type").notNull(),
@@ -46,17 +47,20 @@ export const products = pgTable("products", {
   effects: text("effects").array().notNull().default(sql`ARRAY[]::text[]`),
   availableQuantities: text("available_quantities").array().notNull().default(sql`ARRAY['25', '50', '100']::text[]`), // Available quantities in grams
   fixedQuantityOnly: boolean("fixed_quantity_only").notNull().default(false), // If true, only sell in fixed quantity
-  fixedQuantity: integer("fixed_quantity"), // Fixed quantity in grams (e.g., 357g for tea cake)
+  fixedQuantity: integer("fixed_quantity"), // Fixed quantity in grams (e.g., 357g for tea cake) or 1 for teaware
 });
 
 export const insertProductSchema = createInsertSchema(products, {
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
+  category: z.enum(["tea", "teaware"], {
+    errorMap: () => ({ message: "Выберите категорию: чай или посуда" })
+  }),
   pricePerGram: z.number().min(0, "Цена должна быть положительной"),
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
   images: z.array(z.string().min(1)).min(1, "Добавьте хотя бы одно изображение"),
-  teaType: z.string().min(1, "Выберите тип чая"),
+  teaType: z.string().min(1, "Выберите тип"),
   teaTypeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
-  effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
+  effects: z.array(z.string()).min(0, "Укажите эффекты или оставьте пустым"),
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
