@@ -30,12 +30,15 @@ import { Badge } from "@/components/ui/badge";
 
 const productSchema = z.object({
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
+  category: z.enum(["tea", "teaware"], {
+    errorMap: () => ({ message: "Выберите категорию: чай или посуда" })
+  }),
   pricePerGram: z.number().min(0, "Цена должна быть положительной"),
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
   images: z.array(z.string().min(1)).min(1, "Добавьте хотя бы одно изображение"),
-  teaType: z.string().min(1, "Выберите тип чая"),
+  teaType: z.string().min(1, "Выберите тип"),
   teaTypeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
-  effects: z.array(z.string()).min(1, "Выберите хотя бы один эффект"),
+  effects: z.array(z.string()).min(0, "Укажите эффекты или оставьте пустым"),
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
@@ -81,6 +84,7 @@ export default function AdminProductForm({
     resolver: zodResolver(productSchema),
     defaultValues: {
       name: defaultValues?.name || "",
+      category: (defaultValues as any)?.category || "tea",
       pricePerGram: defaultValues?.pricePerGram || 0,
       description: defaultValues?.description || "",
       images: defaultValues?.images || [],
@@ -167,10 +171,37 @@ export default function AdminProductForm({
 
         <FormField
           control={form.control}
+          name="category"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Категория</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value} data-testid="select-category">
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите категорию" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="tea">Чай</SelectItem>
+                  <SelectItem value="teaware">Чайная посуда</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Для посуды цена указывается за штуку
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
           name="pricePerGram"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Цена за грамм (₽/г)</FormLabel>
+              <FormLabel>
+                {form.watch("category") === "teaware" ? "Цена за штуку (₽)" : "Цена за грамм (₽/г)"}
+              </FormLabel>
               <FormControl>
                 <Input 
                   type="number" 

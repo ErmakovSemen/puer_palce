@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import Header from "@/components/Header";
 import ProductCard from "@/components/ProductCard";
 import ProductDetail from "@/components/ProductDetail";
 import ProductFilters from "@/components/ProductFilters";
+import CategoryNavigation from "@/components/CategoryNavigation";
 import CartDrawer from "@/components/CartDrawer";
 import CheckoutForm from "@/components/CheckoutForm";
 import TeaQuiz from "@/components/TeaQuiz";
@@ -29,6 +30,7 @@ import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jp
 interface CartItem {
   id: number;
   name: string;
+  category?: string;
   price: number;
   quantity: number;
   image: string;
@@ -44,8 +46,11 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState("all");
   const { toast } = useToast();
   const { user } = useAuth();
+
+  const teawareSectionRef = useRef<HTMLDivElement>(null);
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ['/api/products'],
@@ -66,7 +71,52 @@ export default function Home() {
     });
   }, [products, searchTerm, selectedTypes, selectedEffects]);
 
+  // Split products by category
+  const teaProducts = useMemo(() => {
+    return filteredProducts.filter(p => p.category === "tea");
+  }, [filteredProducts]);
+
+  const teawareProducts = useMemo(() => {
+    return filteredProducts.filter(p => p.category === "teaware");
+  }, [filteredProducts]);
+
+  const hasTeaware = teawareProducts.length > 0;
+
   const selectedProduct = products.find(p => p.id === selectedProductId);
+
+  // Handle category change (scroll to section)
+  const handleCategoryChange = (category: string) => {
+    setActiveCategory(category);
+    if (category === "teaware" && teawareSectionRef.current) {
+      teawareSectionRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  // Scroll observer to update active category
+  useEffect(() => {
+    if (!hasTeaware) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.target === teawareSectionRef.current) {
+            setActiveCategory("teaware");
+          } else if (!entry.isIntersecting && entry.target === teawareSectionRef.current) {
+            setActiveCategory("all");
+          }
+        });
+      },
+      { threshold: 0.3 }
+    );
+
+    if (teawareSectionRef.current) {
+      observer.observe(teawareSectionRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasTeaware]);
 
   const cartTotal = useMemo(() => {
     return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -75,6 +125,8 @@ export default function Home() {
   const addToCart = (productId: number, quantityInGrams: number) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
+
+    const isTeaware = product.category === "teaware";
 
     setCartItems(prev => {
       const existing = prev.find(item => item.id === productId);
@@ -87,7 +139,8 @@ export default function Home() {
       }
       return [...prev, { 
         id: product.id,
-        name: product.name, 
+        name: product.name,
+        category: product.category,
         price: product.pricePerGram,
         quantity: quantityInGrams,
         image: product.images[0]
@@ -96,7 +149,7 @@ export default function Home() {
 
     toast({
       title: "Добавлено в корзину",
-      description: `${product.name} (${quantityInGrams}г)`,
+      description: `${product.name} (${isTeaware ? quantityInGrams + ' шт' : quantityInGrams + 'г'})`,
     });
   };
 
@@ -209,6 +262,15 @@ export default function Home() {
           />
         </div>
 
+        {/* Category Navigation */}
+        {hasTeaware && (
+          <CategoryNavigation
+            activeCategory={activeCategory}
+            onCategoryChange={handleCategoryChange}
+            hasTeaware={hasTeaware}
+          />
+        )}
+
         {/* Decorative divider with Chinese meander elements */}
         <div className="flex items-center gap-2 mb-6">
           <div className="w-2 h-2 border-2 border-black rounded-sm" />
@@ -235,16 +297,45 @@ export default function Home() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-            {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                {...product}
-                onAddToCart={addToCart}
-                onClick={setSelectedProductId}
-              />
-            ))}
-          </div>
+          <>
+            {/* Tea Products */}
+            {teaProducts.length > 0 && (
+              <div className="mb-12">
+                <h2 className="font-serif text-2xl font-semibold mb-4" data-testid="heading-tea-section">
+                  Чай
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                  {teaProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      {...product}
+                      onAddToCart={addToCart}
+                      onClick={setSelectedProductId}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Teaware Products */}
+            {teawareProducts.length > 0 && (
+              <div ref={teawareSectionRef} className="scroll-mt-20">
+                <h2 className="font-serif text-2xl font-semibold mb-4" data-testid="heading-teaware-section">
+                  Чайная посуда
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
+                  {teawareProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      {...product}
+                      onAddToCart={addToCart}
+                      onClick={setSelectedProductId}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

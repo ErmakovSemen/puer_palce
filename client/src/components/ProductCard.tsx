@@ -9,6 +9,7 @@ import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jp
 interface ProductCardProps {
   id: number;
   name: string;
+  category?: string;
   pricePerGram: number;
   description: string;
   image?: string;  // Keep for backwards compatibility
@@ -26,6 +27,7 @@ interface ProductCardProps {
 export default function ProductCard({ 
   id, 
   name, 
+  category = "tea",
   pricePerGram, 
   description, 
   image,
@@ -39,6 +41,7 @@ export default function ProductCard({
   onAddToCart, 
   onClick 
 }: ProductCardProps) {
+  const isTeaware = category === "teaware";
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   
@@ -166,14 +169,17 @@ export default function ProductCard({
         </p>
         <div className="flex items-center justify-between gap-2">
           <span className="text-lg sm:text-xl font-semibold transition-colors duration-300 text-foreground group-hover/card:text-primary" data-testid={`text-product-price-${id}`}>
-            {pricePerGram} ₽/г
+            {isTeaware ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
           </span>
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              const defaultQuantity = fixedQuantityOnly && fixedQuantity 
-                ? fixedQuantity 
-                : parseInt(availableQuantities[0] || "100", 10);
+              // For teaware, always add 1 piece
+              const defaultQuantity = isTeaware ? 1 : (
+                fixedQuantityOnly && fixedQuantity 
+                  ? fixedQuantity 
+                  : parseInt(availableQuantities[0] || "100", 10)
+              );
               onAddToCart(id, defaultQuantity);
             }}
             size="icon"

@@ -8,6 +8,7 @@ import { useState } from "react";
 interface ProductDetailProps {
   id: number;
   name: string;
+  category?: string;
   pricePerGram: number;
   description: string;
   image?: string;  // Keep for backwards compatibility
@@ -24,6 +25,7 @@ interface ProductDetailProps {
 export default function ProductDetail({
   id,
   name,
+  category = "tea",
   pricePerGram,
   description,
   image,
@@ -36,6 +38,7 @@ export default function ProductDetail({
   onAddToCart,
   onClose,
 }: ProductDetailProps) {
+  const isTeaware = category === "teaware";
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedQuantity, setSelectedQuantity] = useState<string>(
     fixedQuantityOnly && fixedQuantity ? String(fixedQuantity) : (availableQuantities[0] || "100")
@@ -124,98 +127,105 @@ export default function ProductDetail({
           <div className="pt-4 space-y-4">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-primary" data-testid={`text-detail-price-${id}`}>
-                {pricePerGram} ₽/г
+                {isTeaware ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
               </span>
-              <span className="text-sm text-muted-foreground">
-                (100 г = {pricePerGram * 100} ₽)
-              </span>
-            </div>
-
-            {/* Quantity Selection */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium">Количество</label>
-              
-              {fixedQuantityOnly && fixedQuantity ? (
-                <>
-                  {/* Fixed quantity only - show as info */}
-                  <div className="p-4 bg-muted rounded-md">
-                    <p className="text-sm text-muted-foreground mb-2">
-                      Данный чай продаётся только в фиксированном количестве:
-                    </p>
-                    <p className="text-2xl font-bold text-primary" data-testid="text-fixed-quantity">
-                      {fixedQuantity}г
-                    </p>
-                  </div>
-                  
-                  {/* Total price */}
-                  <div className="text-right">
-                    <span className="text-lg font-semibold" data-testid="text-total-price">
-                      Итого: {pricePerGram * fixedQuantity} ₽
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Preset quantities */}
-                  <div className="flex flex-wrap gap-2">
-                    {availableQuantities.map((qty) => (
-                      <Button
-                        key={qty}
-                        type="button"
-                        variant={selectedQuantity === qty && !customQuantity ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => {
-                          setSelectedQuantity(qty);
-                          setCustomQuantity("");
-                        }}
-                        data-testid={`button-quantity-${qty}`}
-                      >
-                        {qty}г
-                      </Button>
-                    ))}
-                  </div>
-
-                  {/* Custom quantity input */}
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1">
-                      <label className="text-sm text-muted-foreground">Своё количество (г)</label>
-                      <Input
-                        type="number"
-                        min="1"
-                        placeholder="Введите количество"
-                        value={customQuantity}
-                        onChange={(e) => {
-                          setCustomQuantity(e.target.value);
-                          setSelectedQuantity("");
-                        }}
-                        data-testid="input-custom-quantity"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Total price */}
-                  {(selectedQuantity || customQuantity) && (
-                    <div className="text-right">
-                      <span className="text-lg font-semibold" data-testid="text-total-price">
-                        Итого: {pricePerGram * parseInt(customQuantity || selectedQuantity || "0", 10)} ₽
-                      </span>
-                    </div>
-                  )}
-                </>
+              {!isTeaware && (
+                <span className="text-sm text-muted-foreground">
+                  (100 г = {pricePerGram * 100} ₽)
+                </span>
               )}
             </div>
 
+            {/* Quantity Selection - not shown for teaware */}
+            {!isTeaware && (
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Количество</label>
+                
+                {fixedQuantityOnly && fixedQuantity ? (
+                  <>
+                    {/* Fixed quantity only - show as info */}
+                    <div className="p-4 bg-muted rounded-md">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Данный чай продаётся только в фиксированном количестве:
+                      </p>
+                      <p className="text-2xl font-bold text-primary" data-testid="text-fixed-quantity">
+                        {fixedQuantity}г
+                      </p>
+                    </div>
+                    
+                    {/* Total price */}
+                    <div className="text-right">
+                      <span className="text-lg font-semibold" data-testid="text-total-price">
+                        Итого: {pricePerGram * fixedQuantity} ₽
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Preset quantities */}
+                    <div className="flex flex-wrap gap-2">
+                      {availableQuantities.map((qty) => (
+                        <Button
+                          key={qty}
+                          type="button"
+                          variant={selectedQuantity === qty && !customQuantity ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            setSelectedQuantity(qty);
+                            setCustomQuantity("");
+                          }}
+                          data-testid={`button-quantity-${qty}`}
+                        >
+                          {qty}г
+                        </Button>
+                      ))}
+                    </div>
+
+                    {/* Custom quantity input */}
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <label className="text-sm text-muted-foreground">Своё количество (г)</label>
+                        <Input
+                          type="number"
+                          min="1"
+                          placeholder="Введите количество"
+                          value={customQuantity}
+                          onChange={(e) => {
+                            setCustomQuantity(e.target.value);
+                            setSelectedQuantity("");
+                          }}
+                          data-testid="input-custom-quantity"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Total price */}
+                    {(selectedQuantity || customQuantity) && (
+                      <div className="text-right">
+                        <span className="text-lg font-semibold" data-testid="text-total-price">
+                          Итого: {pricePerGram * parseInt(customQuantity || selectedQuantity || "0", 10)} ₽
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             <Button
               onClick={() => {
-                const quantity = fixedQuantityOnly && fixedQuantity 
-                  ? fixedQuantity 
-                  : parseInt(customQuantity || selectedQuantity || "0", 10);
+                // For teaware, always add 1 piece
+                const quantity = isTeaware ? 1 : (
+                  fixedQuantityOnly && fixedQuantity 
+                    ? fixedQuantity 
+                    : parseInt(customQuantity || selectedQuantity || "0", 10)
+                );
                 if (quantity > 0) {
                   onAddToCart(id, quantity);
                   onClose();
                 }
               }}
-              disabled={!fixedQuantityOnly && !selectedQuantity && !customQuantity}
+              disabled={!isTeaware && !fixedQuantityOnly && !selectedQuantity && !customQuantity}
               className="w-full bg-primary text-primary-foreground border border-primary-border"
               size="lg"
               data-testid={`button-detail-add-to-cart-${id}`}
