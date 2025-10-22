@@ -27,6 +27,13 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 - **Guest Checkout Conversion**: After successful guest orders, users see a registration prompt with hyperlink encouraging account creation for loyalty program benefits.
 - **Theme System**: Dual theme support (Classic and Minimalist) with an admin toggle, dynamically applied via CSS classes. The Minimalist theme is the default.
 - **Dynamic Tag Management**: Admins can create new tea types and effects directly from the product form. Homepage filters automatically update with new tags, fetching data dynamically via `GET /api/tags`.
+- **Dual-Category Product System**: Products are categorized as either "tea" or "teaware" with distinct pricing and quantity handling:
+  - **Tea Products**: Sold by gram with flexible quantity selection (25g, 50g, 100g, 357g options). Price displayed as ₽/г.
+  - **Teaware Products**: Sold by piece with fixed quantity of 1. Price displayed as ₽ per item. No quantity selector shown in UI.
+  - **Category Navigation**: Horizontal scrollable navigation bar with "ВСЕ" and "ЧАЙНАЯ ПОСУДА" buttons. Only visible when teaware products exist.
+  - **Separate Sections**: Homepage displays tea and teaware in distinct sections with smooth scroll-to-section functionality.
+  - **IntersectionObserver**: Automatically highlights active category button as user scrolls through sections.
+  - **Cart Integration**: CartItem includes category field for proper unit display (гrams for tea, штук for teaware).
 - **Product Management**: Full CRUD operations for products via the admin panel, stored in PostgreSQL. Includes multi-image upload using Replit Object Storage, with images stored as URLs. Supports fixed-quantity-only mode where products can be sold exclusively in specific amounts (e.g., 357g tea cakes).
 - **Order Processing**: Cart items (1 unit = 100g) are converted to grams on order submission. Backend validates order data using Zod.
 - **Mobile Responsiveness**: Optimized product cards and filters for mobile devices, ensuring a compact and touch-friendly experience.
