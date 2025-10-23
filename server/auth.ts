@@ -78,25 +78,43 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       const existingUser = await storage.getUserByEmail(req.body.email);
-      if (existingUser) {
-        return res.status(400).json({ error: "Email уже используется" });
-      }
-
+      
       // Generate verification code
       const verificationCode = generateVerificationCode();
       const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-      const user = await storage.createUser({
-        ...req.body,
-        password: await hashPassword(req.body.password),
-        emailVerified: false,
-        verificationCode,
-        verificationCodeExpires,
-      });
+      
+      let user;
+      
+      if (existingUser) {
+        // If user exists but is not verified, allow re-registration with new password
+        if (!existingUser.emailVerified) {
+          const hashedPassword = await hashPassword(req.body.password);
+          user = await storage.updateUnverifiedUser(
+            existingUser.id,
+            hashedPassword,
+            verificationCode,
+            verificationCodeExpires
+          );
+          console.log('[Auth] Updated unverified user:', existingUser.email);
+        } else {
+          // If user is verified, they can't re-register
+          return res.status(400).json({ error: "Email уже используется" });
+        }
+      } else {
+        // Create new user
+        user = await storage.createUser({
+          ...req.body,
+          password: await hashPassword(req.body.password),
+          emailVerified: false,
+          verificationCode,
+          verificationCodeExpires,
+        });
+        console.log('[Auth] Created new user:', user.email);
+      }
 
       // Send verification email
       try {
-        await sendVerificationEmail(user.email, verificationCode, user.name || undefined);
+        await sendVerificationEmail(user!.email, verificationCode, user!.name || undefined);
       } catch (emailError) {
         console.error('[Auth] Failed to send verification email:', emailError);
         // Don't fail registration if email fails - user can request resend
@@ -105,7 +123,7 @@ export function setupAuth(app: Express) {
       // Return success without logging in
       res.status(201).json({ 
         message: "Регистрация успешна. Проверьте вашу почту для подтверждения.",
-        email: user.email,
+        email: user!.email,
         needsVerification: true
       });
     } catch (error) {
