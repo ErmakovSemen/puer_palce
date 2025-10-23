@@ -12,6 +12,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser | InsertUserWithVerification): Promise<User>;
   updateUser(id: string, data: { name?: string; phone?: string }): Promise<User | undefined>;
+  updateUnverifiedUser(userId: string, hashedPassword: string, code: string, expires: Date): Promise<User | undefined>;
   addUserXP(userId: string, xpAmount: number): Promise<User | undefined>;
   verifyUser(userId: string): Promise<User | undefined>;
   updateVerificationCode(userId: string, code: string, expires: Date): Promise<User | undefined>;
@@ -178,6 +179,20 @@ export class MemStorage implements IStorage {
     
     const updated: User = { 
       ...user, 
+      verificationCode: code,
+      verificationCodeExpires: expires
+    };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async updateUnverifiedUser(userId: string, hashedPassword: string, code: string, expires: Date): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { 
+      ...user, 
+      password: hashedPassword,
       verificationCode: code,
       verificationCodeExpires: expires
     };
@@ -421,6 +436,19 @@ export class DbStorage implements IStorage {
     const [user] = await db
       .update(usersTable)
       .set({ 
+        verificationCode: code,
+        verificationCodeExpires: expires
+      })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    return user;
+  }
+
+  async updateUnverifiedUser(userId: string, hashedPassword: string, code: string, expires: Date): Promise<User | undefined> {
+    const [user] = await db
+      .update(usersTable)
+      .set({ 
+        password: hashedPassword,
         verificationCode: code,
         verificationCodeExpires: expires
       })
