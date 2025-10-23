@@ -80,17 +80,17 @@ export default function CartDrawer({
                               <Button
                                 variant="outline"
                                 size="icon"
-                                className="h-8 w-8"
+                                className="h-8 w-8 border-white/30 text-white hover:bg-white/10 hover:border-white/50"
                                 onClick={() => onUpdateQuantity(item.id, Math.max(0, item.quantity - 1))}
                                 data-testid={`button-decrease-${item.id}`}
                               >
                                 <Minus className="w-3 h-3" />
                               </Button>
-                              <span className="w-16 text-center text-sm" data-testid={`text-quantity-${item.id}`}>{item.quantity} шт</span>
+                              <span className="w-16 text-center text-sm text-white" data-testid={`text-quantity-${item.id}`}>{item.quantity} шт</span>
                               <Button
                                 variant="outline"
                                 size="icon"
-                                className="h-8 w-8"
+                                className="h-8 w-8 border-white/30 text-white hover:bg-white/10 hover:border-white/50"
                                 onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
                                 data-testid={`button-increase-${item.id}`}
                               >
@@ -102,17 +102,17 @@ export default function CartDrawer({
                               <Button
                                 variant="outline"
                                 size="icon"
-                                className="h-8 w-8"
+                                className="h-8 w-8 border-white/30 text-white hover:bg-white/10 hover:border-white/50"
                                 onClick={() => onUpdateQuantity(item.id, Math.max(0, item.quantity - 25))}
                                 data-testid={`button-decrease-${item.id}`}
                               >
                                 <Minus className="w-3 h-3" />
                               </Button>
-                              <span className="w-16 text-center text-sm" data-testid={`text-quantity-${item.id}`}>{item.quantity}г</span>
+                              <span className="w-16 text-center text-sm text-white" data-testid={`text-quantity-${item.id}`}>{item.quantity}г</span>
                               <Button
                                 variant="outline"
                                 size="icon"
-                                className="h-8 w-8"
+                                className="h-8 w-8 border-white/30 text-white hover:bg-white/10 hover:border-white/50"
                                 onClick={() => onUpdateQuantity(item.id, item.quantity + 25)}
                                 data-testid={`button-increase-${item.id}`}
                               >
@@ -123,7 +123,7 @@ export default function CartDrawer({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 ml-auto"
+                            className="h-8 w-8 ml-auto text-white/70 hover:text-white hover:bg-white/10"
                             onClick={() => onRemoveItem(item.id)}
                             data-testid={`button-remove-${item.id}`}
                           >
