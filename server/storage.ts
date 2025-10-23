@@ -16,6 +16,8 @@ export interface IStorage {
   addUserXP(userId: string, xpAmount: number): Promise<User | undefined>;
   verifyUser(userId: string): Promise<User | undefined>;
   updateVerificationCode(userId: string, code: string, expires: Date): Promise<User | undefined>;
+  setResetPasswordCode(userId: string, code: string, expires: Date): Promise<User | undefined>;
+  resetPassword(userId: string, newHashedPassword: string): Promise<User | undefined>;
   
   getQuizConfig(): Promise<QuizConfig>;
   updateQuizConfig(config: QuizConfig): Promise<QuizConfig>;
@@ -195,6 +197,33 @@ export class MemStorage implements IStorage {
       password: hashedPassword,
       verificationCode: code,
       verificationCodeExpires: expires
+    };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async setResetPasswordCode(userId: string, code: string, expires: Date): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { 
+      ...user, 
+      resetPasswordCode: code,
+      resetPasswordExpires: expires
+    };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async resetPassword(userId: string, newHashedPassword: string): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { 
+      ...user, 
+      password: newHashedPassword,
+      resetPasswordCode: null,
+      resetPasswordExpires: null
     };
     this.users.set(userId, updated);
     return updated;
@@ -451,6 +480,31 @@ export class DbStorage implements IStorage {
         password: hashedPassword,
         verificationCode: code,
         verificationCodeExpires: expires
+      })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    return user;
+  }
+
+  async setResetPasswordCode(userId: string, code: string, expires: Date): Promise<User | undefined> {
+    const [user] = await db
+      .update(usersTable)
+      .set({ 
+        resetPasswordCode: code,
+        resetPasswordExpires: expires
+      })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    return user;
+  }
+
+  async resetPassword(userId: string, newHashedPassword: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(usersTable)
+      .set({ 
+        password: newHashedPassword,
+        resetPasswordCode: null,
+        resetPasswordExpires: null
       })
       .where(eq(usersTable.id, userId))
       .returning();

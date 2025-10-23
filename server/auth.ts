@@ -7,7 +7,7 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser, updateUserSchema } from "@shared/schema";
 import { z } from "zod";
-import { sendVerificationEmail } from "./resend";
+import { sendVerificationEmail, sendPasswordResetEmail } from "./resend";
 
 declare global {
   namespace Express {
@@ -256,6 +256,102 @@ export function setupAuth(app: Express) {
     } catch (error) {
       console.error('[Auth] Resend verification error:', error);
       res.status(500).json({ error: "Ошибка при отправке кода" });
+    }
+  });
+
+  // Request password reset code
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email обязателен" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Don't reveal if user exists - security best practice
+        return res.json({ success: true, message: "Если email существует, код был отправлен" });
+      }
+
+      // Generate password reset code
+      const resetCode = generateVerificationCode();
+      const resetCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      await storage.setResetPasswordCode(user.id, resetCode, resetCodeExpires);
+
+      // Send password reset email
+      try {
+        await sendPasswordResetEmail(user.email, resetCode, user.name || undefined);
+        res.json({ success: true, message: "Код сброса пароля отправлен на email" });
+      } catch (emailError) {
+        console.error('[Auth] Failed to send password reset email:', emailError);
+        return res.status(500).json({ error: "Не удалось отправить email" });
+      }
+    } catch (error) {
+      console.error('[Auth] Forgot password error:', error);
+      res.status(500).json({ error: "Ошибка при отправке кода сброса" });
+    }
+  });
+
+  // Reset password with code
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { email, code, newPassword, confirmPassword } = req.body;
+
+      if (!email || !code || !newPassword || !confirmPassword) {
+        return res.status(400).json({ error: "Все поля обязательны" });
+      }
+
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({ error: "Пароли не совпадают" });
+      }
+
+      if (newPassword.length < 6) {
+        return res.status(400).json({ error: "Пароль должен содержать минимум 6 символов" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      
+      // Generic error message for all failures to prevent user enumeration
+      const genericError = "Неверный или истекший код сброса пароля";
+      
+      // Don't reveal if user exists - security best practice
+      if (!user) {
+        console.log('[Auth] Reset password attempt for non-existent user:', email);
+        return res.status(400).json({ error: genericError });
+      }
+
+      if (!user.resetPasswordCode || !user.resetPasswordExpires) {
+        console.log('[Auth] Reset password attempt but no code set for user:', email);
+        return res.status(400).json({ error: genericError });
+      }
+
+      // Check if code is expired
+      if (new Date() > user.resetPasswordExpires) {
+        console.log('[Auth] Expired reset code for user:', email);
+        return res.status(400).json({ error: genericError });
+      }
+
+      // Check if code matches
+      if (user.resetPasswordCode !== code) {
+        console.log('[Auth] Invalid reset code for user:', email);
+        return res.status(400).json({ error: genericError });
+      }
+
+      // Hash new password and update
+      const hashedPassword = await hashPassword(newPassword);
+      const updated = await storage.resetPassword(user.id, hashedPassword);
+      
+      if (!updated) {
+        return res.status(500).json({ error: "Не удалось сбросить пароль" });
+      }
+
+      console.log('[Auth] Password successfully reset for user:', email);
+      res.json({ success: true, message: "Пароль успешно изменен!" });
+    } catch (error) {
+      console.error('[Auth] Reset password error:', error);
+      res.status(500).json({ error: "Ошибка при сбросе пароля" });
     }
   });
 }

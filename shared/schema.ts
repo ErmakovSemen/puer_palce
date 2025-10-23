@@ -14,6 +14,8 @@ export const users = pgTable("users", {
   emailVerified: boolean("email_verified").notNull().default(false),
   verificationCode: text("verification_code"),
   verificationCodeExpires: timestamp("verification_code_expires"),
+  resetPasswordCode: text("reset_password_code"),
+  resetPasswordExpires: timestamp("reset_password_expires"),
 });
 
 // Schema for user registration from frontend

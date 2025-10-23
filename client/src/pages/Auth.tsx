@@ -127,6 +127,18 @@ export default function Auth() {
                         "Войти"
                       )}
                     </Button>
+                    <div className="text-center text-sm">
+                      <Link href="/forgot-password">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="p-0 h-auto text-muted-foreground hover:text-foreground underline"
+                          data-testid="link-forgot-password"
+                        >
+                          Забыли пароль?
+                        </Button>
+                      </Link>
+                    </div>
                   </form>
                 </CardContent>
               </Card>
