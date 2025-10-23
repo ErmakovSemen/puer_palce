@@ -15,6 +15,7 @@ export default function VerifyEmail() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [isVerified, setIsVerified] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   // Read email from URL parameter
   useEffect(() => {
@@ -24,6 +25,16 @@ export default function VerifyEmail() {
       setEmail(decodeURIComponent(emailParam));
     }
   }, []);
+
+  // Cooldown timer for resend button
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown(resendCooldown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   const verifyMutation = useMutation({
     mutationFn: async (data: { email: string; code: string }) => {
@@ -91,6 +102,8 @@ export default function VerifyEmail() {
       });
       return;
     }
+    // Start cooldown immediately to prevent spam
+    setResendCooldown(30);
     resendMutation.mutate(email);
   };
 
@@ -183,10 +196,14 @@ export default function VerifyEmail() {
                     variant="ghost"
                     className="p-0 h-auto underline"
                     onClick={handleResend}
-                    disabled={resendMutation.isPending}
+                    disabled={resendMutation.isPending || resendCooldown > 0}
                     data-testid="button-resend"
                   >
-                    {resendMutation.isPending ? "Отправка..." : "Отправить повторно"}
+                    {resendMutation.isPending 
+                      ? "Отправка..." 
+                      : resendCooldown > 0 
+                      ? `Повторить через ${resendCooldown} сек` 
+                      : "Отправить повторно"}
                   </Button>
                 </div>
               </form>

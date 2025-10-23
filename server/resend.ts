@@ -146,6 +146,23 @@ export async function sendOrderNotification(orderData: OrderData) {
 export async function sendVerificationEmail(email: string, code: string, name?: string) {
   console.log('[Resend] Preparing to send verification email to:', email);
   
+  // In development mode, just log the code to console
+  if (process.env.NODE_ENV === 'development') {
+    console.log('\n' + '='.repeat(60));
+    console.log('📧 DEVELOPMENT MODE - EMAIL NOT SENT');
+    console.log('='.repeat(60));
+    console.log(`To: ${email}`);
+    console.log(`Name: ${name || 'N/A'}`);
+    console.log(`Verification Code: ${code}`);
+    console.log('='.repeat(60) + '\n');
+    
+    // Return mock success response
+    return {
+      data: { id: 'dev-mode-mock-id' },
+      error: null
+    };
+  }
+  
   const { client, fromEmail } = await getUncachableResendClient();
   console.log('[Resend] Client initialized with from email:', fromEmail);
   
