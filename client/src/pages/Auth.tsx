@@ -26,9 +26,16 @@ export default function Auth() {
     loginMutation.mutate(loginData);
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    registerMutation.mutate(registerData);
+    registerMutation.mutate(registerData, {
+      onSuccess: (data: any) => {
+        if (data.needsVerification) {
+          // Redirect to verify email page
+          setLocation("/verify-email");
+        }
+      }
+    });
   };
 
   if (isLoading) {

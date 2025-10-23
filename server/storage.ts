@@ -1,4 +1,7 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, insertUserWithVerificationSchema } from "@shared/schema";
+import type { z } from "zod";
+
+type InsertUserWithVerification = z.infer<typeof insertUserWithVerificationSchema>;
 import { randomUUID } from "crypto";
 
 // modify the interface with any CRUD methods
@@ -7,9 +10,11 @@ import { randomUUID } from "crypto";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  createUser(user: InsertUser | InsertUserWithVerification): Promise<User>;
   updateUser(id: string, data: { name?: string; phone?: string }): Promise<User | undefined>;
   addUserXP(userId: string, xpAmount: number): Promise<User | undefined>;
+  verifyUser(userId: string): Promise<User | undefined>;
+  updateVerificationCode(userId: string, code: string, expires: Date): Promise<User | undefined>;
   
   getQuizConfig(): Promise<QuizConfig>;
   updateQuizConfig(config: QuizConfig): Promise<QuizConfig>;
@@ -118,14 +123,18 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async createUser(insertUser: InsertUser | InsertUserWithVerification): Promise<User> {
     const id = randomUUID();
+    const withVerification = insertUser as InsertUserWithVerification;
     const user: User = { 
       ...insertUser, 
       id,
       name: insertUser.name ?? null,
       phone: insertUser.phone ?? null,
       xp: 0,
+      emailVerified: withVerification.emailVerified ?? false,
+      verificationCode: withVerification.verificationCode ?? null,
+      verificationCodeExpires: withVerification.verificationCodeExpires ?? null,
     };
     this.users.set(id, user);
     return user;
@@ -145,6 +154,33 @@ export class MemStorage implements IStorage {
     if (!user) return undefined;
     
     const updated: User = { ...user, xp: user.xp + xpAmount };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async verifyUser(userId: string): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { 
+      ...user, 
+      emailVerified: true,
+      verificationCode: null,
+      verificationCodeExpires: null
+    };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async updateVerificationCode(userId: string, code: string, expires: Date): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { 
+      ...user, 
+      verificationCode: code,
+      verificationCodeExpires: expires
+    };
     this.users.set(userId, updated);
     return updated;
   }
@@ -366,6 +402,31 @@ export class DbStorage implements IStorage {
       .where(eq(usersTable.id, userId))
       .returning();
     return updatedUser;
+  }
+
+  async verifyUser(userId: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(usersTable)
+      .set({ 
+        emailVerified: true,
+        verificationCode: null,
+        verificationCodeExpires: null
+      })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    return user;
+  }
+
+  async updateVerificationCode(userId: string, code: string, expires: Date): Promise<User | undefined> {
+    const [user] = await db
+      .update(usersTable)
+      .set({ 
+        verificationCode: code,
+        verificationCodeExpires: expires
+      })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    return user;
   }
 
   async getQuizConfig(): Promise<QuizConfig> {

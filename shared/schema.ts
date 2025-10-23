@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, real, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, real, boolean, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -11,8 +11,12 @@ export const users = pgTable("users", {
   name: text("name"),
   phone: text("phone"),
   xp: integer("xp").notNull().default(0),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  verificationCode: text("verification_code"),
+  verificationCodeExpires: timestamp("verification_code_expires"),
 });
 
+// Schema for user registration from frontend
 export const insertUserSchema = createInsertSchema(users, {
   email: z.string().email("Введите корректный email"),
   password: z.string().min(6, "Пароль должен содержать минимум 6 символов"),
@@ -23,6 +27,13 @@ export const insertUserSchema = createInsertSchema(users, {
   password: true,
   name: true,
   phone: true,
+});
+
+// Schema for internal user creation with verification fields
+export const insertUserWithVerificationSchema = insertUserSchema.extend({
+  emailVerified: z.boolean().optional(),
+  verificationCode: z.string().optional(),
+  verificationCodeExpires: z.date().optional(),
 });
 
 export const updateUserSchema = z.object({

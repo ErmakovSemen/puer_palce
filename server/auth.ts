@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser, updateUserSchema } from "@shared/schema";
 import { z } from "zod";
+import { sendVerificationEmail } from "./resend";
 
 declare global {
   namespace Express {
@@ -29,10 +30,15 @@ async function comparePasswords(supplied: string, stored: string) {
   return timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
-// Remove password from user object before sending to client
+// Remove password and verification code from user object before sending to client
 function sanitizeUser(user: SelectUser) {
-  const { password, ...sanitized } = user;
+  const { password, verificationCode, verificationCodeExpires, ...sanitized } = user;
   return sanitized;
+}
+
+// Generate a 6-digit verification code
+function generateVerificationCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 export function setupAuth(app: Express) {
@@ -70,23 +76,53 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/register", async (req, res, next) => {
-    const existingUser = await storage.getUserByEmail(req.body.email);
-    if (existingUser) {
-      return res.status(400).send("Email уже используется");
+    try {
+      const existingUser = await storage.getUserByEmail(req.body.email);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email уже используется" });
+      }
+
+      // Generate verification code
+      const verificationCode = generateVerificationCode();
+      const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      const user = await storage.createUser({
+        ...req.body,
+        password: await hashPassword(req.body.password),
+        emailVerified: false,
+        verificationCode,
+        verificationCodeExpires,
+      });
+
+      // Send verification email
+      try {
+        await sendVerificationEmail(user.email, verificationCode, user.name || undefined);
+      } catch (emailError) {
+        console.error('[Auth] Failed to send verification email:', emailError);
+        // Don't fail registration if email fails - user can request resend
+      }
+
+      // Return success without logging in
+      res.status(201).json({ 
+        message: "Регистрация успешна. Проверьте вашу почту для подтверждения.",
+        email: user.email,
+        needsVerification: true
+      });
+    } catch (error) {
+      console.error('[Auth] Registration error:', error);
+      return res.status(500).json({ error: "Ошибка при регистрации" });
     }
-
-    const user = await storage.createUser({
-      ...req.body,
-      password: await hashPassword(req.body.password),
-    });
-
-    req.login(user, (err) => {
-      if (err) return next(err);
-      res.status(201).json(sanitizeUser(user));
-    });
   });
 
   app.post("/api/login", passport.authenticate("local"), (req, res) => {
+    // Check if email is verified
+    if (!req.user!.emailVerified) {
+      return res.status(403).json({
+        error: "Email не подтвержден",
+        needsVerification: true,
+        email: req.user!.email
+      });
+    }
     res.status(200).json(sanitizeUser(req.user!));
   });
 
@@ -119,6 +155,89 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ error: error.errors[0].message });
       }
       res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  // Verify email with code
+  app.post("/api/auth/verify-email", async (req, res) => {
+    try {
+      const { email, code } = req.body;
+
+      if (!email || !code) {
+        return res.status(400).json({ error: "Email и код обязательны" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
+
+      if (user.emailVerified) {
+        return res.status(400).json({ error: "Email уже подтвержден" });
+      }
+
+      if (!user.verificationCode || !user.verificationCodeExpires) {
+        return res.status(400).json({ error: "Код верификации не найден" });
+      }
+
+      // Check if code is expired
+      if (new Date() > user.verificationCodeExpires) {
+        return res.status(400).json({ error: "Код верификации истек" });
+      }
+
+      // Check if code matches
+      if (user.verificationCode !== code) {
+        return res.status(400).json({ error: "Неверный код верификации" });
+      }
+
+      // Verify the user
+      const updated = await storage.verifyUser(user.id);
+      if (!updated) {
+        return res.status(500).json({ error: "Не удалось подтвердить email" });
+      }
+
+      res.json({ success: true, message: "Email успешно подтвержден!" });
+    } catch (error) {
+      console.error('[Auth] Verification error:', error);
+      res.status(500).json({ error: "Ошибка при верификации" });
+    }
+  });
+
+  // Resend verification code
+  app.post("/api/auth/resend-verification", async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ error: "Email обязателен" });
+      }
+
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
+
+      if (user.emailVerified) {
+        return res.status(400).json({ error: "Email уже подтвержден" });
+      }
+
+      // Generate new verification code
+      const verificationCode = generateVerificationCode();
+      const verificationCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      await storage.updateVerificationCode(user.id, verificationCode, verificationCodeExpires);
+
+      // Send verification email
+      try {
+        await sendVerificationEmail(user.email, verificationCode, user.name || undefined);
+        res.json({ success: true, message: "Код верификации отправлен повторно" });
+      } catch (emailError) {
+        console.error('[Auth] Failed to resend verification email:', emailError);
+        return res.status(500).json({ error: "Не удалось отправить email" });
+      }
+    } catch (error) {
+      console.error('[Auth] Resend verification error:', error);
+      res.status(500).json({ error: "Ошибка при отправке кода" });
     }
   });
 }
