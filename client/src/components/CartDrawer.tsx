@@ -1,7 +1,6 @@
 import { X, Minus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface CartItem {
   id: number;
@@ -61,7 +60,7 @@ export default function CartDrawer({
           </div>
         ) : (
           <>
-            <ScrollArea className="flex-1 p-6">
+            <div className="flex-1 overflow-y-auto p-6">
               <div className="space-y-4">
                 {items.map((item) => (
                   <Card key={item.id} className="p-4 bg-white/5 border-white/10" data-testid={`cart-item-${item.id}`}>
@@ -136,7 +135,7 @@ export default function CartDrawer({
                   </Card>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
 
             <div className="border-t border-white/10 p-6 space-y-4">
               <div className="flex items-center justify-between">
