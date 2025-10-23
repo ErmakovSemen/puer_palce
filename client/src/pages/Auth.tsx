@@ -12,7 +12,7 @@ export default function Auth() {
   const { user, isLoading, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
   const [loginData, setLoginData] = useState({ email: "", password: "" });
-  const [registerData, setRegisterData] = useState({ email: "", password: "", name: "", phone: "" });
+  const [registerData, setRegisterData] = useState({ email: "", password: "", name: "", phone: "+7" });
 
   // Redirect if already logged in
   useEffect(() => {
