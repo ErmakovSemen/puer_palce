@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,15 @@ export default function VerifyEmail() {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [isVerified, setIsVerified] = useState(false);
+
+  // Read email from URL parameter
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const emailParam = params.get("email");
+    if (emailParam) {
+      setEmail(decodeURIComponent(emailParam));
+    }
+  }, []);
 
   const verifyMutation = useMutation({
     mutationFn: async (data: { email: string; code: string }) => {
