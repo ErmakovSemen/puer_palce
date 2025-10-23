@@ -43,8 +43,8 @@ export default function Auth() {
     registerMutation.mutate(registerData, {
       onSuccess: (data: any) => {
         if (data.needsVerification) {
-          // Redirect to verify email page
-          setLocation("/verify-email");
+          // Redirect to verify email page with email parameter
+          setLocation(`/verify-email?email=${encodeURIComponent(registerData.email)}`);
         }
       }
     });
