@@ -170,7 +170,7 @@ export default function Auth() {
                       <Input
                         id="register-phone"
                         type="tel"
-                        placeholder="+7 900 123-45-67"
+                        placeholder="900 123-45-67"
                         value={registerData.phone}
                         onChange={(e) => setRegisterData({ ...registerData, phone: e.target.value })}
                         data-testid="input-register-phone"
