@@ -23,6 +23,8 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
 ### Key Features & Implementations
 
 - **User Authentication (Optional)**: Email/password registration and login system for customer accounts. Authentication is completely optional - guest checkout remains available for quick purchases. Authenticated users benefit from auto-filled checkout forms and order history tracking. Passwords are hashed with bcrypt and never exposed in API responses.
+- **Email Verification**: 6-digit verification codes sent via email upon registration, valid for 15 minutes. Users must verify email before login. Email auto-fills on verification page via URL parameter.
+- **Re-registration Support**: Unverified accounts can be re-registered with new passwords. When attempting to register with an existing but unverified email, the system updates the password and sends a new verification code instead of blocking the registration. Verified accounts remain protected from duplicate registrations.
 - **User Profiles & Order History**: Personal cabinet (`/profile`) for authenticated users displaying account information and complete order history with detailed order information.
 - **Guest Checkout Conversion**: After successful guest orders, users see a registration prompt with hyperlink encouraging account creation for loyalty program benefits.
 - **Theme System**: Dual theme support (Classic and Minimalist) with an admin toggle, dynamically applied via CSS classes. The Minimalist theme is the default.
