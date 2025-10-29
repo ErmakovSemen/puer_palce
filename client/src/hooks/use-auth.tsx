@@ -35,20 +35,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginMutation = useMutation({
     mutationFn: async (credentials: LoginData) => {
       const res = await apiRequest("POST", "/api/login", credentials);
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Ошибка входа");
-      }
-      return data;
+      return await res.json();
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
     },
-    onError: (error: any) => {
-      const errorData = error.message || "Ошибка входа";
+    onError: (error: Error) => {
       toast({
         title: "Ошибка входа",
-        description: errorData,
+        description: error.message,
         variant: "destructive",
       });
     },
@@ -59,17 +54,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
-    onSuccess: (data: any) => {
-      // If registration requires verification, don't set user
-      if (data.needsVerification) {
-        toast({
-          title: "Регистрация успешна!",
-          description: "Проверьте вашу почту для подтверждения аккаунта",
-        });
-      } else {
-        // Old behavior for compatibility
-        queryClient.setQueryData(["/api/user"], data);
-      }
+    onSuccess: (user: SelectUser) => {
+      queryClient.setQueryData(["/api/user"], user);
     },
     onError: (error: Error) => {
       toast({

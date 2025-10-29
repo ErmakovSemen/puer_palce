@@ -12,7 +12,7 @@ export default function Auth() {
   const { user, isLoading, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
   const [loginData, setLoginData] = useState({ email: "", password: "" });
-  const [registerData, setRegisterData] = useState({ email: "", password: "", name: "", phone: "+7" });
+  const [registerData, setRegisterData] = useState({ email: "", password: "", name: "", phone: "" });
 
   // Redirect if already logged in
   useEffect(() => {
@@ -26,28 +26,9 @@ export default function Auth() {
     loginMutation.mutate(loginData);
   };
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value;
-    
-    // Allow full editing - user can change the country code if they want
-    // But if they clear the field completely, restore +7
-    if (value.length === 0) {
-      setRegisterData({ ...registerData, phone: "+7" });
-    } else {
-      setRegisterData({ ...registerData, phone: value });
-    }
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    registerMutation.mutate(registerData, {
-      onSuccess: (data: any) => {
-        if (data.needsVerification) {
-          // Redirect to verify email page
-          setLocation("/verify-email");
-        }
-      }
-    });
+    registerMutation.mutate(registerData);
   };
 
   if (isLoading) {
@@ -182,9 +163,9 @@ export default function Auth() {
                       <Input
                         id="register-phone"
                         type="tel"
-                        placeholder="900 123-45-67"
+                        placeholder="+7 900 123-45-67"
                         value={registerData.phone}
-                        onChange={handlePhoneChange}
+                        onChange={(e) => setRegisterData({ ...registerData, phone: e.target.value })}
                         data-testid="input-register-phone"
                       />
                     </div>
