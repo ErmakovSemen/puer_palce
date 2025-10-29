@@ -349,7 +349,7 @@ export default function Home() {
       />
 
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-serif text-2xl">Оформление заказа</DialogTitle>
             <DialogDescription>
