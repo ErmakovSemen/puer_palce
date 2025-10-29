@@ -20,7 +20,7 @@ import { Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Link } from "wouter";
 import type { Product } from "@shared/schema";
 
@@ -28,7 +28,8 @@ import type { Product } from "@shared/schema";
 import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
 
 interface CartItem {
-  id: number;
+  id: number; // productId for display/matching
+  cartItemId?: number; // DB cart item ID (only for authenticated users)
   name: string;
   category?: string;
   price: number;
@@ -36,8 +37,17 @@ interface CartItem {
   image: string;
 }
 
+// Type for cart data from API
+interface ApiCartItem {
+  id: number;
+  userId: string;
+  productId: number;
+  quantity: number;
+  addedAt: string;
+  product: Product;
+}
+
 export default function Home() {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
@@ -49,6 +59,38 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState("all");
   const { toast } = useToast();
   const { user } = useAuth();
+
+  // Guest cart (localStorage for unauthenticated users)
+  const [guestCartItems, setGuestCartItems] = useState<CartItem[]>(() => {
+    const saved = localStorage.getItem('guestCart');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Load cart from API for authenticated users
+  const { data: apiCartItems = [], isLoading: isCartLoading } = useQuery<ApiCartItem[]>({
+    queryKey: ['/api/cart'],
+    enabled: !!user,
+  });
+
+  // Use DB cart for authenticated, localStorage for guests
+  const cartItems: CartItem[] = user 
+    ? apiCartItems.map(item => ({
+        id: item.productId, // productId for display/matching
+        cartItemId: item.id, // DB cart item ID for updates/deletes
+        name: item.product.name,
+        category: item.product.category,
+        price: item.product.pricePerGram,
+        quantity: item.quantity,
+        image: item.product.images[0] || fallbackImage,
+      }))
+    : guestCartItems;
+
+  // Save guest cart to localStorage
+  useEffect(() => {
+    if (!user) {
+      localStorage.setItem('guestCart', JSON.stringify(guestCartItems));
+    }
+  }, [guestCartItems, user]);
 
   const teawareSectionRef = useRef<HTMLDivElement>(null);
 
@@ -122,49 +164,123 @@ export default function Home() {
     return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [cartItems]);
 
+  // Mutation for adding items to cart
+  const addToCartMutation = useMutation({
+    mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
+      return await apiRequest("POST", "/api/cart", { productId, quantity });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: error.message === "Необходимо войти в систему" ? "Войдите чтобы добавить в корзину" : "Ошибка",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation for updating cart item quantity
+  const updateCartMutation = useMutation({
+    mutationFn: async ({ cartItemId, quantity }: { cartItemId: number; quantity: number }) => {
+      return await apiRequest("PATCH", `/api/cart/${cartItemId}`, { quantity });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+    },
+  });
+
+  // Mutation for removing item from cart
+  const removeFromCartMutation = useMutation({
+    mutationFn: async (cartItemId: number) => {
+      return await apiRequest("DELETE", `/api/cart/${cartItemId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+    },
+  });
+
   const addToCart = (productId: number, quantityInGrams: number) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
     const isTeaware = product.category === "teaware";
 
-    setCartItems(prev => {
-      const existing = prev.find(item => item.id === productId);
-      if (existing) {
-        return prev.map(item =>
-          item.id === productId
-            ? { ...item, quantity: item.quantity + quantityInGrams }
-            : item
-        );
-      }
-      return [...prev, { 
-        id: product.id,
-        name: product.name,
-        category: product.category,
-        price: product.pricePerGram,
-        quantity: quantityInGrams,
-        image: product.images[0]
-      }];
-    });
-
-    toast({
-      title: "Добавлено в корзину",
-      description: `${product.name} (${isTeaware ? quantityInGrams + ' шт' : quantityInGrams + 'г'})`,
-    });
-  };
-
-  const updateQuantity = (id: number, quantity: number) => {
-    if (quantity === 0) {
-      setCartItems(prev => prev.filter(item => item.id !== id));
-    } else {
-      setCartItems(prev =>
-        prev.map(item => (item.id === id ? { ...item, quantity } : item))
+    if (user) {
+      // Authenticated: save to DB
+      addToCartMutation.mutate(
+        { productId, quantity: quantityInGrams },
+        {
+          onSuccess: () => {
+            toast({
+              title: "Добавлено в корзину",
+              description: `${product.name} (${isTeaware ? quantityInGrams + ' шт' : quantityInGrams + 'г'})`,
+            });
+          },
+        }
       );
+    } else {
+      // Guest: save to localStorage
+      setGuestCartItems(prev => {
+        const existing = prev.find(item => item.id === productId);
+        if (existing) {
+          return prev.map(item =>
+            item.id === productId
+              ? { ...item, quantity: item.quantity + quantityInGrams }
+              : item
+          );
+        }
+        return [...prev, { 
+          id: product.id,
+          name: product.name,
+          category: product.category,
+          price: product.pricePerGram,
+          quantity: quantityInGrams,
+          image: product.images[0] || fallbackImage
+        }];
+      });
+
+      toast({
+        title: "Добавлено в корзину",
+        description: `${product.name} (${isTeaware ? quantityInGrams + ' шт' : quantityInGrams + 'г'})`,
+      });
     }
   };
 
-  const removeItem = (id: number) => {
-    setCartItems(prev => prev.filter(item => item.id !== id));
+  const updateQuantity = (productId: number, quantity: number) => {
+    if (user) {
+      // Authenticated: update in DB
+      const cartItem = cartItems.find(item => item.id === productId);
+      if (!cartItem || !cartItem.cartItemId) return;
+
+      if (quantity === 0) {
+        removeFromCartMutation.mutate(cartItem.cartItemId);
+      } else {
+        updateCartMutation.mutate({ cartItemId: cartItem.cartItemId, quantity });
+      }
+    } else {
+      // Guest: update localStorage
+      if (quantity === 0) {
+        setGuestCartItems(prev => prev.filter(item => item.id !== productId));
+      } else {
+        setGuestCartItems(prev =>
+          prev.map(item => (item.id === productId ? { ...item, quantity } : item))
+        );
+      }
+    }
+  };
+
+  const removeItem = (productId: number) => {
+    if (user) {
+      // Authenticated: remove from DB
+      const cartItem = cartItems.find(item => item.id === productId);
+      if (!cartItem || !cartItem.cartItemId) return;
+      removeFromCartMutation.mutate(cartItem.cartItemId);
+    } else {
+      // Guest: remove from localStorage
+      setGuestCartItems(prev => prev.filter(item => item.id !== productId));
+    }
   };
 
   const resetFilters = () => {
@@ -192,7 +308,14 @@ export default function Home() {
       return await apiRequest("POST", "/api/orders", orderData);
     },
     onSuccess: () => {
-      setCartItems([]);
+      if (user) {
+        // Authenticated: cart cleared on server, invalidate query
+        queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+      } else {
+        // Guest: clear localStorage cart
+        setGuestCartItems([]);
+        localStorage.removeItem('guestCart');
+      }
       setIsCheckoutOpen(false);
       setIsSuccessDialogOpen(true);
     },

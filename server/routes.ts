@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema, updateOrderStatusSchema } from "@shared/schema";
+import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema, updateOrderStatusSchema, insertCartItemSchema, updateCartItemSchema } from "@shared/schema";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
@@ -24,6 +24,15 @@ function requireAdminAuth(req: any, res: any, next: any) {
     return;
   }
   
+  next();
+}
+
+// User authentication middleware
+function requireAuth(req: any, res: any, next: any) {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    res.status(401).json({ error: "Необходимо войти в систему" });
+    return;
+  }
   next();
 }
 
@@ -424,6 +433,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       console.log("[Order] Order saved to database, ID:", savedOrder.id);
       
+      // Clear cart for authenticated users
+      if (userId) {
+        await storage.clearCart(userId);
+        console.log("[Order] Cart cleared for user:", userId);
+      }
+      
       // Send email notification
       try {
         await sendOrderNotification(orderData);
@@ -567,6 +582,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({ error: "Failed to update order status" });
       }
+    }
+  });
+
+  // Cart routes
+  app.get("/api/cart", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const cartItems = await storage.getCartItems(userId);
+      res.json(cartItems);
+    } catch (error) {
+      console.error("[Cart] Get cart error:", error);
+      res.status(500).json({ error: "Failed to get cart items" });
+    }
+  });
+
+  app.post("/api/cart", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const cartItemData = insertCartItemSchema.parse({
+        ...req.body,
+        userId,
+      });
+      
+      const cartItem = await storage.addToCart(cartItemData);
+      res.json(cartItem);
+    } catch (error) {
+      console.error("[Cart] Add to cart error:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        res.status(400).json({ error: "Invalid cart item data" });
+      } else {
+        res.status(500).json({ error: "Failed to add item to cart" });
+      }
+    }
+  });
+
+  app.patch("/api/cart/:id", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user.id;
+      const { quantity } = updateCartItemSchema.parse(req.body);
+      
+      const updatedItem = await storage.updateCartItem(id, quantity, userId);
+      if (!updatedItem) {
+        res.status(404).json({ error: "Cart item not found" });
+        return;
+      }
+      
+      res.json(updatedItem);
+    } catch (error) {
+      console.error("[Cart] Update cart item error:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        res.status(400).json({ error: "Invalid quantity" });
+      } else {
+        res.status(500).json({ error: "Failed to update cart item" });
+      }
+    }
+  });
+
+  app.delete("/api/cart/:id", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user.id;
+      const removed = await storage.removeFromCart(id, userId);
+      
+      if (!removed) {
+        res.status(404).json({ error: "Cart item not found" });
+        return;
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Cart] Remove cart item error:", error);
+      res.status(500).json({ error: "Failed to remove cart item" });
+    }
+  });
+
+  app.delete("/api/cart", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      await storage.clearCart(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Cart] Clear cart error:", error);
+      res.status(500).json({ error: "Failed to clear cart" });
     }
   });
 

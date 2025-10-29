@@ -195,3 +195,28 @@ export type OrderItem = z.infer<typeof orderItemSchema>;
 export type Order = z.infer<typeof orderSchema>;
 export type DbOrder = typeof orders.$inferSelect;
 export type UpdateOrderStatus = z.infer<typeof updateOrderStatusSchema>;
+
+// Cart Items table
+export const cartItems = pgTable("cart_items", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  quantity: integer("quantity").notNull(), // quantity in grams or pieces
+  addedAt: text("added_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  userProductUnique: sql`CONSTRAINT ${sql.identifier("cart_items_user_product_unique")} UNIQUE (${table.userId}, ${table.productId})`
+}));
+
+export const insertCartItemSchema = createInsertSchema(cartItems, {
+  userId: z.string(),
+  productId: z.number().int().positive(),
+  quantity: z.number().int().positive("Количество должно быть больше 0"),
+}).omit({ id: true, addedAt: true });
+
+export const updateCartItemSchema = z.object({
+  quantity: z.number().int().positive("Количество должно быть больше 0"),
+});
+
+export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
+export type UpdateCartItem = z.infer<typeof updateCartItemSchema>;
+export type CartItem = typeof cartItems.$inferSelect;

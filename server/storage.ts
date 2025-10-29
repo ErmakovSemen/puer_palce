@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 // modify the interface with any CRUD methods
@@ -49,6 +49,13 @@ export interface IStorage {
     total: number; 
   }): Promise<DbOrder>;
   updateOrderStatus(orderId: number, status: string, expectedOldStatus?: string): Promise<DbOrder | undefined>;
+  
+  // Cart
+  getCartItems(userId: string): Promise<Array<DbCartItem & { product: Product }>>;
+  addToCart(cartItem: InsertCartItem): Promise<DbCartItem>;
+  updateCartItem(id: number, quantity: number, userId: string): Promise<DbCartItem | undefined>;
+  removeFromCart(id: number, userId: string): Promise<boolean>;
+  clearCart(userId: string): Promise<void>;
   
   // Session store for auth
   sessionStore: any;
@@ -296,10 +303,31 @@ export class MemStorage implements IStorage {
   async deleteTeaType(id: number): Promise<boolean> {
     return false;
   }
+
+  // Cart methods (not implemented in MemStorage)
+  async getCartItems(userId: string): Promise<Array<DbCartItem & { product: Product }>> {
+    return [];
+  }
+
+  async addToCart(cartItem: InsertCartItem): Promise<DbCartItem> {
+    throw new Error("Cart operations not supported in MemStorage");
+  }
+
+  async updateCartItem(id: number, quantity: number, userId: string): Promise<DbCartItem | undefined> {
+    return undefined;
+  }
+
+  async removeFromCart(id: number, userId: string): Promise<boolean> {
+    return false;
+  }
+
+  async clearCart(userId: string): Promise<void> {
+    // No-op in MemStorage
+  }
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable } from "@shared/schema";
+import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable } from "@shared/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
@@ -604,6 +632,60 @@ export class DbStorage implements IStorage {
   async deleteTeaType(id: number): Promise<boolean> {
     const result = await db.delete(teaTypesTable).where(eq(teaTypesTable.id, id));
     return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  // Cart methods
+  async getCartItems(userId: string): Promise<Array<DbCartItem & { product: Product }>> {
+    const items = await db
+      .select({
+        id: cartItemsTable.id,
+        userId: cartItemsTable.userId,
+        productId: cartItemsTable.productId,
+        quantity: cartItemsTable.quantity,
+        addedAt: cartItemsTable.addedAt,
+        product: productsTable,
+      })
+      .from(cartItemsTable)
+      .innerJoin(productsTable, eq(cartItemsTable.productId, productsTable.id))
+      .where(eq(cartItemsTable.userId, userId));
+
+    return items;
+  }
+
+  async addToCart(cartItem: InsertCartItem): Promise<DbCartItem> {
+    // Use INSERT ... ON CONFLICT to handle race conditions atomically
+    const [item] = await db
+      .insert(cartItemsTable)
+      .values(cartItem)
+      .onConflictDoUpdate({
+        target: [cartItemsTable.userId, cartItemsTable.productId],
+        set: {
+          quantity: sql`${cartItemsTable.quantity} + ${cartItem.quantity}`,
+        },
+      })
+      .returning();
+    
+    return item;
+  }
+
+  async updateCartItem(id: number, quantity: number, userId: string): Promise<DbCartItem | undefined> {
+    const [item] = await db
+      .update(cartItemsTable)
+      .set({ quantity })
+      .where(and(eq(cartItemsTable.id, id), eq(cartItemsTable.userId, userId)))
+      .returning();
+    return item;
+  }
+
+  async removeFromCart(id: number, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(cartItemsTable)
+      .where(and(eq(cartItemsTable.id, id), eq(cartItemsTable.userId, userId)));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async clearCart(userId: string): Promise<void> {
+    await db.delete(cartItemsTable).where(eq(cartItemsTable.userId, userId));
   }
 
   async seedInitialTeaTypes(): Promise<void> {
