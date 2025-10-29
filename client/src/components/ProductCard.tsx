@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
-import { getTeaTypeColor } from "@/lib/teaColors";
+import { getTeaTypeBadgeStyle } from "@/lib/tea-colors";
 import { useState, useEffect } from "react";
 import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
 
@@ -15,7 +15,6 @@ interface ProductCardProps {
   image?: string;  // Keep for backwards compatibility
   images?: string[];
   teaType: string;
-  teaTypeColor?: string;
   effects: string[];
   availableQuantities?: string[];
   fixedQuantityOnly?: boolean;
@@ -33,7 +32,6 @@ export default function ProductCard({
   image,
   images,
   teaType,
-  teaTypeColor = "#8B4513",
   effects,
   availableQuantities = ["25", "50", "100"],
   fixedQuantityOnly = false,
@@ -138,11 +136,8 @@ export default function ProductCard({
           </h3>
           <div className="flex flex-wrap gap-1">
             <Badge 
-              className="text-xs transition-all duration-300 text-white"
-              style={{
-                backgroundColor: teaTypeColor,
-                border: '3px double black'
-              }}
+              className="text-xs transition-all duration-300"
+              style={getTeaTypeBadgeStyle(teaType)}
               data-testid={`badge-tea-type-${id}`}
             >
               {teaType}

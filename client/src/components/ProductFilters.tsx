@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Search, Sparkles, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
+import { getTeaTypeBadgeStyle } from "@/lib/tea-colors";
 import {
   Popover,
   PopoverContent,
@@ -176,7 +177,12 @@ export default function ProductFilters({
                     checked={selectedTypes.includes(type.id)}
                     onCheckedChange={() => toggleType(type.id)}
                   />
-                  <span className="text-sm">{type.label}</span>
+                  <Badge 
+                    className="text-xs"
+                    style={getTeaTypeBadgeStyle(type.label)}
+                  >
+                    {type.label}
+                  </Badge>
                 </label>
               ))}
             </div>

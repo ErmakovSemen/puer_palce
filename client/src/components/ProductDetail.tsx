@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ShoppingCart } from "lucide-react";
-import { getTeaTypeColor } from "@/lib/teaColors";
+import { getTeaTypeBadgeStyle } from "@/lib/tea-colors";
 import { useState } from "react";
 
 interface ProductDetailProps {
@@ -102,7 +102,8 @@ export default function ProductDetail({
             </h2>
             <div className="flex flex-wrap gap-2 mb-4">
               <Badge 
-                className={`text-sm ${getTeaTypeColor(teaType)}`}
+                className="text-sm"
+                style={getTeaTypeBadgeStyle(teaType)}
                 data-testid={`badge-detail-tea-type-${id}`}
               >
                 {teaType}

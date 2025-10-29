@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Pencil, Trash2, LogOut, Palette } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getTeaTypeColor } from "@/lib/teaColors";
+import { getTeaTypeBadgeStyle } from "@/lib/tea-colors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { QuizConfig, Product, InsertProduct, Settings, UpdateSettings } from "@shared/schema";
 
@@ -385,7 +385,7 @@ export default function Admin() {
                           </h3>
                           <div className="flex flex-wrap gap-2 mb-2">
                             <Badge 
-                              className={getTeaTypeColor(product.teaType)}
+                              style={getTeaTypeBadgeStyle(product.teaType)}
                               data-testid={`badge-admin-tea-type-${product.id}`}
                             >
                               {product.teaType}
