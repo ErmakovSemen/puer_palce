@@ -42,11 +42,19 @@ function generateVerificationCode(): string {
 }
 
 export function setupAuth(app: Express) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
+    cookie: {
+      secure: isProduction,
+      sameSite: isProduction ? 'none' : 'lax',
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 дней
+    }
   };
 
   app.set("trust proxy", 1);
