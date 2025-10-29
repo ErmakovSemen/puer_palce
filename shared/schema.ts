@@ -43,7 +43,6 @@ export const products = pgTable("products", {
   description: text("description").notNull(),
   images: text("images").array().notNull().default(sql`ARRAY[]::text[]`),
   teaType: text("tea_type").notNull(),
-  teaTypeColor: text("tea_type_color").notNull().default("#8B4513"), // Default brown color
   effects: text("effects").array().notNull().default(sql`ARRAY[]::text[]`),
   availableQuantities: text("available_quantities").array().notNull().default(sql`ARRAY['25', '50', '100']::text[]`), // Available quantities in grams
   fixedQuantityOnly: boolean("fixed_quantity_only").notNull().default(false), // If true, only sell in fixed quantity
@@ -59,7 +58,6 @@ export const insertProductSchema = createInsertSchema(products, {
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
   images: z.array(z.string().min(1)).min(1, "Добавьте хотя бы одно изображение"),
   teaType: z.string().min(1, "Выберите тип"),
-  teaTypeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
   effects: z.array(z.string()).min(0, "Укажите эффекты или оставьте пустым"),
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
   fixedQuantityOnly: z.boolean(),
