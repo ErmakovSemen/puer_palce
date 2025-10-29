@@ -424,13 +424,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       console.log("[Order] Order saved to database, ID:", savedOrder.id);
       
-      // Award XP to authenticated users (1 RUB = 1 XP)
-      if (userId) {
-        const xpToAward = Math.floor(orderData.total);
-        await storage.addUserXP(userId, xpToAward);
-        console.log(`[Order] Awarded ${xpToAward} XP to user ${userId}`);
-      }
-      
       // Send email notification
       try {
         await sendOrderNotification(orderData);
@@ -534,10 +527,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orderId = parseInt(req.params.id);
       const statusData = updateOrderStatusSchema.parse(req.body);
       
-      const updatedOrder = await storage.updateOrderStatus(orderId, statusData.status);
-      if (!updatedOrder) {
+      // Get the order before updating to check conditions for XP award
+      const orderBeforeUpdate = await storage.getOrder(orderId);
+      if (!orderBeforeUpdate) {
         res.status(404).json({ error: "Order not found" });
         return;
+      }
+      
+      // Update order status atomically - only if current status matches expected
+      // This prevents race conditions when multiple admins complete the same order
+      const shouldAwardXP = statusData.status === "completed" && 
+                            orderBeforeUpdate.status !== "completed" && 
+                            orderBeforeUpdate.userId;
+      
+      const updatedOrder = await storage.updateOrderStatus(
+        orderId, 
+        statusData.status,
+        shouldAwardXP ? orderBeforeUpdate.status : undefined
+      );
+      
+      if (!updatedOrder) {
+        // Order not found OR status has already changed (race condition prevented)
+        res.status(404).json({ error: "Order not found or status has already been changed" });
+        return;
+      }
+      
+      // Award XP only if the atomic update succeeded
+      if (shouldAwardXP && orderBeforeUpdate.userId) {
+        const xpToAward = Math.floor(orderBeforeUpdate.total);
+        await storage.addUserXP(orderBeforeUpdate.userId, xpToAward);
+        console.log(`[Admin] Order #${orderId} completed: Awarded ${xpToAward} XP to user ${orderBeforeUpdate.userId}`);
       }
       
       res.json(updatedOrder);

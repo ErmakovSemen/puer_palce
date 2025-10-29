@@ -35,6 +35,7 @@ export interface IStorage {
   deleteTeaType(id: number): Promise<boolean>;
   
   // Orders
+  getOrder(orderId: number): Promise<DbOrder | undefined>;
   getOrders(statusFilter?: string): Promise<DbOrder[]>;
   getUserOrders(userId: string): Promise<DbOrder[]>;
   createOrder(orderData: { 
@@ -47,7 +48,7 @@ export interface IStorage {
     items: string; 
     total: number; 
   }): Promise<DbOrder>;
-  updateOrderStatus(orderId: number, status: string): Promise<DbOrder | undefined>;
+  updateOrderStatus(orderId: number, status: string, expectedOldStatus?: string): Promise<DbOrder | undefined>;
   
   // Session store for auth
   sessionStore: any;
@@ -229,6 +230,11 @@ export class MemStorage implements IStorage {
     return this.settings;
   }
 
+  async getOrder(orderId: number): Promise<DbOrder | undefined> {
+    // MemStorage doesn't persist orders, return undefined
+    return undefined;
+  }
+
   async getUserOrders(userId: string): Promise<DbOrder[]> {
     // MemStorage doesn't persist orders, return empty array
     return [];
@@ -265,7 +271,7 @@ export class MemStorage implements IStorage {
     };
   }
 
-  async updateOrderStatus(orderId: number, status: string): Promise<DbOrder | undefined> {
+  async updateOrderStatus(orderId: number, status: string, expectedOldStatus?: string): Promise<DbOrder | undefined> {
     // MemStorage doesn't persist orders, return undefined
     return undefined;
   }
@@ -294,7 +300,7 @@ export class MemStorage implements IStorage {
 
 import { db } from "./db";
 import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, sql } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
 const PostgresSessionStore = connectPg(session);
@@ -504,6 +510,11 @@ export class DbStorage implements IStorage {
     return settings;
   }
 
+  async getOrder(orderId: number): Promise<DbOrder | undefined> {
+    const [order] = await db.select().from(ordersTable).where(eq(ordersTable.id, orderId));
+    return order;
+  }
+
   async getOrders(statusFilter?: string): Promise<DbOrder[]> {
     let query = db.select().from(ordersTable);
     
@@ -549,12 +560,19 @@ export class DbStorage implements IStorage {
     return order;
   }
 
-  async updateOrderStatus(orderId: number, status: string): Promise<DbOrder | undefined> {
+  async updateOrderStatus(orderId: number, status: string, expectedOldStatus?: string): Promise<DbOrder | undefined> {
+    // If expectedOldStatus is provided, only update if current status matches
+    // This prevents race conditions when multiple admins try to complete the same order
+    const whereCondition = expectedOldStatus 
+      ? and(eq(ordersTable.id, orderId), eq(ordersTable.status, expectedOldStatus))
+      : eq(ordersTable.id, orderId);
+    
     const [order] = await db
       .update(ordersTable)
       .set({ status })
-      .where(eq(ordersTable.id, orderId))
+      .where(whereCondition)
       .returning();
+    
     return order;
   }
 
