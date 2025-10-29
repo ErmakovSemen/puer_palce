@@ -7,9 +7,11 @@ import { randomUUID } from "crypto";
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  searchUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: { name?: string; phone?: string }): Promise<User | undefined>;
   addUserXP(userId: string, xpAmount: number): Promise<User | undefined>;
+  updateUserXP(userId: string, newXP: number): Promise<User | undefined>;
   
   getQuizConfig(): Promise<QuizConfig>;
   updateQuizConfig(config: QuizConfig): Promise<QuizConfig>;
@@ -125,6 +127,12 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async searchUserByPhone(phone: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(
+      (user) => user.phone && user.phone.includes(phone),
+    );
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
     const user: User = { 
@@ -152,6 +160,15 @@ export class MemStorage implements IStorage {
     if (!user) return undefined;
     
     const updated: User = { ...user, xp: user.xp + xpAmount };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async updateUserXP(userId: string, newXP: number): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { ...user, xp: newXP };
     this.users.set(userId, updated);
     return updated;
   }
@@ -297,55 +314,55 @@ export class DbStorage implements IStorage {
       const initialProducts: InsertProduct[] = [
         {
           name: 'Шу Пуэр Мэнхай 2018',
+          category: 'tea',
           description: 'Классический выдержанный Шу Пуэр из провинции Юньнань. Насыщенный землистый вкус с нотками орехов и древесины. Идеален для ежедневного чаепития.',
           pricePerGram: 15.50,
           images: [],
           teaType: 'Шу Пуэр',
-          teaTypeColor: '#8B4513',
           effects: ['Бодрит', 'Концентрирует'],
           availableQuantities: ['25', '50', '100'],
           fixedQuantityOnly: false,
         },
         {
           name: 'Шэн Пуэр Дикие деревья',
+          category: 'tea',
           description: 'Редкий Шэн Пуэр с дикорастущих деревьев. Свежий цветочно-медовый аромат с долгим послевкусием. Для истинных ценителей.',
           pricePerGram: 28.00,
           images: [],
           teaType: 'Шэн Пуэр',
-          teaTypeColor: '#228B22',
           effects: ['Концентрирует', 'Расслабляет'],
           availableQuantities: ['25', '50', '100'],
           fixedQuantityOnly: false,
         },
         {
           name: 'Белый Пуэр Лунный свет',
+          category: 'tea',
           description: 'Деликатный белый пуэр с мягким сладковатым вкусом. Легкий цветочный аромат успокаивает и гармонизирует.',
           pricePerGram: 22.50,
           images: [],
           teaType: 'Белый Пуэр',
-          teaTypeColor: '#F5DEB3',
           effects: ['Успокаивает', 'Расслабляет'],
           availableQuantities: ['25', '50', '100'],
           fixedQuantityOnly: false,
         },
         {
           name: 'Красный Пуэр Императорский',
+          category: 'tea',
           description: 'Премиальный красный пуэр глубокой ферментации. Бархатистый вкус с нотками сухофруктов и специй.',
           pricePerGram: 35.00,
           images: [],
           teaType: 'Красный Пуэр',
-          teaTypeColor: '#DC143C',
           effects: ['Согревает', 'Тонизирует'],
           availableQuantities: ['25', '50', '100'],
           fixedQuantityOnly: false,
         },
         {
           name: 'Чёрный Пуэр Старые головы',
+          category: 'tea',
           description: 'Насыщенный чёрный пуэр из крупных листьев. Глубокий вкус с оттенками шоколада и карамели.',
           pricePerGram: 18.75,
           images: [],
           teaType: 'Чёрный Пуэр',
-          teaTypeColor: '#2F4F4F',
           effects: ['Бодрит', 'Согревает'],
           availableQuantities: ['25', '50', '100'],
           fixedQuantityOnly: false,
@@ -370,6 +387,12 @@ export class DbStorage implements IStorage {
     return user;
   }
 
+  async searchUserByPhone(phone: string): Promise<User | undefined> {
+    const { like } = await import("drizzle-orm");
+    const [user] = await db.select().from(usersTable).where(like(usersTable.phone, `%${phone}%`));
+    return user;
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(usersTable).values(insertUser).returning();
     return user;
@@ -391,6 +414,15 @@ export class DbStorage implements IStorage {
     const [updatedUser] = await db
       .update(usersTable)
       .set({ xp: user.xp + xpAmount })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async updateUserXP(userId: string, newXP: number): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(usersTable)
+      .set({ xp: newXP })
       .where(eq(usersTable.id, userId))
       .returning();
     return updatedUser;

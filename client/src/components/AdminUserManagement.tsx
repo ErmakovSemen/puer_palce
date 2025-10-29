@@ -1,0 +1,333 @@
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Search, ChevronUp, ChevronDown } from "lucide-react";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
+import { getApiUrl } from "@/lib/api-config";
+import { useToast } from "@/hooks/use-toast";
+import type { User, DbOrder } from "@shared/schema";
+
+interface UserWithoutPassword extends Omit<User, 'password'> {}
+
+interface AdminUserManagementProps {
+  adminPassword: string;
+}
+
+export default function AdminUserManagement({ adminPassword }: AdminUserManagementProps) {
+  const [searchPhone, setSearchPhone] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  // Search user query
+  const { data: user, isLoading: isLoadingUser, refetch: refetchUser, error: searchError } = useQuery({
+    queryKey: ['/api/admin/users/search', searchPhone],
+    enabled: false, // Manual trigger
+    queryFn: async () => {
+      const res = await fetch(getApiUrl(`/api/admin/users/search?phone=${encodeURIComponent(searchPhone)}`), {
+        headers: { 'X-Admin-Password': adminPassword },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'User not found');
+      }
+      return await res.json() as UserWithoutPassword;
+    },
+  });
+
+  // Update selectedUserId when user is found
+  useEffect(() => {
+    if (user) {
+      setSelectedUserId(user.id);
+    }
+  }, [user]);
+
+  // Handle search errors
+  useEffect(() => {
+    if (searchError) {
+      setSelectedUserId(null);
+      toast({
+        title: "Ошибка",
+        description: searchError.message || "Пользователь не найден",
+        variant: "destructive",
+      });
+    }
+  }, [searchError, toast]);
+
+  // Get user orders query
+  const { data: ordersData, isLoading: isLoadingOrders } = useQuery({
+    queryKey: ['/api/admin/users', selectedUserId, 'orders'],
+    enabled: !!selectedUserId,
+    queryFn: async () => {
+      const res = await fetch(getApiUrl(`/api/admin/users/${selectedUserId}/orders`), {
+        headers: { 'X-Admin-Password': adminPassword },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        throw new Error('Failed to get orders');
+      }
+      return await res.json() as DbOrder[];
+    },
+  });
+  
+  const orders = ordersData || [];
+
+  // Update XP mutation
+  const updateXPMutation = useMutation({
+    mutationFn: async ({ userId, xp }: { userId: string; xp: number }) => {
+      const res = await fetch(getApiUrl(`/api/admin/users/${userId}/xp`), {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Password': adminPassword,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ xp }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update XP');
+      }
+      return await res.json() as UserWithoutPassword;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users/search'] });
+      refetchUser();
+      toast({
+        title: "Успешно",
+        description: "Уровень пользователя обновлен",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось обновить уровень",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSearch = () => {
+    if (searchPhone.trim()) {
+      refetchUser();
+    }
+  };
+
+  const handleLevelChange = (direction: 'up' | 'down') => {
+    if (!user) return;
+
+    const currentProgress = getLoyaltyProgress(user.xp);
+    let newXP = user.xp;
+
+    if (direction === 'up') {
+      // Move to next level
+      if (currentProgress.nextLevel) {
+        newXP = currentProgress.nextLevel.minXP;
+      }
+    } else {
+      // Move to previous level
+      const currentLevelIndex = LOYALTY_LEVELS.findIndex(
+        (level) => level.level === currentProgress.currentLevel.level
+      );
+      if (currentLevelIndex > 0) {
+        const previousLevel = LOYALTY_LEVELS[currentLevelIndex - 1];
+        newXP = previousLevel.minXP;
+      }
+    }
+
+    updateXPMutation.mutate({ userId: user.id, xp: newXP });
+  };
+
+  const loyaltyProgress = user ? getLoyaltyProgress(user.xp) : null;
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Поиск пользователя</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Введите номер телефона"
+              value={searchPhone}
+              onChange={(e) => setSearchPhone(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+              data-testid="input-search-phone"
+            />
+            <Button 
+              onClick={handleSearch} 
+              disabled={!searchPhone.trim() || isLoadingUser}
+              data-testid="button-search-user"
+            >
+              <Search className="h-4 w-4 mr-2" />
+              Найти
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {user && loyaltyProgress && (
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Профиль пользователя</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Имя</p>
+                  <p className="font-medium" data-testid="text-user-name">{user.name || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="font-medium" data-testid="text-user-email">{user.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Телефон</p>
+                  <p className="font-medium" data-testid="text-user-phone">{user.phone || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Текущий XP</p>
+                  <p className="font-medium" data-testid="text-user-xp">{user.xp}</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge style={{ 
+                      backgroundColor: loyaltyProgress.currentLevel.color,
+                      color: '#fff'
+                    }}>
+                      Уровень {loyaltyProgress.currentLevel.level}
+                    </Badge>
+                    <span className="font-medium">{loyaltyProgress.currentLevel.name}</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    Скидка {loyaltyProgress.currentLevel.discount}%
+                  </span>
+                </div>
+
+                {loyaltyProgress.nextLevel ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        До следующего уровня
+                      </span>
+                      <span className="font-medium">
+                        {loyaltyProgress.xpToNextLevel} XP
+                      </span>
+                    </div>
+                    <Progress value={loyaltyProgress.progressPercentage} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Максимальный уровень достигнут</p>
+                )}
+
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleLevelChange('down')}
+                    disabled={loyaltyProgress.currentLevel.level === 1 || updateXPMutation.isPending}
+                    data-testid="button-decrease-level"
+                  >
+                    <ChevronDown className="h-4 w-4 mr-1" />
+                    -1 Уровень
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleLevelChange('up')}
+                    disabled={!loyaltyProgress.nextLevel || updateXPMutation.isPending}
+                    data-testid="button-increase-level"
+                  >
+                    <ChevronUp className="h-4 w-4 mr-1" />
+                    +1 Уровень
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>История заказов</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoadingOrders ? (
+                <p className="text-muted-foreground">Загрузка...</p>
+              ) : orders.length === 0 ? (
+                <p className="text-muted-foreground">Заказов пока нет</p>
+              ) : (
+                <div className="space-y-3">
+                  {orders.map((order) => {
+                    const items = JSON.parse(order.items);
+                    return (
+                      <Card key={order.id} className="border">
+                        <CardContent className="pt-4">
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <p className="font-medium">Заказ #{order.id}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {format(new Date(order.createdAt), 'dd MMMM yyyy, HH:mm', { locale: ru })}
+                              </p>
+                            </div>
+                            <Badge variant="outline" className="text-base">
+                              {order.total.toFixed(2)} ₽
+                            </Badge>
+                          </div>
+
+                          <div className="space-y-2 border-t pt-3">
+                            <p className="text-sm font-medium">Состав заказа:</p>
+                            {items.map((item: any, idx: number) => (
+                              <div key={idx} className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">
+                                  {item.name} × {item.quantity}г
+                                </span>
+                                <span>{(item.pricePerGram * item.quantity).toFixed(2)} ₽</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t text-sm">
+                            <div>
+                              <p className="text-muted-foreground">Адрес</p>
+                              <p>{order.address}</p>
+                            </div>
+                            {order.comment && (
+                              <div>
+                                <p className="text-muted-foreground">Комментарий</p>
+                                <p>{order.comment}</p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {!user && searchPhone && !isLoadingUser && (
+        <Card>
+          <CardContent className="py-8 text-center text-muted-foreground">
+            Пользователь не найден
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

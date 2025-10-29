@@ -457,6 +457,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin user management routes
+  app.get("/api/admin/users/search", requireAdminAuth, async (req, res) => {
+    try {
+      const phone = req.query.phone as string;
+      if (!phone) {
+        res.status(400).json({ error: "Phone number is required" });
+        return;
+      }
+      
+      const user = await storage.searchUserByPhone(phone);
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      console.error("[Admin] User search error:", error);
+      res.status(500).json({ error: "Failed to search user" });
+    }
+  });
+
+  app.get("/api/admin/users/:id/orders", requireAdminAuth, async (req, res) => {
+    try {
+      const userId = req.params.id;
+      const orders = await storage.getUserOrders(userId);
+      res.json(orders);
+    } catch (error) {
+      console.error("[Admin] Get user orders error:", error);
+      res.status(500).json({ error: "Failed to get user orders" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/xp", requireAdminAuth, async (req, res) => {
+    try {
+      const userId = req.params.id;
+      const { xp } = req.body;
+      
+      if (typeof xp !== 'number' || xp < 0) {
+        res.status(400).json({ error: "Invalid XP value" });
+        return;
+      }
+      
+      const updatedUser = await storage.updateUserXP(userId, xp);
+      if (!updatedUser) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      console.error("[Admin] Update user XP error:", error);
+      res.status(500).json({ error: "Failed to update user XP" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

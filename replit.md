@@ -137,6 +137,31 @@ The backend is powered by **Express.js and TypeScript**, providing a **RESTful A
   - `getLoyaltyDiscount(xp)`: Returns discount percentage
   - `getLoyaltyProgress(xp)`: Returns progress data for UI
 
+### Admin User Management
+
+**Purpose**: Administrative interface for customer service to manage user loyalty status and view purchase history.
+
+**Features**:
+- **Phone Search**: Search for users by phone number (supports partial matching)
+- **User Profile Display**: Shows user's name, email, phone, and current XP
+- **Loyalty Level Management**: 
+  - Visual display of current loyalty level with progress bar
+  - +1/-1 level buttons to promote/demote users
+  - Automatic XP calculation for level transitions
+- **Complete Order History**: Displays all orders with date, total, items breakdown, and delivery information
+
+**Technical Implementation**:
+- **API Endpoints** (admin-protected):
+  - `GET /api/admin/users/search?phone=...`: Search user by phone
+  - `GET /api/admin/users/:id/orders`: Get user's complete order history
+  - `PATCH /api/admin/users/:id/xp`: Update user's XP directly
+- **Storage Methods**:
+  - `searchUserByPhone(phone)`: Finds user by partial phone match
+  - `getUserOrders(userId)`: Returns all orders for a user
+  - `updateUserXP(userId, newXP)`: Sets XP to specific value
+- **UI Component**: `AdminUserManagement` - Integrated in admin panel "Пользователи" tab
+- **Security**: All endpoints require `X-Admin-Password` header
+
 ## External Dependencies
 
 ### Third-Party Services
