@@ -2,9 +2,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
-import { getTeaTypeBadgeStyle } from "@/lib/tea-colors";
+import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { useState, useEffect } from "react";
 import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
+import { useTeaTypes } from "@/hooks/use-tea-types";
 
 interface ProductCardProps {
   id: number;
@@ -42,6 +43,7 @@ export default function ProductCard({
   const isTeaware = category === "teaware";
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
+  const { data: teaTypes } = useTeaTypes();
   
   // Use images array if available, otherwise fallback to single image or default
   const imageList = images && images.length > 0 ? images : (image ? [image] : [fallbackImage]);
@@ -137,7 +139,7 @@ export default function ProductCard({
           <div className="flex flex-wrap gap-1">
             <Badge 
               className="text-xs transition-all duration-300"
-              style={getTeaTypeBadgeStyle(teaType)}
+              style={getTeaTypeBadgeStyleDynamic(teaType, teaTypes)}
               data-testid={`badge-tea-type-${id}`}
             >
               {teaType}

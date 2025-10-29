@@ -27,6 +27,7 @@ import { Upload, X, Plus } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { useTeaTypes } from "@/hooks/use-tea-types";
 
 const productSchema = z.object({
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
@@ -74,7 +75,10 @@ export default function AdminProductForm({
   const [showNewQuantityInput, setShowNewQuantityInput] = useState(false);
   const [newQuantity, setNewQuantity] = useState("");
 
-  // Fetch available tags from API
+  // Fetch available tea types from API
+  const { data: teaTypes } = useTeaTypes();
+  
+  // Fetch available effects from API
   const { data: tags, isLoading: isLoadingTags } = useQuery<{ types: string[], effects: string[] }>({
     queryKey: ['/api/tags'],
   });
@@ -283,9 +287,9 @@ export default function AdminProductForm({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {tags?.types.map((type) => (
-                        <SelectItem key={type} value={type} data-testid={`option-tea-type-${type}`}>
-                          {type}
+                      {teaTypes?.map((type) => (
+                        <SelectItem key={type.id} value={type.name} data-testid={`option-tea-type-${type.name}`}>
+                          {type.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

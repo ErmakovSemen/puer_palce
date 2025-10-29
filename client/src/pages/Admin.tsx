@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTeaTypes } from "@/hooks/use-tea-types";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Plus, Pencil, Trash2, LogOut, Palette } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { getTeaTypeBadgeStyle } from "@/lib/tea-colors";
+import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { QuizConfig, Product, InsertProduct, Settings, UpdateSettings } from "@shared/schema";
 
@@ -31,6 +32,7 @@ export default function Admin() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const { toast } = useToast();
+  const { data: teaTypesData } = useTeaTypes();
 
   // Check password by verifying with backend
   const handleLogin = async (e: React.FormEvent) => {
@@ -387,7 +389,7 @@ export default function Admin() {
                           </h3>
                           <div className="flex flex-wrap gap-2 mb-2">
                             <Badge 
-                              style={getTeaTypeBadgeStyle(product.teaType)}
+                              style={getTeaTypeBadgeStyleDynamic(product.teaType, teaTypesData)}
                               data-testid={`badge-admin-tea-type-${product.id}`}
                             >
                               {product.teaType}

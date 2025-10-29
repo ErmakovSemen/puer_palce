@@ -77,3 +77,24 @@ export function getTeaTypeBadgeStyle(teaType: string): React.CSSProperties {
     border: '3px double black'
   };
 }
+
+// Динамическая функция для получения стилей бейджа из tea types загруженных из API
+// Включает fallback на hardcoded цвета если тип не найден в базе
+export function getTeaTypeBadgeStyleDynamic(
+  teaType: string, 
+  teaTypes: Array<{ name: string; backgroundColor: string; textColor: string }> | undefined
+): React.CSSProperties {
+  // Пытаемся найти тип в загруженных из API
+  const foundType = teaTypes?.find(t => t.name === teaType);
+  
+  if (foundType) {
+    return {
+      backgroundColor: foundType.backgroundColor,
+      color: foundType.textColor,
+      border: '3px double black'
+    };
+  }
+  
+  // Fallback на hardcoded цвета если не найдено в API
+  return getTeaTypeBadgeStyle(teaType);
+}

@@ -4,13 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Search, Sparkles, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
-import { getTeaTypeBadgeStyle } from "@/lib/tea-colors";
+import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTeaTypes } from "@/hooks/use-tea-types";
 
 interface ProductFiltersProps {
   searchTerm: string;
@@ -34,6 +35,9 @@ export default function ProductFilters({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [openFilter, setOpenFilter] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch tea types from API for colors
+  const { data: teaTypesFromAPI } = useTeaTypes();
 
   // Fetch dynamic tags from API
   const { data: tags, isLoading: isLoadingTags } = useQuery<{ types: string[], effects: string[] }>({
@@ -179,7 +183,7 @@ export default function ProductFilters({
                   />
                   <Badge 
                     className="text-xs"
-                    style={getTeaTypeBadgeStyle(type.label)}
+                    style={getTeaTypeBadgeStyleDynamic(type.label, teaTypesFromAPI)}
                   >
                     {type.label}
                   </Badge>

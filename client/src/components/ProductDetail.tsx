@@ -2,8 +2,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ShoppingCart } from "lucide-react";
-import { getTeaTypeBadgeStyle } from "@/lib/tea-colors";
+import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { useState } from "react";
+import { useTeaTypes } from "@/hooks/use-tea-types";
 
 interface ProductDetailProps {
   id: number;
@@ -44,6 +45,7 @@ export default function ProductDetail({
     fixedQuantityOnly && fixedQuantity ? String(fixedQuantity) : (availableQuantities[0] || "100")
   );
   const [customQuantity, setCustomQuantity] = useState<string>("");
+  const { data: teaTypes } = useTeaTypes();
   
   // Use images array if available, otherwise fallback to single image
   const imageList = images && images.length > 0 ? images : (image ? [image] : []);
@@ -103,7 +105,7 @@ export default function ProductDetail({
             <div className="flex flex-wrap gap-2 mb-4">
               <Badge 
                 className="text-sm"
-                style={getTeaTypeBadgeStyle(teaType)}
+                style={getTeaTypeBadgeStyleDynamic(teaType, teaTypes)}
                 data-testid={`badge-detail-tea-type-${id}`}
               >
                 {teaType}
