@@ -385,11 +385,7 @@ export default function Admin() {
                           </h3>
                           <div className="flex flex-wrap gap-2 mb-2">
                             <Badge 
-                              className="text-white"
-                              style={{
-                                backgroundColor: product.teaTypeColor || getTeaTypeColor(product.teaType),
-                                border: '3px double black'
-                              }}
+                              className={getTeaTypeColor(product.teaType)}
                               data-testid={`badge-admin-tea-type-${product.id}`}
                             >
                               {product.teaType}

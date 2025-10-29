@@ -102,11 +102,7 @@ export default function ProductDetail({
             </h2>
             <div className="flex flex-wrap gap-2 mb-4">
               <Badge 
-                className="text-sm text-white"
-                style={{
-                  backgroundColor: teaTypeColor || getTeaTypeColor(teaType),
-                  border: '3px double black'
-                }}
+                className={`text-sm ${getTeaTypeColor(teaType)}`}
                 data-testid={`badge-detail-tea-type-${id}`}
               >
                 {teaType}

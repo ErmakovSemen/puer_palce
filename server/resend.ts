@@ -146,23 +146,6 @@ export async function sendOrderNotification(orderData: OrderData) {
 export async function sendVerificationEmail(email: string, code: string, name?: string) {
   console.log('[Resend] Preparing to send verification email to:', email);
   
-  // In development mode, just log the code to console
-  if (process.env.NODE_ENV === 'development') {
-    console.log('\n' + '='.repeat(60));
-    console.log('📧 DEVELOPMENT MODE - EMAIL NOT SENT');
-    console.log('='.repeat(60));
-    console.log(`To: ${email}`);
-    console.log(`Name: ${name || 'N/A'}`);
-    console.log(`Verification Code: ${code}`);
-    console.log('='.repeat(60) + '\n');
-    
-    // Return mock success response
-    return {
-      data: { id: 'dev-mode-mock-id' },
-      error: null
-    };
-  }
-  
   const { client, fromEmail } = await getUncachableResendClient();
   console.log('[Resend] Client initialized with from email:', fromEmail);
   
@@ -229,94 +212,5 @@ export async function sendVerificationEmail(email: string, code: string, name?: 
   }
   
   console.log('[Resend] Verification email sent successfully. ID:', result.data?.id);
-  return result;
-}
-
-export async function sendPasswordResetEmail(email: string, code: string, name?: string) {
-  console.log('[Resend] Preparing to send password reset email to:', email);
-  
-  // In development mode, just log the code to console
-  if (process.env.NODE_ENV === 'development') {
-    console.log('\n' + '='.repeat(60));
-    console.log('🔒 DEVELOPMENT MODE - PASSWORD RESET EMAIL NOT SENT');
-    console.log('='.repeat(60));
-    console.log(`To: ${email}`);
-    console.log(`Name: ${name || 'N/A'}`);
-    console.log(`Password Reset Code: ${code}`);
-    console.log('='.repeat(60) + '\n');
-    
-    // Return mock success response
-    return {
-      data: { id: 'dev-mode-mock-id' },
-      error: null
-    };
-  }
-  
-  const { client, fromEmail } = await getUncachableResendClient();
-  console.log('[Resend] Client initialized with from email:', fromEmail);
-  
-  const emailHtml = `
-    <div style="font-family: 'Montserrat', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px;">
-      <div style="text-align: center; margin-bottom: 40px;">
-        <h1 style="font-family: 'Playfair Display', serif; font-size: 32px; color: #000; margin-bottom: 10px;">
-          Пуэр Паб
-        </h1>
-        <p style="color: #666; font-size: 16px;">
-          Премиальный китайский пуэр
-        </p>
-      </div>
-      
-      <div style="background: #f9f9f9; border-radius: 12px; padding: 30px; margin-bottom: 30px;">
-        <h2 style="font-size: 24px; color: #000; margin-bottom: 20px;">
-          Сброс пароля
-        </h2>
-        
-        <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
-          ${name ? `Здравствуйте, ${name}!` : 'Здравствуйте!'}<br>
-          Вы запросили сброс пароля для вашего аккаунта.
-        </p>
-        
-        <p style="font-size: 16px; color: #333; margin-bottom: 30px;">
-          Введите этот код для сброса пароля:
-        </p>
-        
-        <div style="text-align: center; margin: 30px 0;">
-          <div style="background: #fff; border: 3px solid #000; border-radius: 8px; display: inline-block; padding: 20px 40px;">
-            <span style="font-size: 36px; font-weight: bold; letter-spacing: 8px; color: #000;">
-              ${code}
-            </span>
-          </div>
-        </div>
-        
-        <p style="font-size: 14px; color: #666; margin-top: 30px;">
-          Код действителен в течение 15 минут.
-        </p>
-      </div>
-      
-      <div style="text-align: center; color: #999; font-size: 12px;">
-        <p>
-          Если вы не запрашивали сброс пароля,<br>
-          просто проигнорируйте это письмо.
-        </p>
-      </div>
-    </div>
-  `;
-
-  console.log('[Resend] Sending password reset email to:', email);
-  const result = await client.emails.send({
-    from: fromEmail,
-    to: email,
-    subject: 'Сброс пароля - Пуэр Паб',
-    html: emailHtml,
-  });
-
-  console.log('[Resend] Password reset email send result:', JSON.stringify(result, null, 2));
-  
-  if ('error' in result && result.error) {
-    console.error('[Resend] Password reset email sending failed:', result.error);
-    throw new Error(`Resend error: ${JSON.stringify(result.error)}`);
-  }
-  
-  console.log('[Resend] Password reset email sent successfully. ID:', result.data?.id);
   return result;
 }
