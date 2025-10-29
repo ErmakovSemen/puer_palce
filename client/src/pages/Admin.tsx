@@ -351,14 +351,25 @@ export default function Admin() {
           <TabsContent value="products">
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-serif text-2xl font-semibold">Управление товарами</h2>
-              <Button
-                onClick={handleAddProduct}
-                className="bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
-                data-testid="button-add-product"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Добавить товар
-              </Button>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    window.open('/api/products/export/yml', '_blank');
+                  }}
+                  data-testid="button-export-yml"
+                >
+                  Экспортировать в YML
+                </Button>
+                <Button
+                  onClick={handleAddProduct}
+                  className="bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
+                  data-testid="button-add-product"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Добавить товар
+                </Button>
+              </div>
             </div>
 
             {productsLoading ? (

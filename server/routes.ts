@@ -27,6 +27,16 @@ function requireAdminAuth(req: any, res: any, next: any) {
   next();
 }
 
+// Helper function to escape XML special characters
+function escapeXml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup user authentication (email/password)
   setupAuth(app);
@@ -167,6 +177,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete product" });
+    }
+  });
+
+  // Export products to YML format (Yandex Market Language)
+  app.get("/api/products/export/yml", async (req, res) => {
+    try {
+      const products = await storage.getProducts();
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      
+      // Get current date in ISO format
+      const currentDate = new Date().toISOString().split('T')[0] + ' ' + 
+                          new Date().toTimeString().split(' ')[0];
+      
+      // Build YML catalog
+      let yml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      yml += `<yml_catalog date="${currentDate}">\n`;
+      yml += '  <shop>\n';
+      yml += '    <name>Пуэр Паб</name>\n';
+      yml += '    <company>Пуэр Паб</company>\n';
+      yml += `    <url>${baseUrl}</url>\n`;
+      yml += '    <currencies>\n';
+      yml += '      <currency id="RUB" rate="1"/>\n';
+      yml += '    </currencies>\n';
+      yml += '    <categories>\n';
+      yml += '      <category id="1">Чай</category>\n';
+      yml += '      <category id="2">Чайная посуда</category>\n';
+      yml += '    </categories>\n';
+      yml += '    <offers>\n';
+      
+      // Add each product as an offer
+      products.forEach(product => {
+        const categoryId = product.category === 'tea' ? '1' : '2';
+        
+        // Calculate price based on category
+        let price: string;
+        let weightParam: string | null = null;
+        
+        if (product.category === 'teaware') {
+          // For teaware: pricePerGram is actually price per piece
+          price = product.pricePerGram.toFixed(2);
+        } else {
+          // For tea: use minimum available quantity or 100g as base
+          const minQuantity = product.availableQuantities && product.availableQuantities.length > 0
+            ? Math.min(...product.availableQuantities.map(q => parseInt(q)))
+            : 100;
+          price = (product.pricePerGram * minQuantity).toFixed(2);
+          weightParam = `${minQuantity}`;
+        }
+        
+        yml += `      <offer id="${product.id}" available="true">\n`;
+        yml += `        <url>${baseUrl}/product/${product.id}</url>\n`;
+        yml += `        <name>${escapeXml(product.name)}</name>\n`;
+        yml += `        <vendor>Пуэр Паб</vendor>\n`;
+        yml += `        <price>${price}</price>\n`;
+        yml += `        <currencyId>RUB</currencyId>\n`;
+        yml += `        <categoryId>${categoryId}</categoryId>\n`;
+        
+        // Add images
+        if (product.images && product.images.length > 0) {
+          product.images.forEach(image => {
+            const imageUrl = image.startsWith('http') ? image : `${baseUrl}${image}`;
+            yml += `        <picture>${escapeXml(imageUrl)}</picture>\n`;
+          });
+        }
+        
+        // Add description
+        yml += `        <description>${escapeXml(product.description)}</description>\n`;
+        
+        // Add tea type as param
+        yml += `        <param name="Тип">${escapeXml(product.teaType)}</param>\n`;
+        
+        // Add category as param
+        const categoryName = product.category === 'tea' ? 'Чай' : 'Чайная посуда';
+        yml += `        <param name="Категория">${escapeXml(categoryName)}</param>\n`;
+        
+        // Add weight param for tea (indicates the weight for the listed price)
+        if (weightParam) {
+          yml += `        <param name="Вес">${weightParam}г</param>\n`;
+        }
+        
+        // Add effects if present
+        if (product.effects && product.effects.length > 0) {
+          yml += `        <param name="Эффекты">${escapeXml(product.effects.join(', '))}</param>\n`;
+        }
+        
+        // Add available quantities for tea
+        if (product.category === 'tea' && product.availableQuantities && product.availableQuantities.length > 0) {
+          yml += `        <param name="Доступные количества">${escapeXml(product.availableQuantities.join('г, '))}г</param>\n`;
+        }
+        
+        yml += '      </offer>\n';
+      });
+      
+      yml += '    </offers>\n';
+      yml += '  </shop>\n';
+      yml += '</yml_catalog>\n';
+      
+      // Set headers for file download
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="products.yml"');
+      res.send(yml);
+    } catch (error) {
+      console.error('[YML Export] Error:', error);
+      res.status(500).json({ error: "Failed to generate YML export" });
     }
   });
 
