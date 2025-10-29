@@ -467,7 +467,18 @@ export default function Admin() {
               setIsFormOpen(false);
               setEditingProduct(null);
             }}
-            defaultValues={editingProduct || undefined}
+            defaultValues={editingProduct ? {
+              name: editingProduct.name,
+              category: editingProduct.category as "tea" | "teaware",
+              pricePerGram: editingProduct.pricePerGram,
+              description: editingProduct.description,
+              images: editingProduct.images,
+              teaType: editingProduct.teaType,
+              effects: editingProduct.effects,
+              availableQuantities: editingProduct.availableQuantities,
+              fixedQuantityOnly: editingProduct.fixedQuantityOnly,
+              fixedQuantity: editingProduct.fixedQuantity,
+            } : undefined}
             isSubmitting={createProductMutation.isPending || updateProductMutation.isPending}
           />
         </DialogContent>
