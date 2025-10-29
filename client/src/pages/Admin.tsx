@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import Header from "@/components/Header";
 import AdminProductForm from "@/components/AdminProductForm";
 import QuizConfigEditor from "@/components/QuizConfigEditor";
+import TeaTypeManager from "@/components/TeaTypeManager";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -339,8 +340,9 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="products">
-          <TabsList className="grid w-full max-w-md grid-cols-2 mb-8">
+          <TabsList className="grid w-full max-w-2xl grid-cols-3 mb-8">
             <TabsTrigger value="products" data-testid="tab-products">Товары</TabsTrigger>
+            <TabsTrigger value="tea-types" data-testid="tab-tea-types">Типы чая</TabsTrigger>
             <TabsTrigger value="quiz" data-testid="tab-quiz">Квиз подбора</TabsTrigger>
           </TabsList>
 
@@ -432,6 +434,16 @@ export default function Admin() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="tea-types">
+            <div className="mb-6">
+              <h2 className="font-serif text-2xl font-semibold">Управление типами чая</h2>
+              <p className="text-muted-foreground mt-2">
+                Создавайте и редактируйте типы чая с индивидуальными цветами для каждой категории
+              </p>
+            </div>
+            {adminPassword && <TeaTypeManager adminPassword={adminPassword} />}
           </TabsContent>
 
           <TabsContent value="quiz">
