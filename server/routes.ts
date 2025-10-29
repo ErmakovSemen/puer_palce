@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
 import { setupAuth } from "./auth";
+import { getTeaTypeColor } from "@shared/tea-colors";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -127,6 +128,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("[Products] Creating product with data:", req.body);
       const product = insertProductSchema.parse(req.body);
+      
+      // Auto-assign tea type color based on tea type
+      product.teaTypeColor = getTeaTypeColor(product.teaType);
+      console.log("[Products] Auto-assigned color:", product.teaTypeColor, "for type:", product.teaType);
+      
       console.log("[Products] Validation passed, creating product");
       const created = await storage.createProduct(product);
       console.log("[Products] Product created:", created);
@@ -145,6 +151,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const product = insertProductSchema.parse(req.body);
+      
+      // Auto-assign tea type color based on tea type
+      product.teaTypeColor = getTeaTypeColor(product.teaType);
+      console.log("[Products] Auto-assigned color:", product.teaTypeColor, "for type:", product.teaType);
+      
       const updated = await storage.updateProduct(id, product);
       if (!updated) {
         res.status(404).json({ error: "Product not found" });
