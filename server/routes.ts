@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema } from "@shared/schema";
+import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema } from "@shared/schema";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
@@ -215,6 +215,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error searching for public object:", error);
       return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Tea Types routes
+  app.get("/api/tea-types", async (_req, res) => {
+    try {
+      const teaTypes = await storage.getTeaTypes();
+      res.json(teaTypes);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get tea types" });
+    }
+  });
+
+  app.post("/api/tea-types", requireAdminAuth, async (req, res) => {
+    try {
+      const teaTypeData = insertTeaTypeSchema.parse(req.body);
+      const teaType = await storage.createTeaType(teaTypeData);
+      res.json(teaType);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid tea type data" });
+    }
+  });
+
+  app.put("/api/tea-types/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const teaTypeData = insertTeaTypeSchema.parse(req.body);
+      const updated = await storage.updateTeaType(id, teaTypeData);
+      if (!updated) {
+        res.status(404).json({ error: "Tea type not found" });
+        return;
+      }
+      res.json(updated);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid tea type data" });
+    }
+  });
+
+  app.delete("/api/tea-types/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteTeaType(id);
+      if (!deleted) {
+        res.status(404).json({ error: "Tea type not found" });
+        return;
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete tea type" });
     }
   });
 

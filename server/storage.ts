@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 // modify the interface with any CRUD methods
@@ -24,6 +24,13 @@ export interface IStorage {
   // Settings
   getSettings(): Promise<Settings>;
   updateSettings(settings: UpdateSettings): Promise<Settings>;
+  
+  // Tea Types
+  getTeaTypes(): Promise<TeaType[]>;
+  getTeaType(id: number): Promise<TeaType | undefined>;
+  createTeaType(teaType: InsertTeaType): Promise<TeaType>;
+  updateTeaType(id: number, teaType: InsertTeaType): Promise<TeaType | undefined>;
+  deleteTeaType(id: number): Promise<boolean>;
   
   // Orders
   getUserOrders(userId: string): Promise<DbOrder[]>;
@@ -232,10 +239,31 @@ export class MemStorage implements IStorage {
       createdAt: new Date().toISOString(),
     };
   }
+
+  // Tea Types methods (not persisted in MemStorage)
+  async getTeaTypes(): Promise<TeaType[]> {
+    return [];
+  }
+
+  async getTeaType(id: number): Promise<TeaType | undefined> {
+    return undefined;
+  }
+
+  async createTeaType(teaType: InsertTeaType): Promise<TeaType> {
+    return { id: 1, ...teaType };
+  }
+
+  async updateTeaType(id: number, teaType: InsertTeaType): Promise<TeaType | undefined> {
+    return undefined;
+  }
+
+  async deleteTeaType(id: number): Promise<boolean> {
+    return false;
+  }
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable } from "@shared/schema";
+import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
@@ -463,6 +491,65 @@ export class DbStorage implements IStorage {
     }).returning();
     
     return order;
+  }
+
+  // Tea Types methods
+  async getTeaTypes(): Promise<TeaType[]> {
+    const types = await db.select().from(teaTypesTable);
+    return types;
+  }
+
+  async getTeaType(id: number): Promise<TeaType | undefined> {
+    const [teaType] = await db.select().from(teaTypesTable).where(eq(teaTypesTable.id, id));
+    return teaType;
+  }
+
+  async createTeaType(insertTeaType: InsertTeaType): Promise<TeaType> {
+    const [teaType] = await db.insert(teaTypesTable).values(insertTeaType).returning();
+    return teaType;
+  }
+
+  async updateTeaType(id: number, insertTeaType: InsertTeaType): Promise<TeaType | undefined> {
+    const [teaType] = await db
+      .update(teaTypesTable)
+      .set(insertTeaType)
+      .where(eq(teaTypesTable.id, id))
+      .returning();
+    return teaType;
+  }
+
+  async deleteTeaType(id: number): Promise<boolean> {
+    const result = await db.delete(teaTypesTable).where(eq(teaTypesTable.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async seedInitialTeaTypes(): Promise<void> {
+    const existingTypes = await this.getTeaTypes();
+    
+    if (existingTypes.length === 0) {
+      console.log('Seeding initial tea types...');
+      
+      // Import colors from tea-colors.ts structure
+      const initialTeaTypes: InsertTeaType[] = [
+        { name: "Шу Пуэр", backgroundColor: "#8B4513", textColor: "#FFFFFF" },
+        { name: "Шэн Пуэр", backgroundColor: "#228B22", textColor: "#FFFFFF" },
+        { name: "Белый Пуэр", backgroundColor: "#D3D3D3", textColor: "#000000" },
+        { name: "Красный Пуэр", backgroundColor: "#DC143C", textColor: "#FFFFFF" },
+        { name: "Чёрный Пуэр", backgroundColor: "#2F4F4F", textColor: "#FFFFFF" },
+        { name: "Улун", backgroundColor: "#FF8C00", textColor: "#FFFFFF" },
+        { name: "Красный чай", backgroundColor: "#B22222", textColor: "#FFFFFF" },
+        { name: "Зелёный чай", backgroundColor: "#32CD32", textColor: "#000000" },
+        { name: "Жёлтый чай", backgroundColor: "#FFD700", textColor: "#000000" },
+        { name: "Габа", backgroundColor: "#9370DB", textColor: "#FFFFFF" },
+        { name: "Выдержанный", backgroundColor: "#CD853F", textColor: "#000000" },
+      ];
+
+      for (const teaType of initialTeaTypes) {
+        await this.createTeaType(teaType);
+      }
+      
+      console.log('✓ Initial tea types seeded');
+    }
   }
 }
 

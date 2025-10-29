@@ -100,6 +100,9 @@ app.use((req, res, next) => {
   if ('seedInitialProducts' in storage) {
     await storage.seedInitialProducts();
   }
+  if ('seedInitialTeaTypes' in storage) {
+    await storage.seedInitialTeaTypes();
+  }
   
   const server = await registerRoutes(app);
 

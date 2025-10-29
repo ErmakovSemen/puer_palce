@@ -124,6 +124,23 @@ export type InsertQuizQuestion = z.infer<typeof quizQuestionSchema>;
 export type InsertQuizRecommendationRule = z.infer<typeof quizRecommendationRuleSchema>;
 export type InsertQuizConfig = z.infer<typeof quizConfigSchema>;
 
+// Tea Types table for managing tea categories with custom colors
+export const teaTypes = pgTable("tea_types", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  backgroundColor: text("background_color").notNull(), // Hex color for badge background
+  textColor: text("text_color").notNull(), // Hex color for badge text
+});
+
+export const insertTeaTypeSchema = createInsertSchema(teaTypes, {
+  name: z.string().min(2, "Название должно содержать минимум 2 символа"),
+  backgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #8B4513)"),
+  textColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Введите корректный hex-цвет (например, #FFFFFF)"),
+}).omit({ id: true });
+
+export type InsertTeaType = z.infer<typeof insertTeaTypeSchema>;
+export type TeaType = typeof teaTypes.$inferSelect;
+
 // Site settings
 export const settings = pgTable("settings", {
   id: serial("id").primaryKey(),
