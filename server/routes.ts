@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema } from "@shared/schema";
+import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema, updateOrderStatusSchema } from "@shared/schema";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
@@ -514,6 +514,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Admin] Update user XP error:", error);
       res.status(500).json({ error: "Failed to update user XP" });
+    }
+  });
+
+  // Admin orders management routes
+  app.get("/api/admin/orders", requireAdminAuth, async (req, res) => {
+    try {
+      const statusFilter = req.query.status as string | undefined;
+      const orders = await storage.getOrders(statusFilter);
+      res.json(orders);
+    } catch (error) {
+      console.error("[Admin] Get orders error:", error);
+      res.status(500).json({ error: "Failed to get orders" });
+    }
+  });
+
+  app.patch("/api/admin/orders/:id/status", requireAdminAuth, async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      const statusData = updateOrderStatusSchema.parse(req.body);
+      
+      const updatedOrder = await storage.updateOrderStatus(orderId, statusData.status);
+      if (!updatedOrder) {
+        res.status(404).json({ error: "Order not found" });
+        return;
+      }
+      
+      res.json(updatedOrder);
+    } catch (error) {
+      console.error("[Admin] Update order status error:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        res.status(400).json({ error: "Invalid status value" });
+      } else {
+        res.status(500).json({ error: "Failed to update order status" });
+      }
     }
   });
 

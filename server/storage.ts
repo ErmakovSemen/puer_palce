@@ -35,6 +35,7 @@ export interface IStorage {
   deleteTeaType(id: number): Promise<boolean>;
   
   // Orders
+  getOrders(statusFilter?: string): Promise<DbOrder[]>;
   getUserOrders(userId: string): Promise<DbOrder[]>;
   createOrder(orderData: { 
     userId?: string | null; 
@@ -46,6 +47,7 @@ export interface IStorage {
     items: string; 
     total: number; 
   }): Promise<DbOrder>;
+  updateOrderStatus(orderId: number, status: string): Promise<DbOrder | undefined>;
   
   // Session store for auth
   sessionStore: any;
@@ -232,6 +234,11 @@ export class MemStorage implements IStorage {
     return [];
   }
 
+  async getOrders(statusFilter?: string): Promise<DbOrder[]> {
+    // MemStorage doesn't persist orders, return empty array
+    return [];
+  }
+
   async createOrder(orderData: { 
     userId?: string | null; 
     name: string; 
@@ -253,8 +260,14 @@ export class MemStorage implements IStorage {
       comment: orderData.comment ?? null,
       items: orderData.items,
       total: orderData.total,
+      status: "pending",
       createdAt: new Date().toISOString(),
     };
+  }
+
+  async updateOrderStatus(orderId: number, status: string): Promise<DbOrder | undefined> {
+    // MemStorage doesn't persist orders, return undefined
+    return undefined;
   }
 
   // Tea Types methods (not persisted in MemStorage)
@@ -491,6 +504,17 @@ export class DbStorage implements IStorage {
     return settings;
   }
 
+  async getOrders(statusFilter?: string): Promise<DbOrder[]> {
+    let query = db.select().from(ordersTable);
+    
+    if (statusFilter) {
+      query = query.where(eq(ordersTable.status, statusFilter)) as any;
+    }
+    
+    const orders = await query.orderBy(desc(ordersTable.createdAt));
+    return orders;
+  }
+
   async getUserOrders(userId: string): Promise<DbOrder[]> {
     const orders = await db
       .select()
@@ -522,6 +546,15 @@ export class DbStorage implements IStorage {
       total: orderData.total,
     }).returning();
     
+    return order;
+  }
+
+  async updateOrderStatus(orderId: number, status: string): Promise<DbOrder | undefined> {
+    const [order] = await db
+      .update(ordersTable)
+      .set({ status })
+      .where(eq(ordersTable.id, orderId))
+      .returning();
     return order;
   }
 

@@ -163,6 +163,7 @@ export const orders = pgTable("orders", {
   comment: text("comment"),
   items: text("items").notNull(), // JSON string of order items
   total: real("total").notNull(),
+  status: text("status").notNull().default("pending"), // pending, paid, cancelled, completed
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -184,6 +185,13 @@ export const orderSchema = z.object({
   total: z.number().min(500, "Минимальная сумма заказа 500₽"),
 });
 
+export const updateOrderStatusSchema = z.object({
+  status: z.enum(["pending", "paid", "cancelled", "completed"], {
+    errorMap: () => ({ message: "Выберите корректный статус" })
+  }),
+});
+
 export type OrderItem = z.infer<typeof orderItemSchema>;
 export type Order = z.infer<typeof orderSchema>;
 export type DbOrder = typeof orders.$inferSelect;
+export type UpdateOrderStatus = z.infer<typeof updateOrderStatusSchema>;
