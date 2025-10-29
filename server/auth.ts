@@ -42,7 +42,7 @@ function generateVerificationCode(): string {
 }
 
 export function setupAuth(app: Express) {
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isReplitEnv = !!process.env.REPL_ID;
   
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
@@ -50,10 +50,10 @@ export function setupAuth(app: Express) {
     saveUninitialized: false,
     store: storage.sessionStore,
     cookie: {
-      secure: isProduction,
-      sameSite: isProduction ? 'none' : 'lax',
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 дней
+      secure: !isReplitEnv, // Disable secure in Replit for dev preview
+      sameSite: isReplitEnv ? 'lax' : 'lax',
     }
   };
 
