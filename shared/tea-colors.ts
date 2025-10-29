@@ -1,15 +1,15 @@
 /**
  * Automatically determines tea type color based on name
- * Uses word boundary checks to avoid false matches
+ * Uses simple string matching to avoid regex compatibility issues
  */
 export function getTeaTypeColor(teaTypeName: string): string {
   const normalized = teaTypeName.toLowerCase().trim();
   
-  // Helper to check if word exists with boundary (Unicode-aware for Cyrillic)
-  // Uses Unicode letter class \p{L} for proper word boundaries with Cyrillic
-  const hasWord = (word: string) => {
-    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(?<!\\p{L})${escaped}(?!\\p{L})`, 'u').test(normalized);
+  // Helper to check if a word exists as a separate word (not part of another word)
+  // Split by spaces and check if the word is in the array
+  const hasWord = (word: string): boolean => {
+    const words = normalized.split(/\s+/);
+    return words.includes(word);
   };
   
   // Priority order: Check most specific types first
@@ -45,18 +45,19 @@ export function getTeaTypeColor(teaTypeName: string): string {
     return '#3b82f6'; // blue-500
   }
   
-  // Зеленый чай - green (word-based to avoid "Зелёненький")
-  if (normalized.includes('зеленый чай') || hasWord('зеленый') || hasWord('зелёный')) {
+  // Зеленый чай - green
+  if (normalized.includes('зеленый чай') || normalized.includes('зелёный чай') || 
+      hasWord('зеленый') || hasWord('зелёный')) {
     return '#22c55e'; // green-500
   }
   
-  // Красный чай - red (only for explicit red tea, not regional names like "Краснодарский")
+  // Красный чай - red (only for explicit red tea)
   if (normalized === 'красный' || normalized.includes('красный чай') || 
       normalized.includes('красный пуэр')) {
     return '#ef4444'; // red-500
   }
   
-  // Черный чай - black (word-based to avoid "Черничный")
+  // Черный чай - black (check as word to avoid "черничный")
   if (normalized.includes('черный чай') || normalized.includes('чёрный чай') ||
       hasWord('черный') || hasWord('чёрный')) {
     return '#000000'; // black
