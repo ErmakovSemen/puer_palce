@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
 import { setupAuth } from "./auth";
+import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification } from "./telegram";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -471,6 +472,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
+      // Send Telegram notification (non-blocking)
+      try {
+        await sendTelegramOrderNotification(savedOrder);
+        console.log("[Order] Telegram notification sent successfully");
+      } catch (telegramError) {
+        console.error("[Order] Telegram notification failed:", telegramError);
+        // Don't block order creation if Telegram fails
+      }
+      
       res.status(201).json({ 
         success: true, 
         message: "Заказ успешно оформлен",
@@ -687,6 +697,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Cart] Clear cart error:", error);
       res.status(500).json({ error: "Failed to clear cart" });
+    }
+  });
+
+  // Telegram helper endpoint to get chat_id
+  app.get("/api/telegram/get-chat-id", async (_req, res) => {
+    try {
+      const updates = await getTelegramUpdates();
+      
+      if (updates.length === 0) {
+        res.send(`
+          <html>
+            <head>
+              <title>Telegram Chat ID</title>
+              <style>
+                body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+                .warning { background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; }
+                code { background: #f5f5f5; padding: 2px 5px; border-radius: 3px; }
+              </style>
+            </head>
+            <body>
+              <h1>Получение Chat ID для Telegram</h1>
+              <div class="warning">
+                <h3>Бот не получил ни одного сообщения</h3>
+                <p>Чтобы получить Chat ID:</p>
+                <ol>
+                  <li>Добавьте вашего бота в беседу Telegram</li>
+                  <li>Отправьте любое сообщение в беседу (например, "привет")</li>
+                  <li>Обновите эту страницу</li>
+                </ol>
+              </div>
+            </body>
+          </html>
+        `);
+        return;
+      }
+
+      const chats = updates
+        .filter(update => update.message?.chat)
+        .map(update => ({
+          chatId: update.message!.chat.id,
+          chatType: update.message!.chat.type,
+          chatTitle: update.message!.chat.title || 'Private chat',
+          lastMessage: update.message!.text || '(no text)',
+          from: update.message!.from?.first_name || 'Unknown'
+        }));
+
+      const uniqueChats = Array.from(
+        new Map(chats.map(chat => [chat.chatId, chat])).values()
+      );
+
+      let html = `
+        <html>
+          <head>
+            <title>Telegram Chat ID</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+              .chat { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+              .chat-id { font-size: 18px; font-weight: bold; color: #007bff; }
+              code { background: #e9ecef; padding: 2px 5px; border-radius: 3px; }
+              .success { background: #d4edda; border: 1px solid #28a745; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+            </style>
+          </head>
+          <body>
+            <h1>Найденные беседы Telegram</h1>
+            <div class="success">
+              <strong>Найдено бесед: ${uniqueChats.length}</strong>
+            </div>
+      `;
+
+      uniqueChats.forEach((chat, index) => {
+        html += `
+          <div class="chat">
+            <div class="chat-id">Chat ID: ${chat.chatId}</div>
+            <p><strong>Тип:</strong> ${chat.chatType}</p>
+            <p><strong>Название:</strong> ${chat.chatTitle}</p>
+            <p><strong>Последнее сообщение:</strong> ${chat.lastMessage}</p>
+            <p><strong>От:</strong> ${chat.from}</p>
+          </div>
+        `;
+      });
+
+      html += `
+            <div style="margin-top: 30px; padding: 15px; background: #e7f3ff; border-radius: 5px;">
+              <h3>Следующий шаг:</h3>
+              <p>Скопируйте нужный <strong>Chat ID</strong> (число) и добавьте его как секрет <code>TELEGRAM_CHAT_ID</code> в настройках Replit</p>
+            </div>
+          </body>
+        </html>
+      `;
+
+      res.send(html);
+    } catch (error) {
+      console.error("Error getting Telegram chat ID:", error);
+      res.status(500).send(`
+        <html>
+          <head>
+            <title>Error</title>
+            <style>
+              body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+              .error { background: #f8d7da; border: 1px solid #dc3545; padding: 15px; border-radius: 5px; }
+            </style>
+          </head>
+          <body>
+            <div class="error">
+              <h2>Ошибка</h2>
+              <p>Проверьте что TELEGRAM_BOT_TOKEN добавлен в секреты Replit</p>
+              <p>Ошибка: ${error instanceof Error ? error.message : 'Unknown error'}</p>
+            </div>
+          </body>
+        </html>
+      `);
     }
   });
 
