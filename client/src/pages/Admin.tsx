@@ -20,11 +20,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, LogOut, Palette } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Palette, Download, Link as LinkIcon, Copy, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { QuizConfig, Product, InsertProduct, Settings, UpdateSettings } from "@shared/schema";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export default function Admin() {
   const [adminPassword, setAdminPassword] = useState<string | null>(
@@ -33,6 +39,8 @@ export default function Admin() {
   const [passwordInput, setPasswordInput] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isYMLLinkDialogOpen, setIsYMLLinkDialogOpen] = useState(false);
+  const [ymlLinkCopied, setYmlLinkCopied] = useState(false);
   const { toast } = useToast();
   const { data: teaTypesData } = useTeaTypes();
 
@@ -273,6 +281,26 @@ export default function Admin() {
     }
   };
 
+  const handleDownloadYML = () => {
+    window.open('/api/products/export/yml', '_blank');
+  };
+
+  const handleShowYMLLink = () => {
+    setIsYMLLinkDialogOpen(true);
+    setYmlLinkCopied(false);
+  };
+
+  const handleCopyYMLLink = () => {
+    const feedUrl = `${window.location.origin}/api/yml-feed`;
+    navigator.clipboard.writeText(feedUrl);
+    setYmlLinkCopied(true);
+    toast({
+      title: "Ссылка скопирована",
+      description: "Ссылка на YML-фид скопирована в буфер обмена",
+    });
+    setTimeout(() => setYmlLinkCopied(false), 2000);
+  };
+
   // Login screen
   if (!adminPassword) {
     return (
@@ -356,15 +384,26 @@ export default function Admin() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-serif text-2xl font-semibold">Управление товарами</h2>
               <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    window.open('/api/products/export/yml', '_blank');
-                  }}
-                  data-testid="button-export-yml"
-                >
-                  Экспортировать в YML
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      data-testid="button-export-yml"
+                    >
+                      Экспортировать в YML
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleDownloadYML} data-testid="menu-item-download-yml">
+                      <Download className="w-4 h-4 mr-2" />
+                      Скачать файл YML
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleShowYMLLink} data-testid="menu-item-show-yml-link">
+                      <LinkIcon className="w-4 h-4 mr-2" />
+                      Получить ссылку на фид
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button
                   onClick={handleAddProduct}
                   className="bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
@@ -530,6 +569,45 @@ export default function Admin() {
             } : undefined}
             isSubmitting={createProductMutation.isPending || updateProductMutation.isPending}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isYMLLinkDialogOpen} onOpenChange={setIsYMLLinkDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl">Ссылка на YML-фид</DialogTitle>
+            <DialogDescription>
+              Используйте эту ссылку для автоматической загрузки товаров маркетплейсами
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-muted rounded-md">
+              <code className="text-sm break-all" data-testid="text-yml-feed-url">
+                {window.location.origin}/api/yml-feed
+              </code>
+            </div>
+            <Button
+              onClick={handleCopyYMLLink}
+              className="w-full"
+              data-testid="button-copy-yml-link"
+            >
+              {ymlLinkCopied ? (
+                <>
+                  <Check className="w-4 h-4 mr-2" />
+                  Скопировано
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-2" />
+                  Скопировать ссылку
+                </>
+              )}
+            </Button>
+            <p className="text-sm text-muted-foreground">
+              Эта ссылка автоматически обновляется при изменении товаров. 
+              Маркетплейсы могут использовать её для регулярной синхронизации каталога.
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
