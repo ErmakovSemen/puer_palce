@@ -159,15 +159,19 @@ export default function Auth() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="register-phone">Телефон (опционально)</Label>
+                      <Label htmlFor="register-phone">Телефон</Label>
                       <Input
                         id="register-phone"
                         type="tel"
                         placeholder="+7 900 123-45-67"
                         value={registerData.phone}
                         onChange={(e) => setRegisterData({ ...registerData, phone: e.target.value })}
+                        required
                         data-testid="input-register-phone"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Необходим для участия в программе лояльности
+                      </p>
                     </div>
                     <Button 
                       type="submit" 

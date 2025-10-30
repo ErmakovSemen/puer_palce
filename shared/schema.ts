@@ -17,7 +17,7 @@ export const insertUserSchema = createInsertSchema(users, {
   email: z.string().email("Введите корректный email"),
   password: z.string().min(6, "Пароль должен содержать минимум 6 символов"),
   name: z.string().min(2, "Имя должно содержать минимум 2 символа").optional(),
-  phone: z.string().min(10, "Введите корректный номер телефона").optional(),
+  phone: z.string().min(1, "Укажите номер телефона").min(10, "Введите корректный номер телефона"),
 }).pick({
   email: true,
   password: true,

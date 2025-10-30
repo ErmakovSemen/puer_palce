@@ -5,7 +5,7 @@ import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
-import { User as SelectUser, updateUserSchema } from "@shared/schema";
+import { User as SelectUser, updateUserSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 
 declare global {
@@ -70,20 +70,29 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/register", async (req, res, next) => {
-    const existingUser = await storage.getUserByEmail(req.body.email);
-    if (existingUser) {
-      return res.status(400).send("Email уже используется");
+    try {
+      const data = insertUserSchema.parse(req.body);
+      
+      const existingUser = await storage.getUserByEmail(data.email);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email уже используется" });
+      }
+
+      const user = await storage.createUser({
+        ...data,
+        password: await hashPassword(data.password),
+      });
+
+      req.login(user, (err) => {
+        if (err) return next(err);
+        res.status(201).json(sanitizeUser(user));
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      res.status(500).json({ error: "Ошибка регистрации" });
     }
-
-    const user = await storage.createUser({
-      ...req.body,
-      password: await hashPassword(req.body.password),
-    });
-
-    req.login(user, (err) => {
-      if (err) return next(err);
-      res.status(201).json(sanitizeUser(user));
-    });
   });
 
   app.post("/api/login", passport.authenticate("local"), (req, res) => {
