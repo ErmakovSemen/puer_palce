@@ -78,6 +78,11 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ error: "Email уже используется" });
       }
 
+      const existingPhone = await storage.getUserByPhone(data.phone);
+      if (existingPhone) {
+        return res.status(400).json({ error: "Номер телефона уже используется" });
+      }
+
       const user = await storage.createUser({
         ...data,
         password: await hashPassword(data.password),
