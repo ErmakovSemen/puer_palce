@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Search, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, Plus, Minus } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { format } from "date-fns";
@@ -23,6 +23,7 @@ interface AdminUserManagementProps {
 export default function AdminUserManagement({ adminPassword }: AdminUserManagementProps) {
   const [searchPhone, setSearchPhone] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [xpAmount, setXpAmount] = useState<string>("100");
   const { toast } = useToast();
 
   // Search user query
@@ -120,26 +121,24 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     }
   };
 
-  const handleLevelChange = (direction: 'up' | 'down') => {
+  const handleXPChange = (operation: 'add' | 'subtract') => {
     if (!user) return;
 
-    const currentProgress = getLoyaltyProgress(user.xp);
-    let newXP = user.xp;
+    const amount = parseInt(xpAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({
+        title: "Ошибка",
+        description: "Введите корректное число XP",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    if (direction === 'up') {
-      // Move to next level
-      if (currentProgress.nextLevel) {
-        newXP = currentProgress.nextLevel.minXP;
-      }
+    let newXP = user.xp;
+    if (operation === 'add') {
+      newXP = user.xp + amount;
     } else {
-      // Move to previous level
-      const currentLevelIndex = LOYALTY_LEVELS.findIndex(
-        (level) => level.level === currentProgress.currentLevel.level
-      );
-      if (currentLevelIndex > 0) {
-        const previousLevel = LOYALTY_LEVELS[currentLevelIndex - 1];
-        newXP = previousLevel.minXP;
-      }
+      newXP = Math.max(0, user.xp - amount);
     }
 
     updateXPMutation.mutate({ userId: user.id, xp: newXP });
@@ -232,27 +231,41 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
                   <p className="text-sm text-muted-foreground">Максимальный уровень достигнут</p>
                 )}
 
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleLevelChange('down')}
-                    disabled={loyaltyProgress.currentLevel.level === 1 || updateXPMutation.isPending}
-                    data-testid="button-decrease-level"
-                  >
-                    <ChevronDown className="h-4 w-4 mr-1" />
-                    -1 Уровень
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleLevelChange('up')}
-                    disabled={!loyaltyProgress.nextLevel || updateXPMutation.isPending}
-                    data-testid="button-increase-level"
-                  >
-                    <ChevronUp className="h-4 w-4 mr-1" />
-                    +1 Уровень
-                  </Button>
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      value={xpAmount}
+                      onChange={(e) => setXpAmount(e.target.value)}
+                      placeholder="Количество XP"
+                      className="w-32"
+                      data-testid="input-xp-amount"
+                    />
+                    <span className="text-sm text-muted-foreground">XP</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleXPChange('add')}
+                      disabled={updateXPMutation.isPending}
+                      data-testid="button-add-xp"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Добавить XP
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleXPChange('subtract')}
+                      disabled={user.xp === 0 || updateXPMutation.isPending}
+                      data-testid="button-subtract-xp"
+                    >
+                      <Minus className="h-4 w-4 mr-1" />
+                      Вычесть XP
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
