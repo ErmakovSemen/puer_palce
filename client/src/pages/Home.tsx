@@ -309,8 +309,10 @@ export default function Home() {
     },
     onSuccess: () => {
       if (user) {
-        // Authenticated: cart cleared on server, invalidate query
+        // Authenticated: cart cleared on server, invalidate queries
         queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/user'] }); // Update user data (firstOrderDiscountUsed)
+        queryClient.invalidateQueries({ queryKey: ['/api/orders'] }); // Update order history
       } else {
         // Guest: clear localStorage cart
         setGuestCartItems([]);
