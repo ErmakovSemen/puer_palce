@@ -237,14 +237,20 @@ export function setupAuth(app: Express) {
         // Mark phone as verified
         await storage.markPhoneVerified(user.id);
 
-        // Log in the user
-        req.login(user, (err) => {
+        // Reload user with updated phoneVerified status
+        const updatedUser = await storage.getUser(user.id);
+        if (!updatedUser) {
+          return res.status(500).json({ error: "Ошибка загрузки пользователя" });
+        }
+
+        // Log in the user with updated data
+        req.login(updatedUser, (err) => {
           if (err) {
             return res.status(500).json({ error: "Ошибка входа" });
           }
           res.json({ 
             message: "Телефон подтверждён",
-            user: sanitizeUser(user),
+            user: sanitizeUser(updatedUser),
           });
         });
       } else {
