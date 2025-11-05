@@ -255,3 +255,30 @@ export const updateCartItemSchema = z.object({
 export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
 export type UpdateCartItem = z.infer<typeof updateCartItemSchema>;
 export type CartItem = typeof cartItems.$inferSelect;
+
+// Site Settings table
+export const siteSettings = pgTable("site_settings", {
+  id: serial("id").primaryKey(),
+  contactEmail: text("contact_email").notNull(),
+  contactPhone: text("contact_phone").notNull(),
+  contactTelegram: text("contact_telegram").notNull(),
+  deliveryInfo: text("delivery_info").notNull(),
+});
+
+export const insertSiteSettingsSchema = createInsertSchema(siteSettings, {
+  contactEmail: z.string().email("Введите корректный email"),
+  contactPhone: z.string().min(10, "Введите корректный номер телефона"),
+  contactTelegram: z.string().min(1, "Введите Telegram"),
+  deliveryInfo: z.string().min(10, "Введите информацию о доставке"),
+}).omit({ id: true });
+
+export const updateSiteSettingsSchema = z.object({
+  contactEmail: z.string().email("Введите корректный email").optional(),
+  contactPhone: z.string().min(10, "Введите корректный номер телефона").optional(),
+  contactTelegram: z.string().min(1, "Введите Telegram").optional(),
+  deliveryInfo: z.string().min(10, "Введите информацию о доставке").optional(),
+});
+
+export type InsertSiteSettings = z.infer<typeof insertSiteSettingsSchema>;
+export type UpdateSiteSettings = z.infer<typeof updateSiteSettingsSchema>;
+export type SiteSettings = typeof siteSettings.$inferSelect;

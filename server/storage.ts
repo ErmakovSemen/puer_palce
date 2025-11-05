@@ -71,6 +71,10 @@ export interface IStorage {
   checkSmsRateLimit(phone: string): Promise<boolean>;
   markPhoneVerified(userId: string): Promise<User | undefined>;
   
+  // Site Settings
+  getSiteSettings(): Promise<import("@shared/schema").SiteSettings | undefined>;
+  updateSiteSettings(settings: import("@shared/schema").UpdateSiteSettings): Promise<import("@shared/schema").SiteSettings | undefined>;
+  
   // Session store for auth
   sessionStore: any;
 }
@@ -423,7 +427,7 @@ export class MemStorage implements IStorage {
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable } from "@shared/schema";
+import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable, siteSettings as siteSettingsTable } from "@shared/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
@@ -929,6 +933,47 @@ export class DbStorage implements IStorage {
       .returning();
     
     return user;
+  }
+
+  async getSiteSettings(): Promise<import("@shared/schema").SiteSettings | undefined> {
+    const [settings] = await db.select().from(siteSettingsTable).limit(1);
+    
+    // If no settings exist, create default settings
+    if (!settings) {
+      const [newSettings] = await db.insert(siteSettingsTable).values({
+        contactEmail: 'SimonErmak@yandex.ru',
+        contactPhone: '+79667364077',
+        contactTelegram: '@HotlineEugene',
+        deliveryInfo: 'Доставка осуществляется через CDEK, Яндекс или WB по всей России в течение 15 рабочих дней',
+      }).returning();
+      return newSettings;
+    }
+    
+    return settings;
+  }
+
+  async updateSiteSettings(settings: import("@shared/schema").UpdateSiteSettings): Promise<import("@shared/schema").SiteSettings | undefined> {
+    // Get first settings record
+    const [existing] = await db.select().from(siteSettingsTable).limit(1);
+    
+    // If no settings exist, create default settings first
+    if (!existing) {
+      const [newSettings] = await db.insert(siteSettingsTable).values({
+        contactEmail: settings.contactEmail || 'SimonErmak@yandex.ru',
+        contactPhone: settings.contactPhone || '+79667364077',
+        contactTelegram: settings.contactTelegram || '@HotlineEugene',
+        deliveryInfo: settings.deliveryInfo || 'Доставка осуществляется через CDEK, Яндекс или WB по всей России в течение 15 рабочих дней',
+      }).returning();
+      return newSettings;
+    }
+
+    const [updated] = await db
+      .update(siteSettingsTable)
+      .set(settings)
+      .where(eq(siteSettingsTable.id, existing.id))
+      .returning();
+    
+    return updated;
   }
 }
 

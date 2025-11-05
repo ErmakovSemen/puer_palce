@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema, updateOrderStatusSchema, insertCartItemSchema, updateCartItemSchema } from "@shared/schema";
+import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema, updateOrderStatusSchema, insertCartItemSchema, updateCartItemSchema, updateSiteSettingsSchema } from "@shared/schema";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
@@ -757,6 +757,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Cart] Clear cart error:", error);
       res.status(500).json({ error: "Failed to clear cart" });
+    }
+  });
+
+  // Site Settings routes
+  app.get("/api/site-settings", async (_req, res) => {
+    try {
+      const settings = await storage.getSiteSettings();
+      res.json(settings);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get site settings" });
+    }
+  });
+
+  app.put("/api/site-settings", requireAdminAuth, async (req, res) => {
+    try {
+      const settingsData = updateSiteSettingsSchema.parse(req.body);
+      const updated = await storage.updateSiteSettings(settingsData);
+      res.json(updated);
+    } catch (error) {
+      res.status(400).json({ error: "Invalid site settings data" });
     }
   });
 

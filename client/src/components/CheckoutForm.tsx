@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -15,7 +16,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { AlertCircle, Mail, Phone, MessageCircle, Truck, UserCircle } from "lucide-react";
+import type { SiteSettings } from "@shared/schema";
+import { Link } from "wouter";
 
 const checkoutSchema = z.object({
   name: z.string().min(2, "Имя должно содержать минимум 2 символа"),
@@ -53,6 +57,12 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
   
   // Calculate final total
   const finalTotal = total - firstOrderDiscountAmount - loyaltyDiscountAmount;
+  
+  // Fetch site settings for contact info
+  const { data: siteSettings } = useQuery<SiteSettings>({
+    queryKey: ["/api/site-settings"],
+  });
+  
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
@@ -154,6 +164,80 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
             </FormItem>
           )}
         />
+
+        {/* Information Card */}
+        {siteSettings && (
+          <Card className="p-4 bg-muted/30">
+            <div className="space-y-3">
+              <div className="flex items-start gap-2">
+                <UserCircle className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                <div className="text-sm">
+                  {user ? (
+                    <span>
+                      История заказов доступна в{" "}
+                      <Link href="/profile" className="text-primary hover:underline" data-testid="link-profile">
+                        личном кабинете
+                      </Link>
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      Зарегистрируйтесь, чтобы получить доступ к истории заказов в личном кабинете
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Связаться с нами:</p>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <a 
+                      href={`mailto:${siteSettings.contactEmail}`}
+                      className="text-primary hover:underline"
+                      data-testid="link-contact-email"
+                    >
+                      {siteSettings.contactEmail}
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <a 
+                      href={`tel:${siteSettings.contactPhone}`}
+                      className="text-primary hover:underline"
+                      data-testid="link-contact-phone"
+                    >
+                      {siteSettings.contactPhone}
+                    </a>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <a 
+                      href={`https://t.me/${siteSettings.contactTelegram.replace('@', '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                      data-testid="link-contact-telegram"
+                    >
+                      {siteSettings.contactTelegram}
+                    </a>
+                  </div>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div className="flex items-start gap-2">
+                <Truck className="w-4 h-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                <p className="text-sm text-muted-foreground" data-testid="text-delivery-info">
+                  {siteSettings.deliveryInfo}
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Order Summary */}
         <div className="space-y-2 pt-4">

@@ -6,6 +6,24 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 
 ## Recent Changes (December 2024)
 
+### Site Settings Management System
+- **Database Schema**: Created `siteSettings` table with fields for contact email, phone, Telegram handle, and delivery information
+- **Admin Interface**: Added "Настройки" tab in admin panel for editing site contact information and delivery details
+- **Checkout Integration**: Checkout page now displays editable contact information (email, phone, Telegram) and delivery details from database
+- **User Experience**: 
+  - Authenticated users see link to order history in personal profile
+  - All users see contact methods (email, phone, Telegram) with clickable links
+  - Delivery information shows CDEK, Yandex, WB delivery options and 15-day timeline
+- **API Endpoints**: GET /api/site-settings (public), PUT /api/site-settings (admin-only)
+
+### First Order Discount System
+- **20% Discount**: Registered users automatically receive 20% discount on their first order
+- **Database Tracking**: Added `firstOrderDiscountUsed` field to users and orders tables
+- **Discount Order**: First order discount applied before loyalty discount (base total → 20% off → loyalty % off)
+- **Security**: Server-side validation prevents discount abuse, recalculates totals from authoritative product data
+- **UI Indicators**: Large animated badge on profile button, prominent banner on profile page, separate line items in checkout
+- **Cache Management**: User data refreshes after order creation to automatically update UI state
+
 ### Phone-Based Authentication with SMS Verification
 - **SMS.ru Integration**: Implemented SMS verification system using SMS.ru API (cost-effective at 1-2₽ per SMS vs Twilio's $0.76)
 - **Security**: SMS codes are hashed before storage, 5-minute expiry, 3 verification attempts max, rate limit 3 SMS per 10 minutes per phone
@@ -17,12 +35,14 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 - **Backend Security**: Order totals are recalculated server-side using current product prices; loyalty discounts only applied if `user.phoneVerified === true`
 - **Frontend UX**: Checkout warns unverified users that loyalty discounts require phone verification; Profile displays verification status with badges and icons
 
-### Database Migration
+### Database Migrations
 - **Legacy Users**: Executed one-time SQL migration to mark all 5 existing users (who registered before SMS verification) as `phoneVerified = true`. This ensures legacy users retain full loyalty program benefits without re-verification
+- **Initial Settings**: Created initial site settings record with current contact information (SimonErmak@yandex.ru, +79667364077, @HotlineEugene)
 
 ### Bug Fixes
 - Fixed registration flow to correctly handle optional email/name fields (empty strings not sent to backend)
 - Added backend validation to prevent loyalty discount tampering through API manipulation
+- Fixed cache invalidation: user data now refreshes after order creation
 
 ## User Preferences
 
