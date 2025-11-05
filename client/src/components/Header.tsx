@@ -80,10 +80,10 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                         <User className="w-6 h-6" />
                         {!user.firstOrderDiscountUsed && (
                           <Badge 
-                            className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-amber-500 text-white border border-amber-600"
+                            className="absolute -top-1 -right-1 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold animate-pulse"
                             data-testid="badge-discount-available"
                           >
-                            -20%
+                            20%
                           </Badge>
                         )}
                       </Button>
@@ -119,10 +119,10 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                       </Link>
                     </Button>
                     <Badge 
-                      className="absolute -top-2 -right-2 bg-amber-500 text-white border border-amber-600 text-xs px-1.5"
+                      className="absolute -top-2 -right-2 bg-amber-500 text-white border-2 border-amber-600 text-xs px-2 py-0.5 font-bold animate-pulse"
                       data-testid="badge-login-discount"
                     >
-                      -20%
+                      20%
                     </Badge>
                   </div>
                 )}

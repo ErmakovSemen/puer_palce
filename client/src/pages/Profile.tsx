@@ -140,6 +140,35 @@ export default function Profile() {
             </div>
           )}
 
+          {/* First Order Discount Banner - Main Profile Page */}
+          {user && !user.firstOrderDiscountUsed && (
+            <div className="mb-6 bg-gradient-to-br from-amber-100 to-yellow-100 border-2 border-amber-400 rounded-lg p-6 shadow-md" data-testid="banner-first-order-discount-main">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div className="flex-shrink-0 bg-amber-500 rounded-full p-4">
+                  <Gift className="w-8 h-8 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-bold text-xl text-amber-900 mb-2">
+                    Скидка 20% на первый заказ
+                  </h3>
+                  <p className="text-sm text-amber-800 mb-0 sm:mb-0">
+                    Оформите свой первый заказ и получите скидку 20%!
+                  </p>
+                </div>
+                <Link href="/">
+                  <Button 
+                    size="default" 
+                    className="bg-amber-600 hover:bg-amber-700 text-white border-amber-700 w-full sm:w-auto"
+                    data-testid="button-shop-discount"
+                  >
+                    <ShoppingBag className="w-4 h-4 mr-2" />
+                    В магазин
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-3">
             <Button 
