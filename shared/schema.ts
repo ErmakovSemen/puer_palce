@@ -6,15 +6,16 @@ import { z } from "zod";
 // Users table for authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: text("email").notNull().unique(),
+  email: text("email").unique(),
   password: text("password").notNull(),
   name: text("name"),
-  phone: text("phone").unique(),
+  phone: text("phone").notNull().unique(),
+  phoneVerified: boolean("phone_verified").notNull().default(false),
   xp: integer("xp").notNull().default(0),
 });
 
 export const insertUserSchema = createInsertSchema(users, {
-  email: z.string().email("Введите корректный email"),
+  email: z.string().email("Введите корректный email").optional(),
   password: z.string().min(6, "Пароль должен содержать минимум 6 символов"),
   name: z.string().min(2, "Имя должно содержать минимум 2 символа").optional(),
   phone: z.string().min(1, "Укажите номер телефона").min(10, "Введите корректный номер телефона"),
@@ -33,6 +34,26 @@ export const updateUserSchema = z.object({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// SMS Verifications table
+export const smsVerifications = pgTable("sms_verifications", {
+  id: serial("id").primaryKey(),
+  phone: text("phone").notNull(),
+  code: text("code").notNull(), // hashed code
+  type: text("type").notNull(), // "registration" or "password_reset"
+  attempts: integer("attempts").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  expiresAt: text("expires_at").notNull(),
+});
+
+export const insertSmsVerificationSchema = createInsertSchema(smsVerifications, {
+  phone: z.string().min(10, "Введите корректный номер телефона"),
+  code: z.string().length(6, "Код должен содержать 6 цифр"),
+  type: z.enum(["registration", "password_reset"]),
+}).omit({ id: true, attempts: true, createdAt: true, expiresAt: true });
+
+export type InsertSmsVerification = z.infer<typeof insertSmsVerificationSchema>;
+export type SmsVerification = typeof smsVerifications.$inferSelect;
 
 // Products
 export const products = pgTable("products", {

@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 // modify the interface with any CRUD methods
@@ -11,6 +11,7 @@ export interface IStorage {
   searchUserByPhone(phone: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: { name?: string; phone?: string }): Promise<User | undefined>;
+  updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined>;
   addUserXP(userId: string, xpAmount: number): Promise<User | undefined>;
   updateUserXP(userId: string, newXP: number): Promise<User | undefined>;
   
@@ -57,6 +58,15 @@ export interface IStorage {
   updateCartItem(id: number, quantity: number, userId: string): Promise<DbCartItem | undefined>;
   removeFromCart(id: number, userId: string): Promise<boolean>;
   clearCart(userId: string): Promise<void>;
+  
+  // SMS Verification
+  createSmsVerification(phone: string, hashedCode: string, type: "registration" | "password_reset"): Promise<SmsVerification>;
+  getSmsVerification(phone: string, type: "registration" | "password_reset"): Promise<SmsVerification | undefined>;
+  incrementSmsAttempts(id: number): Promise<SmsVerification | undefined>;
+  deleteSmsVerification(id: number): Promise<void>;
+  cleanupExpiredSmsVerifications(): Promise<void>;
+  checkSmsRateLimit(phone: string): Promise<boolean>;
+  markPhoneVerified(userId: string): Promise<User | undefined>;
   
   // Session store for auth
   sessionStore: any;
@@ -156,7 +166,9 @@ export class MemStorage implements IStorage {
       ...insertUser, 
       id,
       name: insertUser.name ?? null,
-      phone: insertUser.phone ?? null,
+      email: insertUser.email ?? null,
+      phone: insertUser.phone,
+      phoneVerified: false,
       xp: 0,
     };
     this.users.set(id, user);
@@ -168,6 +180,15 @@ export class MemStorage implements IStorage {
     if (!user) return undefined;
     
     const updated: User = { ...user, ...data };
+    this.users.set(id, updated);
+    return updated;
+  }
+
+  async updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined> {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    
+    const updated: User = { ...user, password: hashedPassword };
     this.users.set(id, updated);
     return updated;
   }
@@ -331,10 +352,54 @@ export class MemStorage implements IStorage {
   async clearCart(userId: string): Promise<void> {
     // No-op in MemStorage
   }
+
+  // SMS Verification methods (not persisted in MemStorage)
+  async createSmsVerification(phone: string, hashedCode: string, type: "registration" | "password_reset"): Promise<SmsVerification> {
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
+    return {
+      id: 1,
+      phone,
+      code: hashedCode,
+      type,
+      attempts: 0,
+      createdAt: new Date().toISOString(),
+      expiresAt,
+    };
+  }
+
+  async getSmsVerification(phone: string, type: "registration" | "password_reset"): Promise<SmsVerification | undefined> {
+    return undefined;
+  }
+
+  async incrementSmsAttempts(id: number): Promise<SmsVerification | undefined> {
+    return undefined;
+  }
+
+  async deleteSmsVerification(id: number): Promise<void> {
+    // No-op
+  }
+
+  async cleanupExpiredSmsVerifications(): Promise<void> {
+    // No-op
+  }
+
+  async checkSmsRateLimit(phone: string): Promise<boolean> {
+    // Always allow in MemStorage
+    return true;
+  }
+
+  async markPhoneVerified(userId: string): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { ...user, phoneVerified: true };
+    this.users.set(userId, updated);
+    return updated;
+  }
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable } from "@shared/schema";
+import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable } from "@shared/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
@@ -461,6 +526,15 @@ export class DbStorage implements IStorage {
     const [user] = await db
       .update(usersTable)
       .set(data)
+      .where(eq(usersTable.id, id))
+      .returning();
+    return user;
+  }
+
+  async updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(usersTable)
+      .set({ password: hashedPassword })
       .where(eq(usersTable.id, id))
       .returning();
     return user;
@@ -727,6 +801,90 @@ export class DbStorage implements IStorage {
       
       console.log('✓ Initial tea types seeded');
     }
+  }
+
+  // SMS Verification methods
+  async createSmsVerification(phone: string, hashedCode: string, type: "registration" | "password_reset"): Promise<SmsVerification> {
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes from now
+    
+    const [verification] = await db
+      .insert(smsVerificationsTable)
+      .values({
+        phone,
+        code: hashedCode,
+        type,
+        expiresAt,
+      })
+      .returning();
+    
+    return verification;
+  }
+
+  async getSmsVerification(phone: string, type: "registration" | "password_reset"): Promise<SmsVerification | undefined> {
+    const [verification] = await db
+      .select()
+      .from(smsVerificationsTable)
+      .where(
+        and(
+          eq(smsVerificationsTable.phone, phone),
+          eq(smsVerificationsTable.type, type)
+        )
+      )
+      .orderBy(desc(smsVerificationsTable.createdAt))
+      .limit(1);
+    
+    return verification;
+  }
+
+  async incrementSmsAttempts(id: number): Promise<SmsVerification | undefined> {
+    const [verification] = await db
+      .update(smsVerificationsTable)
+      .set({
+        attempts: sql`${smsVerificationsTable.attempts} + 1`,
+      })
+      .where(eq(smsVerificationsTable.id, id))
+      .returning();
+    
+    return verification;
+  }
+
+  async deleteSmsVerification(id: number): Promise<void> {
+    await db.delete(smsVerificationsTable).where(eq(smsVerificationsTable.id, id));
+  }
+
+  async cleanupExpiredSmsVerifications(): Promise<void> {
+    const now = new Date().toISOString();
+    await db
+      .delete(smsVerificationsTable)
+      .where(sql`${smsVerificationsTable.expiresAt} < ${now}`);
+  }
+
+  async checkSmsRateLimit(phone: string): Promise<boolean> {
+    // Check if user has sent more than 3 SMS in last 10 minutes
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    
+    const recentVerifications = await db
+      .select()
+      .from(smsVerificationsTable)
+      .where(
+        and(
+          eq(smsVerificationsTable.phone, phone),
+          sql`${smsVerificationsTable.createdAt} > ${tenMinutesAgo}`
+        )
+      );
+    
+    // Allow if less than 3 SMS sent in last 10 minutes
+    return recentVerifications.length < 3;
+  }
+
+  async markPhoneVerified(userId: string): Promise<User | undefined> {
+    const [user] = await db
+      .update(usersTable)
+      .set({ phoneVerified: true })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    
+    return user;
   }
 }
 

@@ -17,7 +17,7 @@ type AuthContextType = {
   registerMutation: UseMutationResult<SelectUser, Error, InsertUser>;
 };
 
-type LoginData = Pick<InsertUser, "email" | "password">;
+type LoginData = Pick<InsertUser, "phone" | "password">;
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 
@@ -54,8 +54,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
-      queryClient.setQueryData(["/api/user"], user);
+    onSuccess: (data: any) => {
+      // Registration doesn't log in automatically - user needs to verify phone first
+      if (data.user) {
+        queryClient.setQueryData(["/api/user"], data.user);
+      } else {
+        toast({
+          title: "Регистрация успешна",
+          description: data.message || "Подтвердите номер телефона",
+        });
+      }
     },
     onError: (error: Error) => {
       toast({

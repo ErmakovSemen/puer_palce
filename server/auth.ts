@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser, updateUserSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
+import { generateVerificationCode, sendSmsCode } from "./sms-ru";
 
 declare global {
   namespace Express {
@@ -48,12 +49,12 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // Use email field instead of username
+  // Use phone field instead of email for authentication
   passport.use(
     new LocalStrategy(
-      { usernameField: 'email' },
-      async (email, password, done) => {
-        const user = await storage.getUserByEmail(email);
+      { usernameField: 'phone' },
+      async (phone, password, done) => {
+        const user = await storage.getUserByPhone(phone);
         if (!user || !(await comparePasswords(password, user.password))) {
           return done(null, false);
         } else {
@@ -73,24 +74,31 @@ export function setupAuth(app: Express) {
     try {
       const data = insertUserSchema.parse(req.body);
       
-      const existingUser = await storage.getUserByEmail(data.email);
-      if (existingUser) {
-        return res.status(400).json({ error: "Email уже используется" });
+      // Check if email already exists (only if email is provided)
+      if (data.email) {
+        const existingUser = await storage.getUserByEmail(data.email);
+        if (existingUser) {
+          return res.status(400).json({ error: "Email уже используется" });
+        }
       }
 
+      // Check if phone already exists
       const existingPhone = await storage.getUserByPhone(data.phone);
       if (existingPhone) {
         return res.status(400).json({ error: "Номер телефона уже используется" });
       }
 
+      // Create user (phone not yet verified)
       const user = await storage.createUser({
         ...data,
         password: await hashPassword(data.password),
       });
 
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(201).json(sanitizeUser(user));
+      // Don't log in yet - user needs to verify phone first
+      res.status(201).json({
+        message: "Пользователь создан. Подтвердите номер телефона.",
+        userId: user.id,
+        phoneVerified: false,
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -133,6 +141,153 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ error: error.errors[0].message });
       }
       res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  // SMS Verification endpoints
+  app.post("/api/auth/send-verification-code", async (req, res) => {
+    try {
+      const { phone, type } = z.object({
+        phone: z.string().min(10, "Введите корректный номер телефона"),
+        type: z.enum(["registration", "password_reset"]),
+      }).parse(req.body);
+
+      // Check rate limit
+      const canSend = await storage.checkSmsRateLimit(phone);
+      if (!canSend) {
+        return res.status(429).json({ 
+          error: "Слишком много попыток. Попробуйте через 10 минут." 
+        });
+      }
+
+      // For password reset, check if user exists
+      if (type === "password_reset") {
+        const user = await storage.getUserByPhone(phone);
+        if (!user) {
+          return res.status(404).json({ error: "Пользователь с таким номером не найден" });
+        }
+      }
+
+      // Generate and hash code
+      const code = generateVerificationCode();
+      const hashedCode = await hashPassword(code);
+
+      // Save to database
+      await storage.createSmsVerification(phone, hashedCode, type);
+
+      // Send SMS
+      await sendSmsCode(phone, code);
+
+      // Clean up expired codes
+      await storage.cleanupExpiredSmsVerifications();
+
+      res.json({ message: "Код отправлен" });
+    } catch (error) {
+      console.error("[SMS Verification] Error sending code:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      res.status(500).json({ error: "Ошибка отправки кода" });
+    }
+  });
+
+  app.post("/api/auth/verify-phone", async (req, res) => {
+    try {
+      const { phone, code, type } = z.object({
+        phone: z.string().min(10),
+        code: z.string().length(6),
+        type: z.enum(["registration", "password_reset"]),
+      }).parse(req.body);
+
+      // Get verification record
+      const verification = await storage.getSmsVerification(phone, type);
+      if (!verification) {
+        return res.status(400).json({ error: "Код не найден или истёк" });
+      }
+
+      // Check if expired
+      if (new Date(verification.expiresAt) < new Date()) {
+        await storage.deleteSmsVerification(verification.id);
+        return res.status(400).json({ error: "Код истёк. Запросите новый." });
+      }
+
+      // Check attempts
+      if (verification.attempts >= 3) {
+        await storage.deleteSmsVerification(verification.id);
+        return res.status(400).json({ error: "Превышено количество попыток. Запросите новый код." });
+      }
+
+      // Verify code
+      const isValid = await comparePasswords(code, verification.code);
+      if (!isValid) {
+        await storage.incrementSmsAttempts(verification.id);
+        return res.status(400).json({ error: "Неверный код" });
+      }
+
+      // Code is valid - delete verification record
+      await storage.deleteSmsVerification(verification.id);
+
+      // For registration type, mark phone as verified and log in
+      if (type === "registration") {
+        const user = await storage.getUserByPhone(phone);
+        if (!user) {
+          return res.status(404).json({ error: "Пользователь не найден" });
+        }
+
+        // Mark phone as verified
+        await storage.markPhoneVerified(user.id);
+
+        // Log in the user
+        req.login(user, (err) => {
+          if (err) {
+            return res.status(500).json({ error: "Ошибка входа" });
+          }
+          res.json({ 
+            message: "Телефон подтверждён",
+            user: sanitizeUser(user),
+          });
+        });
+      } else {
+        // For password reset, return success (next step is to set new password)
+        res.json({ message: "Код подтверждён", verified: true });
+      }
+    } catch (error) {
+      console.error("[SMS Verification] Error verifying code:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      res.status(500).json({ error: "Ошибка проверки кода" });
+    }
+  });
+
+  app.post("/api/auth/reset-password", async (req, res) => {
+    try {
+      const { phone, newPassword } = z.object({
+        phone: z.string().min(10),
+        newPassword: z.string().min(6, "Пароль должен содержать минимум 6 символов"),
+      }).parse(req.body);
+
+      // Find user
+      const user = await storage.getUserByPhone(phone);
+      if (!user) {
+        return res.status(404).json({ error: "Пользователь не найден" });
+      }
+
+      // Update password
+      const hashedPassword = await hashPassword(newPassword);
+      const updatedUser = await storage.updateUserPassword(user.id, hashedPassword);
+      
+      if (!updatedUser) {
+        return res.status(500).json({ error: "Ошибка обновления пароля" });
+      }
+
+      res.json({ message: "Пароль успешно изменён" });
+    } catch (error) {
+      console.error("[Password Reset] Error:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors[0].message });
+      }
+      res.status(500).json({ error: "Ошибка сброса пароля" });
     }
   });
 }
