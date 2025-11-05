@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText } from "lucide-react";
+import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText, CheckCircle, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -272,9 +272,36 @@ export default function Profile() {
                   />
                 </Form>
               ) : (
-                <span data-testid="text-user-phone">{user?.phone || "Не указано"}</span>
+                <div className="flex items-center gap-2 flex-1">
+                  <span data-testid="text-user-phone">{user?.phone || "Не указано"}</span>
+                  {user?.phoneVerified ? (
+                    <CheckCircle className="w-4 h-4 text-green-600" data-testid="icon-phone-verified" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-yellow-600" data-testid="icon-phone-not-verified" />
+                  )}
+                </div>
               )}
             </div>
+
+            {/* Phone Verification Status */}
+            {!isEditing && user && (
+              <div className="flex items-center gap-3 ml-7">
+                {user.phoneVerified ? (
+                  <Badge variant="outline" className="text-green-600 border-green-600">
+                    Телефон подтверждён
+                  </Badge>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+                      Телефон не подтверждён
+                    </Badge>
+                    <p className="text-xs text-muted-foreground">
+                      Подтвердите телефон для получения скидок программы лояльности
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

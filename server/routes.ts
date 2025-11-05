@@ -8,6 +8,7 @@ import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
 import { setupAuth } from "./auth";
 import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification } from "./telegram";
+import { getLoyaltyDiscount } from "@shared/loyalty";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -439,10 +440,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         total: orderData.total
       });
       
-      // Get userId if user is authenticated
-      const userId = req.isAuthenticated() ? (req.user as any).id : null;
+      // Get userId and user if authenticated
+      let userId: string | null = null;
+      let user: any = null;
+      if (req.isAuthenticated()) {
+        userId = (req.user as any).id;
+        if (userId) {
+          user = await storage.getUser(userId);
+        }
+      }
       
-      // Save order to database
+      // Backend security check: Recalculate total with proper discount
+      // This prevents manipulation of loyalty discounts
+      let calculatedTotal = 0;
+      const products = await storage.getProducts();
+      
+      for (const item of orderData.items) {
+        const product = products.find((p: any) => p.id === item.id);
+        if (product) {
+          calculatedTotal += (product.pricePerGram || 0) * item.quantity;
+        }
+      }
+      
+      // Apply loyalty discount only if user is verified
+      const discount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
+      const discountAmount = (calculatedTotal * discount) / 100;
+      calculatedTotal = calculatedTotal - discountAmount;
+      
+      // Log if there's a discrepancy
+      if (Math.abs(calculatedTotal - orderData.total) > 1) {
+        console.warn("[Order] Total mismatch - calculated:", calculatedTotal, "received:", orderData.total);
+      }
+      
+      // Use calculated total (prevents price manipulation)
+      const finalTotal = calculatedTotal;
+      
+      // Save order to database with calculated total
       const savedOrder = await storage.createOrder({
         userId,
         name: orderData.name,
@@ -451,7 +484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         address: orderData.address,
         comment: orderData.comment,
         items: JSON.stringify(orderData.items),
-        total: orderData.total,
+        total: finalTotal,
       });
       console.log("[Order] Order saved to database, ID:", savedOrder.id);
       

@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
 
 const checkoutSchema = z.object({
   name: z.string().min(2, "Имя должно содержать минимум 2 символа"),
@@ -31,15 +33,17 @@ interface CheckoutFormProps {
   isSubmitting?: boolean;
   total: number;
   user?: {
-    email: string;
+    email: string | null;
     name?: string | null;
     phone?: string | null;
+    phoneVerified: boolean;
     xp: number;
   } | null;
 }
 
 export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, user }: CheckoutFormProps) {
-  const discount = user ? getLoyaltyDiscount(user.xp) : 0;
+  // Apply discount only if user is verified
+  const discount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
   const discountAmount = (total * discount) / 100;
   const finalTotal = total - discountAmount;
   const form = useForm<CheckoutFormValues>({
@@ -56,6 +60,16 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* Show warning if user is not verified */}
+        {user && !user.phoneVerified && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Подтвердите телефон в профиле, чтобы получать скидки программы лояльности
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <FormField
           control={form.control}
           name="name"

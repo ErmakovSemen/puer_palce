@@ -340,8 +340,8 @@ export default function Home() {
       };
     });
 
-    // Apply loyalty discount if user is authenticated
-    const discount = user ? getLoyaltyDiscount(user.xp) : 0;
+    // Apply loyalty discount only if user is authenticated AND phone is verified
+    const discount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
     const discountAmount = (cartTotal * discount) / 100;
     const finalTotal = cartTotal - discountAmount;
 
