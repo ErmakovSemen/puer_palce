@@ -38,6 +38,9 @@ export default function Auth() {
   const [forgotPhone, setForgotPhone] = useState("+7");
   const [forgotCode, setForgotCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  
+  // SMS resend timer (30 seconds)
+  const [resendTimer, setResendTimer] = useState(0);
 
   // SMS sending mutation
   const sendSmsMutation = useMutation({
@@ -50,6 +53,7 @@ export default function Auth() {
         title: "Код отправлен",
         description: "Проверьте SMS на вашем телефоне",
       });
+      setResendTimer(30); // Start timer only on successful send
     },
     onError: (error: Error) => {
       toast({
@@ -124,6 +128,16 @@ export default function Auth() {
       setLocation("/");
     }
   }, [user, isLoading, setLocation]);
+
+  // Timer countdown effect
+  useEffect(() => {
+    if (resendTimer > 0) {
+      const interval = setInterval(() => {
+        setResendTimer((prev) => prev - 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [resendTimer]);
 
   // Phone input handler with automatic +7 prefix
   const handlePhoneChange = (value: string) => {
@@ -332,10 +346,12 @@ export default function Auth() {
                           type: "password_reset",
                         });
                       }}
-                      disabled={sendSmsMutation.isPending}
+                      disabled={sendSmsMutation.isPending || resendTimer > 0}
                       data-testid="button-resend-code"
                     >
-                      Отправить код повторно
+                      {resendTimer > 0 
+                        ? `Отправить повторно (${resendTimer}с)` 
+                        : "Отправить код повторно"}
                     </Button>
                   </form>
                 )}
@@ -597,10 +613,12 @@ export default function Auth() {
                             type: "registration",
                           });
                         }}
-                        disabled={sendSmsMutation.isPending}
+                        disabled={sendSmsMutation.isPending || resendTimer > 0}
                         data-testid="button-resend"
                       >
-                        Отправить код повторно
+                        {resendTimer > 0 
+                          ? `Отправить повторно (${resendTimer}с)` 
+                          : "Отправить код повторно"}
                       </Button>
                       <Button
                         type="button"
