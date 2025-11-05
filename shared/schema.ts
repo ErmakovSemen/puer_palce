@@ -178,7 +178,7 @@ export type UpdateSettings = z.infer<typeof updateSettingsSchema>;
 // Orders table
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").references(() => users.id), // nullable - for guest orders
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }), // nullable - for guest orders
   name: text("name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
