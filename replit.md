@@ -17,6 +17,9 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 - **Backend Security**: Order totals are recalculated server-side using current product prices; loyalty discounts only applied if `user.phoneVerified === true`
 - **Frontend UX**: Checkout warns unverified users that loyalty discounts require phone verification; Profile displays verification status with badges and icons
 
+### Database Migration
+- **Legacy Users**: Executed one-time SQL migration to mark all 5 existing users (who registered before SMS verification) as `phoneVerified = true`. This ensures legacy users retain full loyalty program benefits without re-verification
+
 ### Bug Fixes
 - Fixed registration flow to correctly handle optional email/name fields (empty strings not sent to backend)
 - Added backend validation to prevent loyalty discount tampering through API manipulation
