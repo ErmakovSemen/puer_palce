@@ -41,6 +41,7 @@ export async function sendSmsCode(phone: string, code: string): Promise<void> {
     api_id: apiKey,
     to: formattedPhone,
     msg: message,
+    from: 'PuerPub',
     json: '1',
   });
 
