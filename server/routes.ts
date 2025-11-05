@@ -9,6 +9,9 @@ import { sendOrderNotification } from "./resend";
 import { setupAuth } from "./auth";
 import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification } from "./telegram";
 import { getLoyaltyDiscount } from "@shared/loyalty";
+import { db } from "./db";
+import { users as usersTable } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -477,6 +480,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const loyaltyDiscountAmount = (calculatedTotal * loyaltyDiscount) / 100;
       calculatedTotal = calculatedTotal - loyaltyDiscountAmount;
       
+      // Apply custom discount (individual discount from admin) to the reduced total
+      const customDiscount = user?.customDiscount || 0;
+      const customDiscountAmount = (calculatedTotal * customDiscount) / 100;
+      calculatedTotal = calculatedTotal - customDiscountAmount;
+      
+      // Clamp total to zero (prevent negative totals from stacked discounts)
+      calculatedTotal = Math.max(calculatedTotal, 0);
+      
       // Log if there's a discrepancy
       if (Math.abs(calculatedTotal - orderData.total) > 1) {
         console.warn("[Order] Total mismatch - calculated:", calculatedTotal, "received:", orderData.total);
@@ -484,6 +495,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Use calculated total (prevents price manipulation)
       const finalTotal = calculatedTotal;
+      
+      // Validate total is not negative
+      if (finalTotal < 0) {
+        res.status(400).json({ error: "Итоговая сумма заказа не может быть отрицательной" });
+        return;
+      }
       
       // Save order to database with calculated total
       const savedOrder = await storage.createOrder({
@@ -503,6 +520,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (usedFirstOrderDiscount && userId) {
         await storage.markFirstOrderDiscountUsed(userId);
         console.log("[Order] First order discount marked as used for user:", userId);
+      }
+      
+      // Clear custom discount if it was used
+      if (customDiscount > 0 && userId) {
+        await db.update(usersTable).set({ customDiscount: null }).where(eq(usersTable.id, userId));
+        console.log("[Order] Custom discount cleared for user:", userId);
       }
       
       // Clear cart for authenticated users
@@ -603,6 +626,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Admin] Update user XP error:", error);
       res.status(500).json({ error: "Failed to update user XP" });
+    }
+  });
+
+  app.patch("/api/admin/users/:id/custom-discount", requireAdminAuth, async (req, res) => {
+    try {
+      const userId = req.params.id;
+      const { discount } = req.body;
+      
+      // Validate discount value (0-100 or null)
+      if (discount !== null && (typeof discount !== 'number' || discount < 0 || discount > 100)) {
+        res.status(400).json({ error: "Скидка должна быть числом от 0 до 100 или null" });
+        return;
+      }
+      
+      // Update custom discount
+      const [updatedUser] = await db
+        .update(usersTable)
+        .set({ customDiscount: discount })
+        .where(eq(usersTable.id, userId))
+        .returning();
+      
+      if (!updatedUser) {
+        res.status(404).json({ error: "Пользователь не найден" });
+        return;
+      }
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = updatedUser;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      console.error("[Admin] Update custom discount error:", error);
+      res.status(500).json({ error: "Не удалось установить скидку" });
     }
   });
 

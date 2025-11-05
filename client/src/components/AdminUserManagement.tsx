@@ -24,6 +24,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   const [searchPhone, setSearchPhone] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [xpAmount, setXpAmount] = useState<string>("100");
+  const [discountAmount, setDiscountAmount] = useState<string>("");
   const { toast } = useToast();
 
   // Search user query
@@ -115,6 +116,42 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     },
   });
 
+  // Update custom discount mutation
+  const updateDiscountMutation = useMutation({
+    mutationFn: async ({ userId, discount }: { userId: string; discount: number | null }) => {
+      const res = await fetch(getApiUrl(`/api/admin/users/${userId}/custom-discount`), {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Password': adminPassword,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ discount }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Не удалось установить скидку');
+      }
+      return await res.json() as UserWithoutPassword;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users/search'] });
+      refetchUser();
+      setDiscountAmount("");
+      toast({
+        title: "Успешно",
+        description: "Индивидуальная скидка установлена",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось установить скидку",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSearch = () => {
     if (searchPhone.trim()) {
       refetchUser();
@@ -142,6 +179,23 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     }
 
     updateXPMutation.mutate({ userId: user.id, xp: newXP });
+  };
+
+  const handleSetDiscount = () => {
+    if (!user) return;
+
+    const discount = discountAmount.trim() === "" ? null : parseInt(discountAmount);
+    
+    if (discount !== null && (isNaN(discount) || discount < 0 || discount > 100)) {
+      toast({
+        title: "Ошибка",
+        description: "Скидка должна быть от 0 до 100%",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    updateDiscountMutation.mutate({ userId: user.id, discount });
   };
 
   const loyaltyProgress = user ? getLoyaltyProgress(user.xp) : null;
@@ -196,6 +250,12 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
                 <div>
                   <p className="text-sm text-muted-foreground">Текущий XP</p>
                   <p className="font-medium" data-testid="text-user-xp">{user.xp}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Индивидуальная скидка</p>
+                  <p className="font-medium" data-testid="text-user-custom-discount">
+                    {user.customDiscount !== null && user.customDiscount !== undefined ? `${user.customDiscount}%` : "—"}
+                  </p>
                 </div>
               </div>
 
@@ -266,6 +326,49 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
                       Вычесть XP
                     </Button>
                   </div>
+                </div>
+
+                <div className="space-y-3 pt-4 border-t">
+                  <p className="text-sm font-medium">Индивидуальная скидка на следующий заказ</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={discountAmount}
+                      onChange={(e) => setDiscountAmount(e.target.value)}
+                      placeholder="0-100"
+                      className="w-24"
+                      data-testid="input-discount-amount"
+                    />
+                    <span className="text-sm text-muted-foreground">%</span>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleSetDiscount}
+                      disabled={updateDiscountMutation.isPending}
+                      data-testid="button-set-discount"
+                    >
+                      Установить скидку
+                    </Button>
+                    {user.customDiscount !== null && user.customDiscount !== undefined && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setDiscountAmount("");
+                          updateDiscountMutation.mutate({ userId: user.id, discount: null });
+                        }}
+                        disabled={updateDiscountMutation.isPending}
+                        data-testid="button-clear-discount"
+                      >
+                        Убрать скидку
+                      </Button>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Скидка применяется после скидки на первый заказ и скидки лояльности. Автоматически обнуляется после использования.
+                  </p>
                 </div>
               </div>
             </CardContent>

@@ -735,6 +735,14 @@ export class DbStorage implements IStorage {
       .where(whereCondition)
       .returning();
     
+    // If order is being cancelled and it used the first order discount, restore the flag
+    if (order && status === 'cancelled' && order.usedFirstOrderDiscount && order.userId) {
+      await db
+        .update(usersTable)
+        .set({ firstOrderDiscountUsed: false })
+        .where(eq(usersTable.id, order.userId));
+    }
+    
     return order;
   }
 

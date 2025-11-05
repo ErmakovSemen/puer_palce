@@ -13,6 +13,7 @@ export const users = pgTable("users", {
   phoneVerified: boolean("phone_verified").notNull().default(false),
   xp: integer("xp").notNull().default(0),
   firstOrderDiscountUsed: boolean("first_order_discount_used").notNull().default(false),
+  customDiscount: integer("custom_discount"), // Индивидуальная скидка в процентах (nullable)
 });
 
 export const insertUserSchema = createInsertSchema(users, {

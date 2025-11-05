@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import { AlertCircle, Mail, Phone, MessageCircle, Truck, UserCircle } from "lucide-react";
 import type { SiteSettings } from "@shared/schema";
 import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
 
 const checkoutSchema = z.object({
   name: z.string().min(2, "Имя должно содержать минимум 2 символа"),
@@ -43,10 +44,13 @@ interface CheckoutFormProps {
     phoneVerified: boolean;
     xp: number;
     firstOrderDiscountUsed: boolean;
+    customDiscount?: number | null;
   } | null;
 }
 
 export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, user }: CheckoutFormProps) {
+  const { toast } = useToast();
+  
   // First order discount (20% if user hasn't used it yet)
   const firstOrderDiscount = (user && !user.firstOrderDiscountUsed) ? 20 : 0;
   const firstOrderDiscountAmount = (total * firstOrderDiscount) / 100;
@@ -55,13 +59,34 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
   const loyaltyDiscount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
   const loyaltyDiscountAmount = ((total - firstOrderDiscountAmount) * loyaltyDiscount) / 100;
   
-  // Calculate final total
-  const finalTotal = total - firstOrderDiscountAmount - loyaltyDiscountAmount;
+  // Custom discount (individual discount from admin)
+  const customDiscount = user?.customDiscount || 0;
+  const customDiscountAmount = ((total - firstOrderDiscountAmount - loyaltyDiscountAmount) * customDiscount) / 100;
+  
+  // Calculate final total (clamp to zero to prevent negative totals)
+  const finalTotal = Math.max(total - firstOrderDiscountAmount - loyaltyDiscountAmount - customDiscountAmount, 0);
   
   // Fetch site settings for contact info
   const { data: siteSettings } = useQuery<SiteSettings>({
     queryKey: ["/api/site-settings"],
   });
+  
+  // Copy to clipboard function
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({
+        title: "Скопировано",
+        description: `${label} скопирован в буфер обмена`,
+      });
+    } catch (err) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось скопировать",
+        variant: "destructive",
+      });
+    }
+  };
   
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
@@ -198,6 +223,10 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
                       href={`mailto:${siteSettings.contactEmail}`}
                       className="text-primary hover:underline"
                       data-testid="link-contact-email"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        copyToClipboard(siteSettings.contactEmail, "Email");
+                      }}
                     >
                       {siteSettings.contactEmail}
                     </a>
@@ -208,18 +237,27 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
                       href={`tel:${siteSettings.contactPhone}`}
                       className="text-primary hover:underline"
                       data-testid="link-contact-phone"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        copyToClipboard(siteSettings.contactPhone, "Телефон");
+                      }}
                     >
                       {siteSettings.contactPhone}
                     </a>
                   </div>
                   <div className="flex items-center gap-2">
                     <MessageCircle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                    <span className="text-muted-foreground">Telegram:</span>
                     <a 
                       href={`https://t.me/${siteSettings.contactTelegram.replace('@', '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-primary hover:underline"
                       data-testid="link-contact-telegram"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        copyToClipboard(siteSettings.contactTelegram, "Telegram");
+                      }}
                     >
                       {siteSettings.contactTelegram}
                     </a>
@@ -263,7 +301,15 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
                 </span>
               </div>
             )}
-            {(firstOrderDiscount > 0 || loyaltyDiscount > 0) && (
+            {customDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-purple-600 font-medium">Индивидуальная скидка ({customDiscount}%):</span>
+                <span className="text-purple-600 font-medium" data-testid="text-custom-discount">
+                  -{Math.round(customDiscountAmount)} ₽
+                </span>
+              </div>
+            )}
+            {(firstOrderDiscount > 0 || loyaltyDiscount > 0 || customDiscount > 0) && (
               <>
                 <Separator />
                 <div className="flex justify-between font-semibold">
@@ -272,7 +318,7 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
                 </div>
               </>
             )}
-            {firstOrderDiscount === 0 && loyaltyDiscount === 0 && (
+            {firstOrderDiscount === 0 && loyaltyDiscount === 0 && customDiscount === 0 && (
               <div className="flex justify-between font-semibold">
                 <span>Итого:</span>
                 <span data-testid="text-total">{Math.round(total)} ₽</span>
