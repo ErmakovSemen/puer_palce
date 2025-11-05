@@ -2,7 +2,24 @@
 
 ## Overview
 
-Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliver a warm, culturally authentic, and premium user experience. It features a public-facing tea shop with product catalog, shopping cart, and checkout, alongside an integrated admin interface for comprehensive product management. The project also includes PWA capabilities and a native Android application, offering a full-stack solution for tea enthusiasts.
+Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliver a warm, culturally authentic, and premium user experience. It features a public-facing tea shop with product catalog, shopping cart, and checkout with phone-based SMS authentication, alongside an integrated admin interface for comprehensive product management. The project also includes PWA capabilities and a native Android application, offering a full-stack solution for tea enthusiasts.
+
+## Recent Changes (December 2024)
+
+### Phone-Based Authentication with SMS Verification
+- **SMS.ru Integration**: Implemented SMS verification system using SMS.ru API (cost-effective at 1-2₽ per SMS vs Twilio's $0.76)
+- **Security**: SMS codes are hashed before storage, 5-minute expiry, 3 verification attempts max, rate limit 3 SMS per 10 minutes per phone
+- **Authentication Flows**:
+  - Registration: Phone → Password → Email (optional) → SMS verification → Account activation
+  - Login: Phone + Password (normal flow)
+  - Password Reset: Phone → SMS code → New password
+- **Database Schema**: Added `phoneVerified` boolean to users table, created `smsVerifications` table with expiry and rate limiting
+- **Backend Security**: Order totals are recalculated server-side using current product prices; loyalty discounts only applied if `user.phoneVerified === true`
+- **Frontend UX**: Checkout warns unverified users that loyalty discounts require phone verification; Profile displays verification status with badges and icons
+
+### Bug Fixes
+- Fixed registration flow to correctly handle optional email/name fields (empty strings not sent to backend)
+- Added backend validation to prevent loyalty discount tampering through API manipulation
 
 ## User Preferences
 
@@ -59,4 +76,4 @@ Powered by Express.js and TypeScript, providing a RESTful API. Drizzle ORM inter
 
 ### Configuration Management
 
--   **Environment Variables**: `DATABASE_URL`, `NODE_ENV`, `ADMIN_PASSWORD`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`.
+-   **Environment Variables**: `DATABASE_URL`, `NODE_ENV`, `ADMIN_PASSWORD`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `SMSRU_API_KEY` (for SMS verification), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (for admin notifications).
