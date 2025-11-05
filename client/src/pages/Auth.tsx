@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Home, ArrowLeft } from "lucide-react";
+import { Loader2, Home, ArrowLeft, Gift, ShoppingBag, Award } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -501,6 +501,32 @@ export default function Auth() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
+                  {registerStep === "register" && (
+                    <div className="mb-6 bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-lg p-4" data-testid="banner-registration-benefits">
+                      <div className="flex items-start gap-3 mb-3">
+                        <Gift className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-amber-900 mb-2">
+                            Преимущества регистрации
+                          </h3>
+                          <ul className="space-y-1.5 text-sm text-amber-800">
+                            <li className="flex items-start gap-2">
+                              <ShoppingBag className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                              <span><strong>Скидка 20%</strong> на первый заказ</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <Award className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                              <span>Участие в программе лояльности с накопительными скидками</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <ShoppingBag className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                              <span>Удобная история заказов и быстрое оформление</span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {registerStep === "register" ? (
                     <form onSubmit={handleRegister} className="space-y-4">
                       <div className="space-y-2">

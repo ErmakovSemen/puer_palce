@@ -12,6 +12,7 @@ export const users = pgTable("users", {
   phone: text("phone").notNull().unique(),
   phoneVerified: boolean("phone_verified").notNull().default(false),
   xp: integer("xp").notNull().default(0),
+  firstOrderDiscountUsed: boolean("first_order_discount_used").notNull().default(false),
 });
 
 export const insertUserSchema = createInsertSchema(users, {
@@ -185,6 +186,7 @@ export const orders = pgTable("orders", {
   items: text("items").notNull(), // JSON string of order items
   total: real("total").notNull(),
   status: text("status").notNull().default("pending"), // pending, paid, cancelled, completed
+  usedFirstOrderDiscount: boolean("used_first_order_discount").notNull().default(false),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -206,6 +208,17 @@ export const orderSchema = z.object({
   total: z.number().min(500, "Минимальная сумма заказа 500₽"),
 });
 
+export const insertOrderSchema = createInsertSchema(orders, {
+  name: z.string().min(2),
+  email: z.string().email(),
+  phone: z.string().min(10),
+  address: z.string().min(10),
+  items: z.string(),
+  total: z.number().min(0),
+  status: z.string().default("pending"),
+  usedFirstOrderDiscount: z.boolean().default(false),
+}).omit({ id: true, createdAt: true });
+
 export const updateOrderStatusSchema = z.object({
   status: z.enum(["pending", "paid", "cancelled", "completed"], {
     errorMap: () => ({ message: "Выберите корректный статус" })
@@ -214,6 +227,7 @@ export const updateOrderStatusSchema = z.object({
 
 export type OrderItem = z.infer<typeof orderItemSchema>;
 export type Order = z.infer<typeof orderSchema>;
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
 export type DbOrder = typeof orders.$inferSelect;
 export type UpdateOrderStatus = z.infer<typeof updateOrderStatusSchema>;
 

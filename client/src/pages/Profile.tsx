@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText, CheckCircle, AlertCircle } from "lucide-react";
+import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText, CheckCircle, AlertCircle, Gift, ShoppingBag } from "lucide-react";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -216,6 +216,35 @@ export default function Profile() {
               )}
             </div>
           </DialogHeader>
+          
+          {/* First Order Discount Banner */}
+          {user && !user.firstOrderDiscountUsed && (
+            <div className="mt-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-lg p-4" data-testid="banner-first-order-discount">
+              <div className="flex items-start gap-3">
+                <Gift className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-amber-900 mb-1">
+                    Скидка 20% на первый заказ
+                  </h3>
+                  <p className="text-sm text-amber-800 mb-3">
+                    Вы получите скидку 20% при оформлении вашего первого заказа. 
+                    Не упустите возможность попробовать наш премиальный чай по специальной цене!
+                  </p>
+                  <Link href="/shop">
+                    <Button 
+                      size="sm" 
+                      className="bg-amber-600 hover:bg-amber-700 text-white border-amber-700"
+                      data-testid="button-shop-now"
+                    >
+                      <ShoppingBag className="w-4 h-4 mr-2" />
+                      Перейти в магазин
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="space-y-4 mt-4">
             <div className="flex items-center gap-3">
               <Mail className="w-4 h-4 text-muted-foreground" />

@@ -14,6 +14,8 @@ export interface IStorage {
   updateUserPassword(id: string, hashedPassword: string): Promise<User | undefined>;
   addUserXP(userId: string, xpAmount: number): Promise<User | undefined>;
   updateUserXP(userId: string, newXP: number): Promise<User | undefined>;
+  markFirstOrderDiscountUsed(userId: string): Promise<User | undefined>;
+  restoreFirstOrderDiscount(userId: string): Promise<User | undefined>;
   
   getQuizConfig(): Promise<QuizConfig>;
   updateQuizConfig(config: QuizConfig): Promise<QuizConfig>;
@@ -48,7 +50,8 @@ export interface IStorage {
     address: string; 
     comment?: string; 
     items: string; 
-    total: number; 
+    total: number;
+    usedFirstOrderDiscount?: boolean;
   }): Promise<DbOrder>;
   updateOrderStatus(orderId: number, status: string, expectedOldStatus?: string): Promise<DbOrder | undefined>;
   
@@ -170,6 +173,7 @@ export class MemStorage implements IStorage {
       phone: insertUser.phone,
       phoneVerified: false,
       xp: 0,
+      firstOrderDiscountUsed: false,
     };
     this.users.set(id, user);
     return user;
@@ -207,6 +211,24 @@ export class MemStorage implements IStorage {
     if (!user) return undefined;
     
     const updated: User = { ...user, xp: newXP };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async markFirstOrderDiscountUsed(userId: string): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { ...user, firstOrderDiscountUsed: true };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async restoreFirstOrderDiscount(userId: string): Promise<User | undefined> {
+    const user = this.users.get(userId);
+    if (!user) return undefined;
+    
+    const updated: User = { ...user, firstOrderDiscountUsed: false };
     this.users.set(userId, updated);
     return updated;
   }
@@ -288,7 +310,8 @@ export class MemStorage implements IStorage {
     address: string; 
     comment?: string; 
     items: string; 
-    total: number; 
+    total: number;
+    usedFirstOrderDiscount?: boolean;
   }): Promise<DbOrder> {
     // MemStorage doesn't persist orders, return mock order
     return {
@@ -302,6 +325,7 @@ export class MemStorage implements IStorage {
       items: orderData.items,
       total: orderData.total,
       status: "pending",
+      usedFirstOrderDiscount: orderData.usedFirstOrderDiscount ?? false,
       createdAt: new Date().toISOString(),
     };
   }
@@ -561,6 +585,24 @@ export class DbStorage implements IStorage {
     return updatedUser;
   }
 
+  async markFirstOrderDiscountUsed(userId: string): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(usersTable)
+      .set({ firstOrderDiscountUsed: true })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async restoreFirstOrderDiscount(userId: string): Promise<User | undefined> {
+    const [updatedUser] = await db
+      .update(usersTable)
+      .set({ firstOrderDiscountUsed: false })
+      .where(eq(usersTable.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
   async getQuizConfig(): Promise<QuizConfig> {
     // For now, return default config (could be stored in DB later)
     return defaultQuizConfig;
@@ -658,7 +700,8 @@ export class DbStorage implements IStorage {
     address: string; 
     comment?: string; 
     items: string; 
-    total: number; 
+    total: number;
+    usedFirstOrderDiscount?: boolean;
   }): Promise<DbOrder> {
     const [order] = await db.insert(ordersTable).values({
       userId: orderData.userId ?? null,
@@ -669,6 +712,7 @@ export class DbStorage implements IStorage {
       comment: orderData.comment ?? null,
       items: orderData.items,
       total: orderData.total,
+      usedFirstOrderDiscount: orderData.usedFirstOrderDiscount ?? false,
     }).returning();
     
     return order;

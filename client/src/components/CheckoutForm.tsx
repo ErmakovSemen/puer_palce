@@ -38,14 +38,21 @@ interface CheckoutFormProps {
     phone?: string | null;
     phoneVerified: boolean;
     xp: number;
+    firstOrderDiscountUsed: boolean;
   } | null;
 }
 
 export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, user }: CheckoutFormProps) {
-  // Apply discount only if user is verified
-  const discount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
-  const discountAmount = (total * discount) / 100;
-  const finalTotal = total - discountAmount;
+  // First order discount (20% if user hasn't used it yet)
+  const firstOrderDiscount = (user && !user.firstOrderDiscountUsed) ? 20 : 0;
+  const firstOrderDiscountAmount = (total * firstOrderDiscount) / 100;
+  
+  // Loyalty discount (only if user is verified)
+  const loyaltyDiscount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
+  const loyaltyDiscountAmount = ((total - firstOrderDiscountAmount) * loyaltyDiscount) / 100;
+  
+  // Calculate final total
+  const finalTotal = total - firstOrderDiscountAmount - loyaltyDiscountAmount;
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutSchema),
     defaultValues: {
@@ -156,14 +163,24 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
               <span className="text-muted-foreground">Сумма заказа:</span>
               <span data-testid="text-order-subtotal">{Math.round(total)} ₽</span>
             </div>
-            {discount > 0 && (
+            {firstOrderDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-amber-600 font-medium">Скидка на первый заказ (-20%):</span>
+                <span className="text-amber-600 font-medium" data-testid="text-first-order-discount">
+                  -{Math.round(firstOrderDiscountAmount)} ₽
+                </span>
+              </div>
+            )}
+            {loyaltyDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Скидка программы лояльности ({loyaltyDiscount}%):</span>
+                <span className="text-green-600" data-testid="text-loyalty-discount">
+                  -{Math.round(loyaltyDiscountAmount)} ₽
+                </span>
+              </div>
+            )}
+            {(firstOrderDiscount > 0 || loyaltyDiscount > 0) && (
               <>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Скидка ({discount}%):</span>
-                  <span className="text-green-600" data-testid="text-discount-amount">
-                    -{Math.round(discountAmount)} ₽
-                  </span>
-                </div>
                 <Separator />
                 <div className="flex justify-between font-semibold">
                   <span>Итого к оплате:</span>
@@ -171,7 +188,7 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
                 </div>
               </>
             )}
-            {discount === 0 && (
+            {firstOrderDiscount === 0 && loyaltyDiscount === 0 && (
               <div className="flex justify-between font-semibold">
                 <span>Итого:</span>
                 <span data-testid="text-total">{Math.round(total)} ₽</span>

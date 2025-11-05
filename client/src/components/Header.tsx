@@ -74,10 +74,18 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-12 w-12"
+                        className="h-12 w-12 relative"
                         data-testid="button-user-menu"
                       >
                         <User className="w-6 h-6" />
+                        {!user.firstOrderDiscountUsed && (
+                          <Badge 
+                            className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-amber-500 text-white border border-amber-600"
+                            data-testid="badge-discount-available"
+                          >
+                            -20%
+                          </Badge>
+                        )}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -100,15 +108,23 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
-                  <Button
-                    variant="ghost"
-                    asChild
-                    data-testid="button-login"
-                  >
-                    <Link href="/auth">
-                      Войти
-                    </Link>
-                  </Button>
+                  <div className="relative">
+                    <Button
+                      variant="ghost"
+                      asChild
+                      data-testid="button-login"
+                    >
+                      <Link href="/auth">
+                        Войти
+                      </Link>
+                    </Button>
+                    <Badge 
+                      className="absolute -top-2 -right-2 bg-amber-500 text-white border border-amber-600 text-xs px-1.5"
+                      data-testid="badge-login-discount"
+                    >
+                      -20%
+                    </Badge>
+                  </div>
                 )}
               </>
             )}

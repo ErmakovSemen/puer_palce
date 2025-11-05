@@ -451,7 +451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Backend security check: Recalculate total with proper discount
-      // This prevents manipulation of loyalty discounts
+      // This prevents manipulation of discounts
       let calculatedTotal = 0;
       const products = await storage.getProducts();
       
@@ -462,10 +462,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Apply loyalty discount only if user is verified
-      const discount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
-      const discountAmount = (calculatedTotal * discount) / 100;
-      calculatedTotal = calculatedTotal - discountAmount;
+      // Apply first order discount first (20% from base total)
+      let usedFirstOrderDiscount = false;
+      let firstOrderDiscountAmount = 0;
+      if (user && !user.firstOrderDiscountUsed) {
+        firstOrderDiscountAmount = calculatedTotal * 0.20;
+        calculatedTotal = calculatedTotal - firstOrderDiscountAmount;
+        usedFirstOrderDiscount = true;
+        console.log("[Order] First order discount applied:", firstOrderDiscountAmount);
+      }
+      
+      // Apply loyalty discount to the reduced total (only if user is verified)
+      const loyaltyDiscount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
+      const loyaltyDiscountAmount = (calculatedTotal * loyaltyDiscount) / 100;
+      calculatedTotal = calculatedTotal - loyaltyDiscountAmount;
       
       // Log if there's a discrepancy
       if (Math.abs(calculatedTotal - orderData.total) > 1) {
@@ -485,8 +495,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         comment: orderData.comment,
         items: JSON.stringify(orderData.items),
         total: finalTotal,
+        usedFirstOrderDiscount,
       });
       console.log("[Order] Order saved to database, ID:", savedOrder.id);
+      
+      // Mark first order discount as used if applicable
+      if (usedFirstOrderDiscount && userId) {
+        await storage.markFirstOrderDiscountUsed(userId);
+        console.log("[Order] First order discount marked as used for user:", userId);
+      }
       
       // Clear cart for authenticated users
       if (userId) {
@@ -636,6 +653,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const xpToAward = Math.floor(orderBeforeUpdate.total);
         await storage.addUserXP(orderBeforeUpdate.userId, xpToAward);
         console.log(`[Admin] Order #${orderId} completed: Awarded ${xpToAward} XP to user ${orderBeforeUpdate.userId}`);
+      }
+      
+      // Restore first order discount if order is cancelled and it was used
+      const shouldRestoreDiscount = statusData.status === "cancelled" && 
+                                     orderBeforeUpdate.usedFirstOrderDiscount && 
+                                     orderBeforeUpdate.userId;
+      
+      if (shouldRestoreDiscount && orderBeforeUpdate.userId) {
+        await storage.restoreFirstOrderDiscount(orderBeforeUpdate.userId);
+        console.log(`[Admin] Order #${orderId} cancelled: Restored first order discount for user ${orderBeforeUpdate.userId}`);
       }
       
       res.json(updatedOrder);
