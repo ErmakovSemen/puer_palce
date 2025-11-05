@@ -20,12 +20,12 @@ export default function Auth() {
   const { toast } = useToast();
   
   // Login state
-  const [loginData, setLoginData] = useState({ phone: "", password: "" });
+  const [loginData, setLoginData] = useState({ phone: "+7", password: "" });
   
   // Register state
   const [registerStep, setRegisterStep] = useState<VerificationStep>("register");
   const [registerData, setRegisterData] = useState({ 
-    phone: "", 
+    phone: "+7", 
     password: "", 
     name: "", 
     email: "" 
@@ -35,7 +35,7 @@ export default function Auth() {
   // Forgot password state
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotStep, setForgotStep] = useState<ForgotStep>("phone");
-  const [forgotPhone, setForgotPhone] = useState("");
+  const [forgotPhone, setForgotPhone] = useState("+7");
   const [forgotCode, setForgotCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
@@ -125,6 +125,28 @@ export default function Auth() {
     }
   }, [user, isLoading, setLocation]);
 
+  // Phone input handler with automatic +7 prefix
+  const handlePhoneChange = (value: string) => {
+    // Remove all non-digit characters except +
+    let cleaned = value.replace(/[^\d+]/g, '');
+    
+    // If user deletes the +7, restore it
+    if (!cleaned.startsWith('+7')) {
+      // If starts with 7 or 8, add +
+      if (cleaned.startsWith('7') || cleaned.startsWith('8')) {
+        cleaned = '+7' + cleaned.slice(1);
+      } else if (cleaned.length > 0 && cleaned !== '+') {
+        // User typed a digit - prepend +7
+        cleaned = '+7' + cleaned.replace(/^\+/, '');
+      } else {
+        // Empty or just +, set to +7
+        cleaned = '+7';
+      }
+    }
+    
+    return cleaned;
+  };
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     loginMutation.mutate(loginData);
@@ -133,16 +155,12 @@ export default function Auth() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Build registration data - only include non-empty fields
+    // Build registration data
     const registrationData: any = {
       phone: registerData.phone,
       password: registerData.password,
+      name: registerData.name,
     };
-    
-    // Only include name if it's not empty
-    if (registerData.name && registerData.name.trim()) {
-      registrationData.name = registerData.name;
-    }
     
     // Only include email if it's not empty
     if (registerData.email && registerData.email.trim()) {
@@ -248,7 +266,7 @@ export default function Auth() {
                         type="tel"
                         placeholder="+7 900 123-45-67"
                         value={forgotPhone}
-                        onChange={(e) => setForgotPhone(e.target.value)}
+                        onChange={(e) => setForgotPhone(handlePhoneChange(e.target.value))}
                         required
                         data-testid="input-forgot-phone"
                       />
@@ -410,7 +428,7 @@ export default function Auth() {
                         type="tel"
                         placeholder="+7 900 123-45-67"
                         value={loginData.phone}
-                        onChange={(e) => setLoginData({ ...loginData, phone: e.target.value })}
+                        onChange={(e) => setLoginData({ ...loginData, phone: handlePhoneChange(e.target.value) })}
                         required
                         data-testid="input-login-phone"
                       />
@@ -428,7 +446,7 @@ export default function Auth() {
                     </div>
                     <Button
                       type="button"
-                      variant="link"
+                      variant="ghost"
                       className="px-0 h-auto"
                       onClick={() => setShowForgotPassword(true)}
                       data-testid="button-forgot-password"
@@ -476,13 +494,25 @@ export default function Auth() {
                           type="tel"
                           placeholder="+7 900 123-45-67"
                           value={registerData.phone}
-                          onChange={(e) => setRegisterData({ ...registerData, phone: e.target.value })}
+                          onChange={(e) => setRegisterData({ ...registerData, phone: handlePhoneChange(e.target.value) })}
                           required
                           data-testid="input-register-phone"
                         />
                         <p className="text-xs text-muted-foreground">
                           Будет отправлен SMS с кодом подтверждения
                         </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="register-name">Имя</Label>
+                        <Input
+                          id="register-name"
+                          type="text"
+                          placeholder="Как к вам обращаться?"
+                          value={registerData.name}
+                          onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
+                          required
+                          data-testid="input-register-name"
+                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="register-password">Пароль</Label>
@@ -507,9 +537,6 @@ export default function Auth() {
                           onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
                           data-testid="input-register-email"
                         />
-                        <p className="text-xs text-muted-foreground">
-                          Только для получения квитанций
-                        </p>
                       </div>
                       <Button 
                         type="submit" 

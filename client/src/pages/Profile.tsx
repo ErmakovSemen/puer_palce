@@ -272,14 +272,7 @@ export default function Profile() {
                   />
                 </Form>
               ) : (
-                <div className="flex items-center gap-2 flex-1">
-                  <span data-testid="text-user-phone">{user?.phone || "Не указано"}</span>
-                  {user?.phoneVerified ? (
-                    <CheckCircle className="w-4 h-4 text-green-600" data-testid="icon-phone-verified" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-yellow-600" data-testid="icon-phone-not-verified" />
-                  )}
-                </div>
+                <span data-testid="text-user-phone">{user?.phone || "Не указано"}</span>
               )}
             </div>
 
