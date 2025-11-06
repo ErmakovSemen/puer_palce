@@ -36,6 +36,10 @@ interface StatsData {
     repeatCustomers: number;
     repeatRate: number;
   };
+  newCustomers: Array<{
+    date: string;
+    count: number;
+  }>;
   dailyOrders: Array<{
     date: string;
     orderCount: number;
@@ -193,6 +197,36 @@ export default function AdminStats({ adminFetch }: AdminStatsProps) {
           </div>
         </Card>
       </div>
+
+      {/* New Customers Chart */}
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold mb-4">Новые покупатели (30 дней)</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={stats.newCustomers}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis 
+              dataKey="date" 
+              tick={{ fontSize: 12 }}
+              tickFormatter={(value) => new Date(value).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+            />
+            <YAxis />
+            <Tooltip 
+              labelFormatter={(value) => new Date(value).toLocaleDateString('ru-RU')}
+              formatter={(value: number) => [value, 'Новых покупателей']}
+            />
+            <Legend 
+              formatter={() => 'Новые покупатели'}
+            />
+            <Line 
+              type="monotone" 
+              dataKey="count" 
+              stroke={COLORS.primary} 
+              strokeWidth={2}
+              dot={{ r: 3 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </Card>
 
       {/* Daily Orders Chart */}
       <Card className="p-6">
