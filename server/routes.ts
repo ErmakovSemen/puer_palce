@@ -1047,12 +1047,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       `);
 
       // 9. Discount statistics
+      // First order discount usage (last 30 days)
       const firstOrderDiscountResult = await db.execute(sql`
         SELECT COUNT(CASE WHEN used_first_order_discount = true THEN 1 END) as first_order_used
         FROM orders
         WHERE created_at >= ${thirtyDaysAgoStr}
       `);
       
+      // Custom discounts currently granted (snapshot, not time-based)
+      // This shows how many users currently have admin-granted custom discounts
       const customDiscountResult = await db.execute(sql`
         SELECT COUNT(*) as count 
         FROM users 
