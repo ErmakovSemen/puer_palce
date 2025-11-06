@@ -981,19 +981,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 3. Conversion rate (users who made at least one order)
       const conversionRate = totalUsers > 0 ? (activeUsers / totalUsers) * 100 : 0;
 
-      // 4. Daily registrations for last 30 days
-      const dailyRegistrationsResult = await db.execute(sql`
+      // 4. New customers by day (users who made their first order in last 30 days)
+      const newCustomersResult = await db.execute(sql`
         SELECT 
           DATE(created_at) as date,
-          COUNT(*) as count
-        FROM users
-        WHERE created_at >= ${thirtyDaysAgoStr}
+          COUNT(DISTINCT user_id) as count
+        FROM orders
+        WHERE used_first_order_discount = true 
+          AND user_id IS NOT NULL 
+          AND created_at >= ${thirtyDaysAgoStr}
         GROUP BY DATE(created_at)
         ORDER BY date ASC
       `);
-
-      // Note: users table doesn't have created_at, using orders as proxy for user activity
-      // Let's use a simpler approach - just show active users over time through orders
       
       // 5. Daily orders and revenue for last 30 days
       const dailyOrdersResult = await db.execute(sql`
@@ -1089,6 +1088,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           repeatCustomers,
           repeatRate: Math.round(repeatRate * 10) / 10,
         },
+        newCustomers: newCustomersResult.rows.map((row: any) => ({
+          date: row.date,
+          count: Number(row.count),
+        })),
         dailyOrders: dailyOrdersResult.rows.map((row: any) => ({
           date: row.date,
           orderCount: Number(row.order_count),
