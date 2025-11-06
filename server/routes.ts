@@ -331,14 +331,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`[Upload] Processing ${req.files.length} files`);
+      const sharp = (await import('sharp')).default;
       const objectStorageService = new ObjectStorageService();
       const uploadedUrls: string[] = [];
 
       for (const file of req.files) {
-        const ext = file.originalname.split('.').pop();
-        const filename = `${randomUUID()}.${ext}`;
-        console.log(`[Upload] Uploading file: ${filename}`);
-        const url = await objectStorageService.uploadPublicObject(file.buffer, filename);
+        const filename = `${randomUUID()}.webp`;
+        console.log(`[Upload] Converting and uploading file: ${filename}`);
+        
+        // Convert image to WebP format with quality 80 and max dimension 1920px
+        const webpBuffer = await sharp(file.buffer)
+          .resize(1920, 1920, { 
+            fit: 'inside', 
+            withoutEnlargement: true 
+          })
+          .webp({ quality: 80 })
+          .toBuffer();
+        
+        console.log(`[Upload] Original size: ${file.size} bytes, WebP size: ${webpBuffer.length} bytes`);
+        const url = await objectStorageService.uploadPublicObject(webpBuffer, filename);
         console.log(`[Upload] File uploaded: ${url}`);
         uploadedUrls.push(url);
       }

@@ -19,6 +19,7 @@ interface ProductDetailProps {
   availableQuantities?: string[];
   fixedQuantityOnly?: boolean;
   fixedQuantity?: number | null;
+  outOfStock?: boolean;
   onAddToCart: (id: number, quantity: number) => void;
   onClose: () => void;
 }
@@ -36,6 +37,7 @@ export default function ProductDetail({
   availableQuantities = ["25", "50", "100"],
   fixedQuantityOnly = false,
   fixedQuantity = null,
+  outOfStock = false,
   onAddToCart,
   onClose,
 }: ProductDetailProps) {
@@ -110,6 +112,15 @@ export default function ProductDetail({
               >
                 {teaType}
               </Badge>
+              {outOfStock && (
+                <Badge 
+                  variant="outline" 
+                  className="text-sm bg-destructive/10 text-destructive border-destructive"
+                  data-testid={`badge-detail-out-of-stock-${id}`}
+                >
+                  Нет в наличии
+                </Badge>
+              )}
               {effects.map((effect, index) => (
                 <Badge 
                   key={index} 
@@ -217,6 +228,7 @@ export default function ProductDetail({
 
             <Button
               onClick={() => {
+                if (outOfStock) return;
                 // For teaware, always add 1 piece
                 const quantity = isTeaware ? 1 : (
                   fixedQuantityOnly && fixedQuantity 
@@ -228,13 +240,13 @@ export default function ProductDetail({
                   onClose();
                 }
               }}
-              disabled={!isTeaware && !fixedQuantityOnly && !selectedQuantity && !customQuantity}
+              disabled={outOfStock || (!isTeaware && !fixedQuantityOnly && !selectedQuantity && !customQuantity)}
               className="w-full bg-primary text-primary-foreground border border-primary-border"
               size="lg"
               data-testid={`button-detail-add-to-cart-${id}`}
             >
               <ShoppingCart className="w-5 h-5 mr-2" />
-              Добавить в корзину
+              {outOfStock ? "Нет в наличии" : "Добавить в корзину"}
             </Button>
           </div>
         </div>

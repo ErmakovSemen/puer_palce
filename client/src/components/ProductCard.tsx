@@ -20,6 +20,7 @@ interface ProductCardProps {
   availableQuantities?: string[];
   fixedQuantityOnly?: boolean;
   fixedQuantity?: number | null;
+  outOfStock?: boolean;
   onAddToCart: (id: number, quantity: number) => void;
   onClick: (id: number) => void;
 }
@@ -37,6 +38,7 @@ export default function ProductCard({
   availableQuantities = ["25", "50", "100"],
   fixedQuantityOnly = false,
   fixedQuantity = null,
+  outOfStock = false,
   onAddToCart, 
   onClick 
 }: ProductCardProps) {
@@ -144,6 +146,15 @@ export default function ProductCard({
             >
               {teaType}
             </Badge>
+            {outOfStock && (
+              <Badge 
+                variant="outline" 
+                className="text-xs transition-all duration-300 bg-destructive/10 text-destructive border-destructive"
+                data-testid={`badge-out-of-stock-${id}`}
+              >
+                Нет в наличии
+              </Badge>
+            )}
             {effects.slice(0, 2).map((effect, index) => (
               <Badge 
                 key={index} 
@@ -168,23 +179,25 @@ export default function ProductCard({
           <span className="text-lg sm:text-xl font-semibold transition-colors duration-300 text-foreground group-hover/card:text-primary" data-testid={`text-product-price-${id}`}>
             {isTeaware ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
           </span>
-          <Button
-            onClick={(e) => {
-              e.stopPropagation();
-              // For teaware, always add 1 piece
-              const defaultQuantity = isTeaware ? 1 : (
-                fixedQuantityOnly && fixedQuantity 
-                  ? fixedQuantity 
-                  : parseInt(availableQuantities[0] || "100", 10)
-              );
-              onAddToCart(id, defaultQuantity);
-            }}
-            size="icon"
-            className="bg-black text-white hover:bg-black/90 border-0 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 h-8 w-8"
-            data-testid={`button-add-to-cart-${id}`}
-          >
-            <ShoppingCart className="w-4 h-4" />
-          </Button>
+          {!outOfStock && (
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                // For teaware, always add 1 piece
+                const defaultQuantity = isTeaware ? 1 : (
+                  fixedQuantityOnly && fixedQuantity 
+                    ? fixedQuantity 
+                    : parseInt(availableQuantities[0] || "100", 10)
+                );
+                onAddToCart(id, defaultQuantity);
+              }}
+              size="icon"
+              className="bg-black text-white hover:bg-black/90 border-0 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 h-8 w-8"
+              data-testid={`button-add-to-cart-${id}`}
+            >
+              <ShoppingCart className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </div>
     </Card>
