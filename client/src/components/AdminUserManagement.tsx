@@ -25,7 +25,24 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [xpAmount, setXpAmount] = useState<string>("100");
   const [discountAmount, setDiscountAmount] = useState<string>("");
+  const [showRecentUsers, setShowRecentUsers] = useState(false);
   const { toast } = useToast();
+
+  // Recent users query
+  const { data: recentUsers, isLoading: isLoadingRecent } = useQuery({
+    queryKey: ['/api/admin/users/recent'],
+    enabled: showRecentUsers,
+    queryFn: async () => {
+      const res = await fetch(getApiUrl('/api/admin/users/recent'), {
+        headers: { 'X-Admin-Password': adminPassword },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        throw new Error('Failed to load recent users');
+      }
+      return await res.json() as UserWithoutPassword[];
+    },
+  });
 
   // Search user query
   const { data: user, isLoading: isLoadingUser, refetch: refetchUser, error: searchError } = useQuery({
@@ -44,12 +61,23 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     },
   });
 
+  // Track when we need to auto-refetch after selecting from recent users
+  const [shouldAutoRefetch, setShouldAutoRefetch] = useState(false);
+
   // Update selectedUserId when user is found
   useEffect(() => {
     if (user) {
       setSelectedUserId(user.id);
     }
   }, [user]);
+
+  // Auto-refetch when searchPhone changes and shouldAutoRefetch is true
+  useEffect(() => {
+    if (shouldAutoRefetch && searchPhone.trim()) {
+      refetchUser();
+      setShouldAutoRefetch(false);
+    }
+  }, [searchPhone, shouldAutoRefetch, refetchUser]);
 
   // Handle search errors
   useEffect(() => {
@@ -200,6 +228,14 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
 
   const loyaltyProgress = user ? getLoyaltyProgress(user.xp) : null;
 
+  const handleSelectUser = (selectedUser: UserWithoutPassword) => {
+    // Update search phone and trigger auto-refetch
+    setSearchPhone(selectedUser.phone || "");
+    setSelectedUserId(selectedUser.id);
+    setShowRecentUsers(false);
+    setShouldAutoRefetch(true);
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -207,7 +243,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
           <CardTitle>Поиск пользователя</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2">
+          <div className="flex gap-2 mb-4">
             <Input
               placeholder="Введите номер телефона"
               value={searchPhone}
@@ -224,6 +260,63 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
               Найти
             </Button>
           </div>
+          
+          <Button 
+            variant="outline" 
+            onClick={() => setShowRecentUsers(!showRecentUsers)}
+            data-testid="button-toggle-recent-users"
+          >
+            {showRecentUsers ? 'Скрыть последних пользователей' : 'Показать последних 10 пользователей'}
+          </Button>
+          
+          {showRecentUsers && (
+            <div className="mt-4">
+              {isLoadingRecent ? (
+                <p className="text-sm text-muted-foreground">Загрузка...</p>
+              ) : recentUsers && recentUsers.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Последние зарегистрированные пользователи:</p>
+                  <div className="space-y-1">
+                    {recentUsers.map((u) => {
+                      const progress = getLoyaltyProgress(u.xp);
+                      return (
+                        <button
+                          key={u.id}
+                          onClick={() => handleSelectUser(u)}
+                          className="w-full text-left p-3 rounded-md border hover-elevate active-elevate-2 transition-colors"
+                          data-testid={`button-select-user-${u.id}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium truncate">{u.name || u.phone || u.email}</p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-sm text-muted-foreground">{u.phone}</p>
+                                {u.phoneVerified && (
+                                  <Badge variant="outline" className="text-xs">✓</Badge>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge style={{ 
+                                backgroundColor: progress.currentLevel.color,
+                                color: '#fff',
+                                fontSize: '0.75rem'
+                              }}>
+                                {progress.currentLevel.name}
+                              </Badge>
+                              <span className="text-sm text-muted-foreground">{u.xp} XP</span>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Пользователи не найдены</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
