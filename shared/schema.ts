@@ -70,6 +70,7 @@ export const products = pgTable("products", {
   availableQuantities: text("available_quantities").array().notNull().default(sql`ARRAY['25', '50', '100']::text[]`), // Available quantities in grams
   fixedQuantityOnly: boolean("fixed_quantity_only").notNull().default(false), // If true, only sell in fixed quantity
   fixedQuantity: integer("fixed_quantity"), // Fixed quantity in grams (e.g., 357g for tea cake) or 1 for teaware
+  outOfStock: boolean("out_of_stock").notNull().default(false), // If true, product is out of stock and cannot be ordered
 });
 
 export const insertProductSchema = createInsertSchema(products, {
@@ -85,6 +86,7 @@ export const insertProductSchema = createInsertSchema(products, {
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
+  outOfStock: z.boolean(),
 }).omit({ id: true }).refine((data) => {
   if (data.fixedQuantityOnly && !data.fixedQuantity) {
     return false;
