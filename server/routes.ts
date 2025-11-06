@@ -11,7 +11,7 @@ import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotificat
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
 import { users as usersTable } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, desc } from "drizzle-orm";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -590,6 +590,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Admin] User search error:", error);
       res.status(500).json({ error: "Failed to search user" });
+    }
+  });
+
+  app.get("/api/admin/users/recent", requireAdminAuth, async (req, res) => {
+    try {
+      const recentUsers = await db
+        .select({
+          id: usersTable.id,
+          phone: usersTable.phone,
+          email: usersTable.email,
+          name: usersTable.name,
+          phoneVerified: usersTable.phoneVerified,
+          xp: usersTable.xp,
+          customDiscount: usersTable.customDiscount,
+          firstOrderDiscountUsed: usersTable.firstOrderDiscountUsed,
+        })
+        .from(usersTable)
+        .orderBy(desc(usersTable.id))
+        .limit(10);
+      
+      res.json(recentUsers);
+    } catch (error) {
+      console.error("[Admin] Get recent users error:", error);
+      res.status(500).json({ error: "Failed to get recent users" });
     }
   });
 
