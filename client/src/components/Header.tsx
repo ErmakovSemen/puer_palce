@@ -108,7 +108,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
-                  <div className="relative">
+                  <div className="relative inline-block">
                     <Button
                       variant="ghost"
                       asChild
@@ -119,7 +119,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                       </Link>
                     </Button>
                     <Badge 
-                      className="absolute -top-2 -right-2 bg-amber-500 text-white border-2 border-amber-600 text-xs px-2 py-0.5 font-bold animate-pulse"
+                      className="absolute -top-2.5 -right-3 bg-amber-500 text-white border border-amber-600 text-[10px] px-1 py-0 font-bold animate-pulse leading-tight"
                       data-testid="badge-login-discount"
                     >
                       20%
