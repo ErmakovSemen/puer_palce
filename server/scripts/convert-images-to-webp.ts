@@ -32,16 +32,35 @@ async function convertImagesToWebP() {
     
     for (const imageUrl of product.images) {
       try {
+        // Strip query strings and hash fragments first
+        const cleanUrl = imageUrl.split('?')[0].split('#')[0];
+        
         // Skip if already WebP
-        if (imageUrl.endsWith('.webp')) {
+        if (cleanUrl.endsWith('.webp')) {
           console.log(`[Convert] Image ${imageUrl} is already WebP, skipping`);
           newImages.push(imageUrl);
           totalSkipped++;
           continue;
         }
 
-        // Extract filename from URL (e.g., /public/abc.jpg -> abc.jpg)
-        const filename = imageUrl.replace('/public/', '');
+        // Extract filename from URL - handle both relative and full URLs
+        let filename: string;
+        if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+          // Full URL: extract the path after the last occurrence of '/public/'
+          const publicIndex = cleanUrl.lastIndexOf('/public/');
+          if (publicIndex === -1) {
+            console.warn(`[Convert] Cannot extract filename from URL: ${imageUrl}, skipping`);
+            newImages.push(imageUrl);
+            totalFailed++;
+            continue;
+          }
+          filename = cleanUrl.substring(publicIndex + '/public/'.length);
+        } else {
+          // Relative URL: just remove '/public/' prefix
+          filename = cleanUrl.replace('/public/', '');
+        }
+        
+        console.log(`[Convert] Extracted filename: ${filename} from URL: ${imageUrl}`);
         
         // Search for the file in object storage
         const file = await objectStorageService.searchPublicObject(filename);

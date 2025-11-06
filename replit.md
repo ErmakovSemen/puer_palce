@@ -6,6 +6,23 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 
 ## Recent Changes (December 2024)
 
+### Out-of-Stock Product Management (January 2025)
+- **Database Schema**: Added `outOfStock` boolean field to products table
+- **Admin Interface**: Added checkbox in product form to mark products as out of stock
+- **Frontend UX**: 
+  - Products marked as out of stock display "Нет в наличии" badge in red
+  - Cart addition buttons are hidden for out-of-stock items
+  - Detail view shows disabled "Нет в наличии" button instead of "Добавить в корзину"
+- **Visibility**: Out-of-stock products remain visible on the website for customer awareness
+
+### WebP Image Optimization (January 2025)
+- **Sharp Integration**: Installed and integrated Sharp library for image processing
+- **Automatic Conversion**: Upload route now automatically converts all new product images to WebP format
+- **Optimization Settings**: Images resized to max 1920px (maintaining aspect ratio) with 80% quality
+- **Batch Conversion Script**: Created `server/scripts/convert-images-to-webp.ts` for converting existing images
+- **URL Handling**: Script supports both relative (`/public/file.jpg`) and full URL formats
+- **Performance**: WebP format significantly reduces image file sizes while maintaining visual quality
+
 ### Site Settings Management System
 - **Database Schema**: Created `siteSettings` table with fields for contact email, phone, Telegram handle, and delivery information
 - **Admin Interface**: Added "Настройки" tab in admin panel for editing site contact information and delivery details
