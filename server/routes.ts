@@ -1047,14 +1047,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       `);
 
       // 9. Discount statistics
-      const discountStatsResult = await db.execute(sql`
-        SELECT 
-          COUNT(CASE WHEN used_first_order_discount = true THEN 1 END) as first_order_used,
-          COUNT(CASE WHEN custom_discount IS NOT NULL AND custom_discount > 0 THEN 1 END) as custom_discount_granted
+      const firstOrderDiscountResult = await db.execute(sql`
+        SELECT COUNT(CASE WHEN used_first_order_discount = true THEN 1 END) as first_order_used
         FROM orders
         WHERE created_at >= ${thirtyDaysAgoStr}
       `);
-      const discountStats = discountStatsResult.rows[0];
+      
+      const customDiscountResult = await db.execute(sql`
+        SELECT COUNT(*) as count 
+        FROM users 
+        WHERE custom_discount IS NOT NULL AND custom_discount > 0
+      `);
 
       // Count users with verified phones (eligible for loyalty discount)
       const verifiedUsersResult = await db.execute(sql`
@@ -1111,8 +1114,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           count: Number(row.count),
         })),
         discounts: {
-          firstOrderUsed: Number(discountStats?.first_order_used || 0),
-          customDiscountGranted: Number(discountStats?.custom_discount_granted || 0),
+          firstOrderUsed: Number(firstOrderDiscountResult.rows[0]?.first_order_used || 0),
+          customDiscountGranted: Number(customDiscountResult.rows[0]?.count || 0),
           loyaltyEligible: verifiedUsers,
         },
       });
