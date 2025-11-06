@@ -119,7 +119,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                       </Link>
                     </Button>
                     <Badge 
-                      className="absolute -top-2.5 -right-3 bg-amber-500 text-white border border-amber-600 text-[10px] px-1 py-0 font-bold animate-pulse leading-tight"
+                      className="absolute -top-1.5 -right-1 bg-amber-500 text-white border border-amber-600 text-[9px] px-1 py-0 font-bold animate-pulse leading-tight"
                       data-testid="badge-login-discount"
                     >
                       20%
