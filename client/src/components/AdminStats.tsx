@@ -263,7 +263,7 @@ export default function AdminStats({ adminFetch }: AdminStatsProps) {
               yAxisId="right"
               type="monotone" 
               dataKey="revenue" 
-              stroke={COLORS.accent} 
+              stroke="#059669" 
               strokeWidth={2}
               dot={{ r: 3 }}
             />
