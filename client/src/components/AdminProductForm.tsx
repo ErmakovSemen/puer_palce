@@ -42,6 +42,7 @@ const productSchema = z.object({
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
+  outOfStock: z.boolean(),
 }).refine((data) => {
   if (data.fixedQuantityOnly && !data.fixedQuantity) {
     return false;
@@ -96,6 +97,7 @@ export default function AdminProductForm({
       availableQuantities: defaultValues?.availableQuantities || ["25", "50", "100"],
       fixedQuantityOnly: defaultValues?.fixedQuantityOnly || false,
       fixedQuantity: defaultValues?.fixedQuantity || null,
+      outOfStock: (defaultValues as any)?.outOfStock || false,
     },
   });
 
@@ -551,6 +553,30 @@ export default function AdminProductForm({
             )}
           />
         )}
+
+        <FormField
+          control={form.control}
+          name="outOfStock"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  data-testid="checkbox-out-of-stock"
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>
+                  Товар закончился
+                </FormLabel>
+                <FormDescription>
+                  Включите эту опцию, если товара нет в наличии. Он будет виден на сайте, но его нельзя будет добавить в корзину.
+                </FormDescription>
+              </div>
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}
