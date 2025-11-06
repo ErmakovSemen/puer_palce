@@ -7,6 +7,7 @@ import TeaTypeManager from "@/components/TeaTypeManager";
 import AdminUserManagement from "@/components/AdminUserManagement";
 import AdminOrderManagement from "@/components/AdminOrderManagement";
 import AdminSiteSettings from "@/components/AdminSiteSettings";
+import AdminStats from "@/components/AdminStats";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -373,10 +374,11 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="products">
-          <TabsList className="grid w-full max-w-3xl grid-cols-6 mb-8">
+          <TabsList className="grid w-full max-w-4xl grid-cols-7 mb-8">
             <TabsTrigger value="products" data-testid="tab-products">Товары</TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders">Заказы</TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Пользователи</TabsTrigger>
+            <TabsTrigger value="stats" data-testid="tab-stats">Статистика</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings">Настройки</TabsTrigger>
             <TabsTrigger value="tea-types" data-testid="tab-tea-types">Типы чая</TabsTrigger>
             <TabsTrigger value="quiz" data-testid="tab-quiz">Квиз подбора</TabsTrigger>
@@ -512,6 +514,10 @@ export default function Admin() {
               </p>
             </div>
             {adminPassword && <AdminUserManagement adminPassword={adminPassword} />}
+          </TabsContent>
+
+          <TabsContent value="stats">
+            <AdminStats adminFetch={adminFetch} />
           </TabsContent>
 
           <TabsContent value="settings">

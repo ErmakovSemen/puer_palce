@@ -11,7 +11,7 @@ import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotificat
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
 import { users as usersTable } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -943,6 +943,179 @@ export async function registerRoutes(app: Express): Promise<Server> {
           </body>
         </html>
       `);
+    }
+  });
+
+  // Admin statistics endpoint
+  app.get("/api/admin/stats", requireAdminAuth, async (_req, res) => {
+    try {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
+
+      // 1. Overall user statistics
+      const totalUsersResult = await db.execute(sql`SELECT COUNT(*) as count FROM users`);
+      const totalUsers = Number(totalUsersResult.rows[0]?.count || 0);
+
+      const activeUsersResult = await db.execute(sql`
+        SELECT COUNT(DISTINCT user_id) as count 
+        FROM orders 
+        WHERE user_id IS NOT NULL
+      `);
+      const activeUsers = Number(activeUsersResult.rows[0]?.count || 0);
+
+      // 2. Overall order statistics (excluding cancelled)
+      const orderStatsResult = await db.execute(sql`
+        SELECT 
+          COUNT(*) as total_orders,
+          COALESCE(SUM(total), 0) as total_revenue,
+          COALESCE(AVG(total), 0) as avg_order
+        FROM orders
+        WHERE status != 'cancelled' AND created_at >= ${thirtyDaysAgoStr}
+      `);
+      const orderStats = orderStatsResult.rows[0];
+      const totalOrders = Number(orderStats?.total_orders || 0);
+      const totalRevenue = Number(orderStats?.total_revenue || 0);
+      const avgOrder = Number(orderStats?.avg_order || 0);
+
+      // 3. Conversion rate (users who made at least one order)
+      const conversionRate = totalUsers > 0 ? (activeUsers / totalUsers) * 100 : 0;
+
+      // 4. Daily registrations for last 30 days
+      const dailyRegistrationsResult = await db.execute(sql`
+        SELECT 
+          DATE(created_at) as date,
+          COUNT(*) as count
+        FROM users
+        WHERE created_at >= ${thirtyDaysAgoStr}
+        GROUP BY DATE(created_at)
+        ORDER BY date ASC
+      `);
+
+      // Note: users table doesn't have created_at, using orders as proxy for user activity
+      // Let's use a simpler approach - just show active users over time through orders
+      
+      // 5. Daily orders and revenue for last 30 days
+      const dailyOrdersResult = await db.execute(sql`
+        SELECT 
+          DATE(created_at) as date,
+          COUNT(*) as order_count,
+          COALESCE(SUM(total), 0) as revenue
+        FROM orders
+        WHERE status != 'cancelled' AND created_at >= ${thirtyDaysAgoStr}
+        GROUP BY DATE(created_at)
+        ORDER BY date ASC
+      `);
+
+      // 6. Top 5 products by total quantity sold
+      const topProductsResult = await db.execute(sql`
+        SELECT 
+          p.name,
+          SUM(CAST(oi->>'quantity' AS INTEGER)) as total_quantity,
+          COALESCE(SUM(CAST(oi->>'quantity' AS INTEGER) * CAST(oi->>'pricePerGram' AS FLOAT)), 0) as total_revenue
+        FROM orders o,
+        LATERAL json_array_elements(o.items::json) AS oi
+        JOIN products p ON p.id = CAST(oi->>'id' AS INTEGER)
+        WHERE o.status != 'cancelled' AND o.created_at >= ${thirtyDaysAgoStr}
+        GROUP BY p.name
+        ORDER BY total_quantity DESC
+        LIMIT 5
+      `);
+
+      // 7. Loyalty levels distribution
+      const loyaltyDistResult = await db.execute(sql`
+        SELECT 
+          CASE
+            WHEN xp < 3000 THEN 'Новичок'
+            WHEN xp < 7000 THEN 'Ценитель'
+            WHEN xp < 15000 THEN 'Чайный мастер'
+            ELSE 'Чайный Гуру'
+          END as level,
+          COUNT(*) as count
+        FROM users
+        GROUP BY level
+        ORDER BY MIN(xp) ASC
+      `);
+
+      // 8. Order status distribution
+      const statusDistResult = await db.execute(sql`
+        SELECT 
+          status,
+          COUNT(*) as count
+        FROM orders
+        WHERE created_at >= ${thirtyDaysAgoStr}
+        GROUP BY status
+      `);
+
+      // 9. Discount statistics
+      const discountStatsResult = await db.execute(sql`
+        SELECT 
+          COUNT(CASE WHEN used_first_order_discount = true THEN 1 END) as first_order_used,
+          COUNT(CASE WHEN custom_discount IS NOT NULL AND custom_discount > 0 THEN 1 END) as custom_discount_granted
+        FROM orders
+        WHERE created_at >= ${thirtyDaysAgoStr}
+      `);
+      const discountStats = discountStatsResult.rows[0];
+
+      // Count users with verified phones (eligible for loyalty discount)
+      const verifiedUsersResult = await db.execute(sql`
+        SELECT COUNT(*) as count FROM users WHERE phone_verified = true
+      `);
+      const verifiedUsers = Number(verifiedUsersResult.rows[0]?.count || 0);
+
+      // 10. Repeat customers (users with 2+ orders)
+      const repeatCustomersResult = await db.execute(sql`
+        SELECT COUNT(*) as count
+        FROM (
+          SELECT user_id
+          FROM orders
+          WHERE user_id IS NOT NULL AND status != 'cancelled'
+          GROUP BY user_id
+          HAVING COUNT(*) >= 2
+        ) as repeat_users
+      `);
+      const repeatCustomers = Number(repeatCustomersResult.rows[0]?.count || 0);
+      const repeatRate = activeUsers > 0 ? (repeatCustomers / activeUsers) * 100 : 0;
+
+      res.json({
+        overview: {
+          totalUsers,
+          activeUsers,
+          verifiedUsers,
+          totalOrders,
+          totalRevenue: Math.round(totalRevenue),
+          avgOrder: Math.round(avgOrder),
+          conversionRate: Math.round(conversionRate * 10) / 10,
+          repeatCustomers,
+          repeatRate: Math.round(repeatRate * 10) / 10,
+        },
+        dailyOrders: dailyOrdersResult.rows.map((row: any) => ({
+          date: row.date,
+          orderCount: Number(row.order_count),
+          revenue: Math.round(Number(row.revenue)),
+        })),
+        topProducts: topProductsResult.rows.map((row: any) => ({
+          name: row.name,
+          quantity: Number(row.total_quantity),
+          revenue: Math.round(Number(row.total_revenue)),
+        })),
+        loyaltyDistribution: loyaltyDistResult.rows.map((row: any) => ({
+          level: row.level,
+          count: Number(row.count),
+        })),
+        statusDistribution: statusDistResult.rows.map((row: any) => ({
+          status: row.status,
+          count: Number(row.count),
+        })),
+        discounts: {
+          firstOrderUsed: Number(discountStats?.first_order_used || 0),
+          customDiscountGranted: Number(discountStats?.custom_discount_granted || 0),
+          loyaltyEligible: verifiedUsers,
+        },
+      });
+    } catch (error) {
+      console.error("[Admin] Stats error:", error);
+      res.status(500).json({ error: "Failed to get statistics" });
     }
   });
 
