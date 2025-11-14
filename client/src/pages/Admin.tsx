@@ -346,11 +346,11 @@ export default function Admin() {
       />
 
       <div className="max-w-7xl mx-auto px-6 md:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="font-serif text-4xl font-bold" data-testid="text-admin-title">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+          <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-bold" data-testid="text-admin-title">
             Панель управления
           </h1>
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             <Button
               variant="outline"
               onClick={() => {
@@ -358,43 +358,49 @@ export default function Admin() {
                 updateDesignModeMutation.mutate(newMode);
               }}
               data-testid="button-toggle-design"
+              aria-label={settings?.designMode === "minimalist" ? "Переключить на классический дизайн" : "Переключить на минималистичный дизайн"}
             >
-              <Palette className="w-4 h-4 mr-2" />
-              {settings?.designMode === "minimalist" ? "Классический" : "Минималистичный"}
+              <Palette className="w-4 h-4" />
+              <span className="hidden sm:inline ml-2">
+                {settings?.designMode === "minimalist" ? "Классический" : "Минималистичный"}
+              </span>
             </Button>
             <Button
               variant="outline"
               onClick={handleLogout}
               data-testid="button-admin-logout"
+              aria-label="Выйти из админ-панели"
             >
-              <LogOut className="w-4 h-4 mr-2" />
-              Выйти
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline ml-2">Выйти</span>
             </Button>
           </div>
         </div>
 
         <Tabs defaultValue="products">
-          <TabsList className="grid w-full max-w-4xl grid-cols-7 mb-8">
-            <TabsTrigger value="products" data-testid="tab-products">Товары</TabsTrigger>
-            <TabsTrigger value="orders" data-testid="tab-orders">Заказы</TabsTrigger>
-            <TabsTrigger value="users" data-testid="tab-users">Пользователи</TabsTrigger>
-            <TabsTrigger value="stats" data-testid="tab-stats">Статистика</TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings">Настройки</TabsTrigger>
-            <TabsTrigger value="tea-types" data-testid="tab-tea-types">Типы чая</TabsTrigger>
-            <TabsTrigger value="quiz" data-testid="tab-quiz">Квиз подбора</TabsTrigger>
+          <TabsList className="w-full max-w-4xl mb-8 flex overflow-x-auto md:grid md:grid-cols-7">
+            <TabsTrigger value="products" data-testid="tab-products" className="min-w-max">Товары</TabsTrigger>
+            <TabsTrigger value="orders" data-testid="tab-orders" className="min-w-max">Заказы</TabsTrigger>
+            <TabsTrigger value="users" data-testid="tab-users" className="min-w-max">Пользователи</TabsTrigger>
+            <TabsTrigger value="stats" data-testid="tab-stats" className="min-w-max">Статистика</TabsTrigger>
+            <TabsTrigger value="settings" data-testid="tab-settings" className="min-w-max">Настройки</TabsTrigger>
+            <TabsTrigger value="tea-types" data-testid="tab-tea-types" className="min-w-max">Типы чая</TabsTrigger>
+            <TabsTrigger value="quiz" data-testid="tab-quiz" className="min-w-max">Квиз подбора</TabsTrigger>
           </TabsList>
 
           <TabsContent value="products">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-serif text-2xl font-semibold">Управление товарами</h2>
-              <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6">
+              <h2 className="font-serif text-xl sm:text-2xl font-semibold">Управление товарами</h2>
+              <div className="flex gap-2 sm:gap-3">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="outline"
                       data-testid="button-export-yml"
+                      aria-label="Экспортировать в YML"
                     >
-                      Экспортировать в YML
+                      <Download className="w-4 h-4" />
+                      <span className="hidden sm:inline ml-2">Экспортировать в YML</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -412,9 +418,10 @@ export default function Admin() {
                   onClick={handleAddProduct}
                   className="bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
                   data-testid="button-add-product"
+                  aria-label="Добавить товар"
                 >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Добавить товар
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline ml-2">Добавить товар</span>
                 </Button>
               </div>
             </div>
