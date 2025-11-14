@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { trackEvent } from "@/lib/metrics";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -134,7 +135,10 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                 variant="ghost"
                 size="icon"
                 className="relative h-12 w-12"
-                onClick={onCartClick}
+                onClick={() => {
+                  trackEvent('cart_opened');
+                  onCartClick();
+                }}
                 data-testid="button-cart"
               >
                 <ShoppingCart className="w-6 h-6" />

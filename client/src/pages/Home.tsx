@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { trackEvent } from "@/lib/metrics";
 import { Link } from "wouter";
 import type { Product } from "@shared/schema";
 
@@ -320,6 +321,9 @@ export default function Home() {
       }
       setIsCheckoutOpen(false);
       setIsSuccessDialogOpen(true);
+      
+      // Track order completion in Yandex Metrika
+      trackEvent('order_completed');
     },
     onError: (error: any) => {
       toast({

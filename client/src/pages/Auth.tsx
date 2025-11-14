@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Home, ArrowLeft, Gift, ShoppingBag, Award } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { trackEvent } from "@/lib/metrics";
 import { useToast } from "@/hooks/use-toast";
 
 type VerificationStep = "register" | "verify-phone";
@@ -78,6 +79,9 @@ export default function Auth() {
           title: "Телефон подтверждён",
           description: "Добро пожаловать!",
         });
+        
+        // Track successful registration in Yandex Metrika
+        trackEvent('registration_completed');
       } else if (data.verified) {
         // Password reset verification
         toast({
