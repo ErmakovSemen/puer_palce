@@ -1,12 +1,3 @@
-import { 
-  ApiManager, 
-  InitPaymentRequestPayload, 
-  InitPaymentResponsePayload,
-  WebhookPayload,
-  Receipt as TinkoffReceipt,
-  ReceiptItem as TinkoffReceiptItem
-} from '@jfkz/tinkoff-payment-sdk';
-import type { GetStateRequestPayload, GetStateResponsePayload } from '@jfkz/tinkoff-payment-sdk/dist/types/api-client/requests/get-state';
 import crypto from 'crypto';
 
 // Receipt item type for our application
@@ -40,56 +31,38 @@ export interface TinkoffInitRequest {
   FailURL?: string;
 }
 
-// Export SDK types
-export type TinkoffInitResponse = InitPaymentResponsePayload;
-export type TinkoffNotification = WebhookPayload;
-
-// HTTP Client implementation for SDK
-class SimpleHttpClient {
-  async sendRequest(request: any): Promise<any> {
-    const url = request.url;
-    const method = request.method || 'POST';
-    
-    // SDK передаёт данные в request.payload
-    const payload = request.payload;
-    const body = JSON.stringify(payload);
-    
-    // Используем headers от SDK если есть, иначе дефолтные
-    const headers = {
-      'Content-Type': 'application/json',
-      ...request.headers
-    };
-    
-    console.log('[Tinkoff HTTP] Request:', { url, method, headers, payload });
-
-    const response = await fetch(url, {
-      method,
-      headers,
-      body,
-    });
-
-    const responseText = await response.text();
-    console.log('[Tinkoff HTTP] Response:', responseText);
-    
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      console.error('[Tinkoff HTTP] Failed to parse response:', e);
-      throw new Error(`Invalid JSON response: ${responseText}`);
-    }
-
-    return {
-      statusCode: response.status,
-      body: JSON.stringify(data),
-    };
-  }
+interface TinkoffInitResponse {
+  Success: boolean;
+  ErrorCode: string;
+  Message?: string;
+  TerminalKey: string;
+  Status: string;
+  PaymentId: string;
+  OrderId: string;
+  Amount: number;
+  PaymentURL: string;
 }
 
+interface TinkoffNotification {
+  TerminalKey: string;
+  OrderId: string;
+  Success: boolean;
+  Status: string;
+  PaymentId: string;
+  ErrorCode: string;
+  Amount: number;
+  CardId?: string;
+  Pan?: string;
+  ExpDate?: string;
+  Token: string;
+}
+
+export type { TinkoffInitResponse, TinkoffNotification };
+
 class TinkoffAPI {
-  private apiManager: ApiManager;
   private terminalKey: string;
   private password: string;
+  private apiUrl: string = 'https://securepay.tinkoff.ru/v2';
 
   constructor(terminalKey: string, password: string) {
     this.terminalKey = terminalKey;
@@ -102,113 +75,134 @@ class TinkoffAPI {
       .replace(/&quot;/g, '"')
       .replace(/&#039;/g, "'");
 
-    console.log('[Tinkoff SDK] Initializing with TerminalKey:', terminalKey);
-    console.log('[Tinkoff SDK] Password length:', this.password.length);
-    console.log('[Tinkoff SDK] Password (first 3 chars):', this.password.substring(0, 3));
+    console.log('[Tinkoff] Initializing with TerminalKey:', terminalKey);
+    console.log('[Tinkoff] Password length:', this.password.length);
+    console.log('[Tinkoff] Password (first 3 chars):', this.password.substring(0, 3));
+  }
 
-    // Initialize API Manager with our HTTP client
-    this.apiManager = new ApiManager({
-      terminalKey: this.terminalKey,
-      password: this.password,
-      httpClient: new SimpleHttpClient() as any,
+  private generateToken(params: Record<string, any>): string {
+    // Clone params for token generation
+    const tokenParams: Record<string, any> = { ...params };
+    
+    // Remove Token field if it exists
+    delete tokenParams.Token;
+    
+    // Remove nested objects - they don't participate in token generation
+    delete tokenParams.Receipt;
+    delete tokenParams.DATA;
+    
+    // Add Password to params for token generation
+    tokenParams.Password = this.password;
+    
+    // Sort keys alphabetically
+    const sortedKeys = Object.keys(tokenParams).sort();
+    
+    console.log('[Token] Sorted keys:', sortedKeys);
+    
+    // Concatenate values
+    const values = sortedKeys.map(key => tokenParams[key]).join('');
+    
+    console.log('[Token] Concatenated string for hashing:', values);
+    
+    // Generate SHA-256 hash
+    const token = crypto.createHash('sha256').update(values).digest('hex');
+    
+    console.log('[Token] Generated token:', token);
+    
+    return token;
+  }
+
+  async init(request: TinkoffInitRequest): Promise<TinkoffInitResponse> {
+    const params: any = {
+      TerminalKey: this.terminalKey,
+      Amount: request.Amount,
+      OrderId: request.OrderId,
+      Description: request.Description,
+    };
+
+    if (request.DATA) {
+      params.DATA = request.DATA;
+    }
+
+    if (request.Receipt) {
+      params.Receipt = request.Receipt;
+    }
+
+    if (request.NotificationURL) {
+      params.NotificationURL = request.NotificationURL;
+    }
+
+    if (request.SuccessURL) {
+      params.SuccessURL = request.SuccessURL;
+    }
+
+    if (request.FailURL) {
+      params.FailURL = request.FailURL;
+    }
+
+    // Generate token
+    params.Token = this.generateToken(params);
+
+    console.log('[Tinkoff] Full request:', JSON.stringify(params, null, 2));
+
+    const response = await fetch(`${this.apiUrl}/Init`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
     });
-  }
 
-  async init(request: TinkoffInitRequest): Promise<InitPaymentResponsePayload> {
-    try {
-      // Build SDK-compatible request
-      const sdkRequest: InitPaymentRequestPayload = {
-        OrderId: request.OrderId,
-        Amount: request.Amount,
-        Description: request.Description,
-      };
+    const data = await response.json();
 
-      // Add optional fields
-      if (request.DATA) {
-        sdkRequest.DATA = request.DATA as any;
-      }
+    console.log('[Tinkoff] Response:', JSON.stringify(data, null, 2));
 
-      if (request.Receipt) {
-        sdkRequest.Receipt = request.Receipt as any;
-      }
-
-      if (request.NotificationURL) {
-        sdkRequest.NotificationURL = request.NotificationURL;
-      }
-
-      if (request.SuccessURL) {
-        sdkRequest.SuccessURL = request.SuccessURL;
-      }
-
-      if (request.FailURL) {
-        sdkRequest.FailURL = request.FailURL;
-      }
-
-      console.log('[Tinkoff SDK] Calling initPayment with:', sdkRequest);
-
-      // Call SDK
-      const response = await this.apiManager.initPayment(sdkRequest);
-
-      console.log('[Tinkoff SDK] Init payment response:', response);
-
-      if (!response.Success) {
-        throw new Error(response.Message || `Tinkoff API error: ${response.ErrorCode}`);
-      }
-
-      return response;
-    } catch (error: any) {
-      console.error('[Tinkoff SDK] Init payment error:', error);
-      throw error;
-    }
-  }
-
-  async getState(paymentId: string): Promise<GetStateResponsePayload> {
-    try {
-      const request: GetStateRequestPayload = {
-        PaymentId: paymentId,
-      };
-
-      const response = await this.apiManager.getState(request);
-
-      if (!response.Success) {
-        throw new Error(response.Message || `Tinkoff API error: ${response.ErrorCode}`);
-      }
-
-      return response;
-    } catch (error: any) {
-      console.error('[Tinkoff SDK] Get state error:', error);
-      throw error;
-    }
-  }
-
-  verifyNotification(notification: WebhookPayload): boolean {
-    try {
-      // Clone notification without Token
-      const params: any = { ...notification };
-      const receivedToken = params.Token;
-      delete params.Token;
-
-      // Add password and generate token
-      params.Password = this.password;
-
-      // Sort keys and concatenate values
-      const sortedKeys = Object.keys(params).sort();
-      const concatenated = sortedKeys.map(key => params[key]).join('');
-
-      // Generate SHA-256 hash
-      const expectedToken = crypto.createHash('sha256').update(concatenated).digest('hex');
-
-      console.log('[Tinkoff SDK] Notification verification:', {
-        receivedToken,
-        expectedToken,
-        match: receivedToken === expectedToken,
+    if (!data.Success) {
+      console.error('[Tinkoff] Error details:', {
+        Message: data.Message,
+        ErrorCode: data.ErrorCode,
+        Details: data.Details,
       });
-
-      return receivedToken === expectedToken;
-    } catch (error: any) {
-      console.error('[Tinkoff SDK] Notification verification error:', error);
-      return false;
+      throw new Error(data.Message || `Tinkoff API error: ${data.ErrorCode}`);
     }
+
+    return data;
+  }
+
+  async getState(paymentId: string): Promise<any> {
+    const params = {
+      TerminalKey: this.terminalKey,
+      PaymentId: paymentId,
+    };
+
+    const token = this.generateToken(params);
+
+    const response = await fetch(`${this.apiUrl}/GetState`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...params,
+        Token: token,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!data.Success) {
+      throw new Error(data.Message || `Tinkoff API error: ${data.ErrorCode}`);
+    }
+
+    return data;
+  }
+
+  verifyNotification(notification: TinkoffNotification): boolean {
+    const params: any = { ...notification };
+    delete params.Token;
+
+    const expectedToken = this.generateToken(params);
+    return expectedToken === notification.Token;
   }
 
   getNotificationSuccessResponse(): string {
