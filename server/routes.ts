@@ -1295,7 +1295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Name: item.name,
           Price: priceInKopecks, // Price per unit in kopecks
           Quantity: Number(item.quantity.toFixed(2)), // Format as number with 2 decimals
-          Amount: amountInKopecks, // Total in kopecks
+          Amount: amountInKopecks, // Total in kopecks (before discount)
           Tax: "none", // Assuming no VAT
         };
       });
@@ -1304,16 +1304,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalItemsAmount = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
       const discountAmount = totalItemsAmount - amountInKopecks;
 
-      // Add discount as separate line item if present
+      // Distribute discount proportionally across all items
       if (discountAmount > 0) {
-        receiptItems.push({
-          Name: "Скидка",
-          Price: -discountAmount, // Negative price for discount
-          Quantity: 1,
-          Amount: -discountAmount, // Negative amount
-          Tax: "none",
-        });
-        console.log("[Payment] Discount added to receipt:", discountAmount, "kopecks");
+        console.log("[Payment] Total discount to distribute:", discountAmount, "kopecks");
+        
+        let distributedDiscount = 0;
+        
+        // Apply proportional discount to each item except the last one
+        for (let i = 0; i < receiptItems.length - 1; i++) {
+          const item = receiptItems[i];
+          const itemDiscount = Math.round((discountAmount * item.Amount) / totalItemsAmount);
+          item.Amount -= itemDiscount;
+          distributedDiscount += itemDiscount;
+          console.log(`[Payment] Item "${item.Name}": discount=${itemDiscount}, new Amount=${item.Amount}`);
+        }
+        
+        // Apply remaining discount to last item to handle rounding
+        const lastItem = receiptItems[receiptItems.length - 1];
+        const remainingDiscount = discountAmount - distributedDiscount;
+        lastItem.Amount -= remainingDiscount;
+        console.log(`[Payment] Last item "${lastItem.Name}": discount=${remainingDiscount}, new Amount=${lastItem.Amount}`);
       }
 
       // Verify that receipt items total equals payment amount
