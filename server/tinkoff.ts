@@ -49,13 +49,18 @@ class SimpleHttpClient {
   async sendRequest(request: any): Promise<any> {
     const url = request.url;
     const method = request.method || 'POST';
-    const headers = request.headers || { 'Content-Type': 'application/json' };
     
     // SDK передаёт данные в request.payload
     const payload = request.payload;
     const body = JSON.stringify(payload);
     
-    console.log('[Tinkoff HTTP] Request:', { url, method, payload });
+    // Используем headers от SDK если есть, иначе дефолтные
+    const headers = {
+      'Content-Type': 'application/json',
+      ...request.headers
+    };
+    
+    console.log('[Tinkoff HTTP] Request:', { url, method, headers, payload });
 
     const response = await fetch(url, {
       method,

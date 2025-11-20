@@ -1289,51 +1289,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Prepare receipt items for Tinkoff
+      // NOTE: Tinkoff SDK expects amounts in RUBLES (not kopecks) - it will multiply by 100 internally
       const receiptItems: ReceiptItem[] = orderItems.map((item: any) => {
-        const priceInKopecks = Math.round(item.pricePerGram * 100);
-        const amountInKopecks = Math.round(item.pricePerGram * item.quantity * 100);
+        const priceInRubles = Number(item.pricePerGram.toFixed(2));
+        const amountInRubles = Number((item.pricePerGram * item.quantity).toFixed(2));
         
         return {
           Name: item.name,
-          Price: priceInKopecks, // Price per unit in kopecks
+          Price: priceInRubles, // Price per unit in RUBLES (SDK will convert to kopecks)
           Quantity: Number(item.quantity.toFixed(2)), // Format as number with 2 decimals
-          Amount: amountInKopecks, // Total in kopecks (before discount)
+          Amount: amountInRubles, // Total in RUBLES (before discount, SDK will convert to kopecks)
           Tax: "vat0", // VAT 0% (no VAT, 54-ФЗ compliance)
           PaymentMethod: "full_payment", // Full payment (54-ФЗ compliance)
           PaymentObject: "commodity", // Goods/commodity (54-ФЗ compliance)
         };
       });
 
-      // Calculate total items amount and discount
+      // Calculate total items amount and discount (in RUBLES)
+      const amountInRubles = Number((order.total).toFixed(2));
       const totalItemsAmount = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
-      const discountAmount = totalItemsAmount - amountInKopecks;
+      const discountAmount = Number((totalItemsAmount - amountInRubles).toFixed(2));
 
       // Distribute discount proportionally across all items
       if (discountAmount > 0) {
-        console.log("[Payment] Total discount to distribute:", discountAmount, "kopecks");
+        console.log("[Payment] Total discount to distribute:", discountAmount, "rubles");
         
         let distributedDiscount = 0;
         
         // Apply proportional discount to each item except the last one
         for (let i = 0; i < receiptItems.length - 1; i++) {
           const item = receiptItems[i];
-          const itemDiscount = Math.round((discountAmount * item.Amount) / totalItemsAmount);
-          item.Amount -= itemDiscount;
-          distributedDiscount += itemDiscount;
+          const itemDiscount = Number(((discountAmount * item.Amount) / totalItemsAmount).toFixed(2));
+          item.Amount = Number((item.Amount - itemDiscount).toFixed(2));
+          distributedDiscount = Number((distributedDiscount + itemDiscount).toFixed(2));
           console.log(`[Payment] Item "${item.Name}": discount=${itemDiscount}, new Amount=${item.Amount}`);
         }
         
         // Apply remaining discount to last item to handle rounding
         const lastItem = receiptItems[receiptItems.length - 1];
-        const remainingDiscount = discountAmount - distributedDiscount;
-        lastItem.Amount -= remainingDiscount;
+        const remainingDiscount = Number((discountAmount - distributedDiscount).toFixed(2));
+        lastItem.Amount = Number((lastItem.Amount - remainingDiscount).toFixed(2));
         console.log(`[Payment] Last item "${lastItem.Name}": discount=${remainingDiscount}, new Amount=${lastItem.Amount}`);
       }
 
-      // Verify that receipt items total equals payment amount
-      const receiptTotal = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
-      if (receiptTotal !== amountInKopecks) {
-        throw new Error(`Receipt total mismatch: ${receiptTotal} !== ${amountInKopecks}`);
+      // Verify that receipt items total equals payment amount (in RUBLES)
+      const receiptTotal = Number(receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0).toFixed(2));
+      if (Math.abs(receiptTotal - amountInRubles) > 0.01) {
+        throw new Error(`Receipt total mismatch: ${receiptTotal} !== ${amountInRubles}`);
       }
 
       const baseUrl = process.env.NODE_ENV === "production" 
@@ -1341,7 +1343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
 
       const paymentRequest = {
-        Amount: amountInKopecks,
+        Amount: amountInRubles, // Amount in RUBLES (SDK will convert to kopecks)
         OrderId: String(orderId),
         Description: `Заказ #${orderId} - Puer Pub`,
         DATA: {
