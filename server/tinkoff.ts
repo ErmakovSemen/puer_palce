@@ -94,20 +94,13 @@ class TinkoffAPI {
     // Remove Token field if it exists
     delete tokenParams.Token;
     
-    // Remove URL fields - they don't participate in token generation
+    // Remove fields that don't participate in token generation
+    // Per Tinkoff documentation: only primitive root-level fields participate
     delete tokenParams.NotificationURL;
     delete tokenParams.SuccessURL;
     delete tokenParams.FailURL;
-    
-    // Serialize Receipt and DATA to compact JSON with sorted keys
-    if (tokenParams.Receipt) {
-      const sortedReceipt = this.sortObjectKeys(tokenParams.Receipt);
-      tokenParams.Receipt = JSON.stringify(sortedReceipt);
-    }
-    if (tokenParams.DATA) {
-      const sortedData = this.sortObjectKeys(tokenParams.DATA);
-      tokenParams.DATA = JSON.stringify(sortedData);
-    }
+    delete tokenParams.Receipt;  // Receipt does NOT participate in token
+    delete tokenParams.DATA;     // DATA does NOT participate in token
     
     // Add Password to params for token generation
     tokenParams.Password = this.password;
