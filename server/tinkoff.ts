@@ -47,36 +47,28 @@ export type TinkoffNotification = WebhookPayload;
 // HTTP Client implementation for SDK
 class SimpleHttpClient {
   async sendRequest(request: any): Promise<any> {
-    console.log('[Tinkoff HTTP] Full request object:', JSON.stringify(request, null, 2));
-    console.log('[Tinkoff HTTP] Request keys:', Object.keys(request));
-    
     const url = request.url;
     const method = request.method || 'POST';
+    const headers = request.headers || { 'Content-Type': 'application/json' };
     
-    // SDK может передавать данные в разных полях - проверим все
-    const body = request.body || request.payload || request.data || request.json;
+    // SDK передаёт данные в request.payload
+    const payload = request.payload;
+    const body = JSON.stringify(payload);
     
-    console.log('[Tinkoff HTTP] Extracted values:', { 
-      url, 
-      method, 
-      body: body ? (typeof body === 'string' ? JSON.parse(body) : body) : null 
-    });
+    console.log('[Tinkoff HTTP] Request:', { url, method, payload });
 
     const response = await fetch(url, {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: typeof body === 'string' ? body : JSON.stringify(body),
+      headers,
+      body,
     });
 
     const responseText = await response.text();
-    console.log('[Tinkoff HTTP] Raw response:', responseText);
+    console.log('[Tinkoff HTTP] Response:', responseText);
     
     let data;
     try {
       data = JSON.parse(responseText);
-      console.log('[Tinkoff HTTP] Parsed response:', data);
     } catch (e) {
       console.error('[Tinkoff HTTP] Failed to parse response:', e);
       throw new Error(`Invalid JSON response: ${responseText}`);
