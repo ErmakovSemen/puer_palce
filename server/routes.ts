@@ -525,7 +525,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         items: JSON.stringify(orderData.items),
         total: finalTotal,
         usedFirstOrderDiscount,
-        receiptEmail: orderData.receiptEmail || orderData.email,
       });
       console.log("[Order] Order saved to database, ID:", savedOrder.id);
       
@@ -1255,11 +1254,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         OrderId: String(orderId),
         Description: `Заказ #${orderId} - Puer Pub`,
         DATA: {
-          Email: order.receiptEmail || order.email,
           Phone: order.phone,
         },
         Receipt: {
-          Email: order.receiptEmail || order.email,
           Phone: order.phone,
           Taxation: "usn_income", // Simplified tax system
           Items: receiptItems,
