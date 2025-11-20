@@ -7,7 +7,6 @@ import CategoryNavigation from "@/components/CategoryNavigation";
 import CartDrawer from "@/components/CartDrawer";
 import CheckoutForm from "@/components/CheckoutForm";
 import TeaQuiz from "@/components/TeaQuiz";
-import SBPPaymentDialog from "@/components/SBPPaymentDialog";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import {
   Dialog,
@@ -59,9 +58,7 @@ export default function Home() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState("all");
-  const [isSBPDialogOpen, setIsSBPDialogOpen] = useState(false);
-  const [sbpPaymentUrl, setSBPPaymentUrl] = useState("");
-  const { toast} = useToast();
+  const { toast } = useToast();
   const { user } = useAuth();
 
   // Guest cart (localStorage for unauthenticated users)
@@ -311,7 +308,7 @@ export default function Home() {
     mutationFn: async (orderData: any) => {
       const response = await apiRequest("POST", "/api/orders", orderData);
       const data = await response.json();
-      return data; // Backend returns paymentMethod in response
+      return data;
     },
     onSuccess: async (data: any) => {
       if (user) {
@@ -330,26 +327,16 @@ export default function Home() {
       
       setIsCheckoutOpen(false);
       
-      // Initialize payment
+      // Initialize payment and redirect to Tinkoff payment page
       try {
-        // Use paymentMethod from server response with fallback to "card"
-        const paymentMethod = data.paymentMethod || "card";
-        const useSBP = paymentMethod === "sbp";
         const paymentResponse = await apiRequest("POST", "/api/payments/init", {
           orderId: data.orderId,
-          useSBP,
         });
         const paymentData = await paymentResponse.json();
         
         if (paymentData.success && paymentData.paymentUrl) {
-          if (useSBP) {
-            // Show SBP payment dialog (QR code on desktop, deeplink on mobile)
-            setSBPPaymentUrl(paymentData.paymentUrl);
-            setIsSBPDialogOpen(true);
-          } else {
-            // Redirect to Tinkoff card payment page
-            window.location.href = paymentData.paymentUrl;
-          }
+          // Redirect to Tinkoff payment page (all payment methods including SBP will be shown there)
+          window.location.href = paymentData.paymentUrl;
         } else {
           throw new Error("Failed to initialize payment");
         }
@@ -389,14 +376,9 @@ export default function Home() {
     const finalTotal = cartTotal - discountAmount;
 
     orderMutation.mutate({
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      comment: data.comment,
+      ...data,
       items: orderItems,
       total: finalTotal,
-      paymentMethod: data.paymentMethod,
     });
   };
 
@@ -622,13 +604,6 @@ export default function Home() {
           )}
         </DialogContent>
       </Dialog>
-
-      {/* SBP Payment Dialog */}
-      <SBPPaymentDialog
-        isOpen={isSBPDialogOpen}
-        onClose={() => setIsSBPDialogOpen(false)}
-        paymentUrl={sbpPaymentUrl}
-      />
     </div>
   );
 }

@@ -73,18 +73,12 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 - **XP Accrual**: Loyalty points awarded only on CONFIRMED status, not on AUTHORIZED or REJECTED
 
 ### SBP (Fast Payment System) Integration (January 2025)
-- **Payment Method Selection**: Users can choose between card payment and SBP (Система Быстрых Платежей) at checkout via radio buttons
-- **QR Code Generation**: Installed qrcode.react package for generating payment QR codes on desktop browsers
-- **Smart Device Detection**: isMobileDevice() utility function checks user agent to provide appropriate payment UI
-- **Responsive Payment Flow**: 
-  - Desktop users see QR code to scan with their banking app
-  - Mobile users receive deeplink that opens directly in their banking app
-- **SBPPaymentDialog Component**: Dedicated dialog component handles SBP payment presentation with auto-redirect on mobile
-- **Payment Init API**: PayType: "O" parameter in Tinkoff Init API call enables SBP payment method
-- **Schema Validation**: orderSchema accepts optional paymentMethod field (defaults to "card") for backward compatibility
-- **Server Response**: Backend returns paymentMethod in order creation response for reliable frontend routing
-- **Type Safety**: Frontend uses server response (not request data) for payment method with fallback to "card"
-- **User Experience**: Clear visual indicators (card icon vs QR code icon) help users understand payment options
+- **Automatic Quick Pay Button**: SBP appears automatically as a Quick Pay button on Tinkoff's hosted payment page alongside card payment and T-Pay
+- **No Frontend Selection**: Users are redirected to Tinkoff payment page where they can choose between card, T-Pay, or SBP (no selection needed in checkout form)
+- **Standard Init API**: Payment initialization uses standard Tinkoff Init API without PayType parameter - all payment methods displayed based on terminal settings
+- **Seamless Experience**: Single payment flow for all methods - Tinkoff handles method selection and processing on their secure page
+- **Mobile Optimization**: SBP on mobile devices automatically opens banking app via deeplink; desktop shows QR code
+- **Terminal Configuration**: SBP availability controlled in Tinkoff merchant account settings (no code changes needed)
 
 ### Bug Fixes
 - Fixed registration flow to correctly handle optional email/name fields (empty strings not sent to backend)
