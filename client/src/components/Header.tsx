@@ -44,10 +44,11 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
             </h1>
           </Link>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2">
             <Button
               variant="ghost"
               size="icon"
+              className="hidden md:flex"
               asChild
               data-testid="link-telegram"
             >
@@ -58,6 +59,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
             <Button
               variant="ghost"
               size="icon"
+              className="hidden md:flex"
               asChild
               data-testid="link-vk"
             >
@@ -109,23 +111,22 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
-                  <div className="relative inline-block">
-                    <Button
-                      variant="ghost"
-                      asChild
-                      data-testid="button-login"
-                    >
-                      <Link href="/auth">
-                        Войти
-                      </Link>
-                    </Button>
-                    <Badge 
-                      className="absolute -top-1.5 right-2 bg-amber-500 text-white border border-amber-600 text-[9px] px-1 py-0 font-bold animate-pulse leading-tight"
-                      data-testid="badge-login-discount"
-                    >
-                      20%
-                    </Badge>
-                  </div>
+                  <Button
+                    variant="ghost"
+                    className="relative"
+                    asChild
+                    data-testid="button-login"
+                  >
+                    <Link href="/auth">
+                      Войти
+                      <Badge 
+                        className="absolute -top-1 -right-1 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold animate-pulse"
+                        data-testid="badge-login-discount"
+                      >
+                        20%
+                      </Badge>
+                    </Link>
+                  </Button>
                 )}
               </>
             )}
