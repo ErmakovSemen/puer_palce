@@ -46,10 +46,10 @@ export type TinkoffNotification = WebhookPayload;
 
 // HTTP Client implementation for SDK
 class SimpleHttpClient {
-  async request(options: any): Promise<any> {
-    const url = options.url || options.uri;
-    const method = options.method || 'POST';
-    const body = options.body;
+  async sendRequest(request: any): Promise<any> {
+    const url = request.url;
+    const method = request.method || 'POST';
+    const body = request.body;
 
     console.log('[Tinkoff HTTP] Request:', { url, method, body: body ? JSON.parse(body) : null });
 
