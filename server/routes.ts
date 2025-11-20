@@ -1278,13 +1278,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[Payment] Phone normalized:", order.phone, "->", normalizedPhone);
 
       // Prepare receipt items for Tinkoff
-      const receiptItems = orderItems.map((item: any) => ({
-        Name: item.name,
-        Price: Math.round(item.pricePerGram * 100), // Price per unit in kopecks
-        Quantity: item.quantity,
-        Amount: Math.round(item.pricePerGram * item.quantity * 100), // Total in kopecks
-        Tax: "none", // Assuming no VAT
-      }));
+      const receiptItems = orderItems.map((item: any) => {
+        const priceInKopecks = Math.round(item.pricePerGram * 100);
+        const amountInKopecks = Math.round(item.pricePerGram * item.quantity * 100);
+        
+        return {
+          Name: item.name,
+          Price: priceInKopecks, // Price per unit in kopecks
+          Quantity: Number(item.quantity.toFixed(2)), // Format as number with 2 decimals
+          Amount: amountInKopecks, // Total in kopecks
+          Tax: "none", // Assuming no VAT
+        };
+      });
 
       const baseUrl = process.env.NODE_ENV === "production" 
         ? "https://puerpub.replit.app"
@@ -1308,6 +1313,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         SuccessURL: `${baseUrl}/payment/success?orderId=${orderId}`,
         FailURL: `${baseUrl}/payment/error?orderId=${orderId}`,
       };
+
+      console.log("[Payment] Full payment request:", JSON.stringify(paymentRequest, null, 2));
 
       const paymentResponse = await tinkoffClient.init(paymentRequest);
 
