@@ -190,6 +190,10 @@ export const orders = pgTable("orders", {
   total: real("total").notNull(),
   status: text("status").notNull().default("pending"), // pending, paid, cancelled, completed
   usedFirstOrderDiscount: boolean("used_first_order_discount").notNull().default(false),
+  paymentId: text("payment_id"), // Tinkoff payment ID
+  paymentStatus: text("payment_status"), // NEW, CONFIRMED, REJECTED, etc.
+  paymentUrl: text("payment_url"), // URL for customer to pay
+  receiptEmail: text("receipt_email"), // Email for sending receipt
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -209,6 +213,7 @@ export const orderSchema = z.object({
   comment: z.string().optional(),
   items: z.array(orderItemSchema).min(1, "Корзина не может быть пустой"),
   total: z.number().min(500, "Минимальная сумма заказа 500₽"),
+  receiptEmail: z.string().email("Введите корректный email для чека").optional(),
 });
 
 export const insertOrderSchema = createInsertSchema(orders, {
