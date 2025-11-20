@@ -68,18 +68,12 @@ class TinkoffAPI {
     // Remove Token field if it exists
     delete tokenParams.Token;
     
-    // Remove URL fields - they don't participate in token generation
+    // Remove fields that don't participate in token generation
     delete tokenParams.NotificationURL;
     delete tokenParams.SuccessURL;
     delete tokenParams.FailURL;
-    
-    // Serialize Receipt and DATA to JSON strings if they exist
-    if (tokenParams.Receipt) {
-      tokenParams.Receipt = JSON.stringify(tokenParams.Receipt);
-    }
-    if (tokenParams.DATA) {
-      tokenParams.DATA = JSON.stringify(tokenParams.DATA);
-    }
+    delete tokenParams.Receipt;
+    delete tokenParams.DATA;
     
     // Add Password to params for token generation
     tokenParams.Password = this.password;
@@ -88,7 +82,7 @@ class TinkoffAPI {
     const sortedKeys = Object.keys(tokenParams).sort();
     
     console.log("[Token] Sorted keys:", sortedKeys);
-    console.log("[Token] Token params:", JSON.stringify(tokenParams, null, 2));
+    console.log("[Token] Token params:", tokenParams);
     
     // Concatenate values
     const values = sortedKeys.map(key => tokenParams[key]).join("");
