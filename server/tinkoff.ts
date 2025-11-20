@@ -67,14 +67,19 @@ class TinkoffAPI {
   constructor(terminalKey: string, password: string) {
     this.terminalKey = terminalKey;
     
+    console.log('[Tinkoff] Password length BEFORE decoding:', password.length);
+    console.log('[Tinkoff] Password has newlines/spaces:', /[\n\r\s]/.test(password));
+    
     // Decode HTML entities from Replit Secrets (&amp; → &)
     this.password = password
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
-      .replace(/&#039;/g, "'");
+      .replace(/&#039;/g, "'")
+      .trim(); // Remove leading/trailing whitespace
 
+    console.log('[Tinkoff] Password length AFTER decoding:', this.password.length);
     console.log('[Tinkoff] Initializing with TerminalKey:', terminalKey);
   }
 
@@ -223,13 +228,11 @@ function decodeHTMLEntities(text: string): string {
 export function getTinkoffClient(): TinkoffAPI {
   if (!tinkoffClient) {
     const terminalKey = process.env.TINKOFF_TERMINAL_KEY;
-    let password = process.env.TINKOFF_SECRET_KEY;
+    const password = process.env.TINKOFF_SECRET_KEY;
 
     if (!terminalKey || !password) {
       throw new Error('Tinkoff credentials not configured');
     }
-
-    password = decodeHTMLEntities(password);
 
     console.log('[Tinkoff] Creating singleton client');
     console.log('[Tinkoff] TerminalKey:', terminalKey);
