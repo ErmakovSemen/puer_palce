@@ -16,6 +16,7 @@ export interface TinkoffInitRequest {
   Amount: number;
   OrderId: string;
   Description: string;
+  PayType?: string; // "O" for SBP (QR-code), omit for default card payment
   DATA?: {
     Email?: string;
     Phone?: string;
@@ -67,9 +68,6 @@ class TinkoffAPI {
   constructor(terminalKey: string, password: string) {
     this.terminalKey = terminalKey;
     
-    console.log('[Tinkoff] Password length BEFORE decoding:', password.length);
-    console.log('[Tinkoff] Password has newlines/spaces:', /[\n\r\s]/.test(password));
-    
     // Decode HTML entities from Replit Secrets (&amp; → &)
     this.password = password
       .replace(/&amp;/g, '&')
@@ -79,8 +77,7 @@ class TinkoffAPI {
       .replace(/&#039;/g, "'")
       .trim(); // Remove leading/trailing whitespace
 
-    console.log('[Tinkoff] Password length AFTER decoding:', this.password.length);
-    console.log('[Tinkoff] Initializing with TerminalKey:', terminalKey);
+    console.log('[Tinkoff] Initialized with TerminalKey:', terminalKey);
   }
 
   private generateToken(params: Record<string, any>): string {
@@ -122,6 +119,10 @@ class TinkoffAPI {
       OrderId: request.OrderId,
       Description: request.Description,
     };
+
+    if (request.PayType) {
+      params.PayType = request.PayType;
+    }
 
     if (request.DATA) {
       params.DATA = request.DATA;

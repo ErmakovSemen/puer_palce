@@ -2,6 +2,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -13,11 +14,13 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
-import { AlertCircle, Mail, Phone, MessageCircle, Truck, UserCircle } from "lucide-react";
+import { AlertCircle, Mail, Phone, MessageCircle, Truck, UserCircle, CreditCard, QrCode } from "lucide-react";
 import type { SiteSettings } from "@shared/schema";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
@@ -33,7 +36,7 @@ const checkoutSchema = z.object({
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
 
 interface CheckoutFormProps {
-  onSubmit: (data: CheckoutFormValues) => void;
+  onSubmit: (data: CheckoutFormValues & { paymentMethod: "card" | "sbp" }) => void;
   onCancel: () => void;
   isSubmitting?: boolean;
   total: number;
@@ -50,6 +53,7 @@ interface CheckoutFormProps {
 
 export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, user }: CheckoutFormProps) {
   const { toast } = useToast();
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "sbp">("card");
   
   // First order discount (20% if user hasn't used it yet)
   const firstOrderDiscount = (user && !user.firstOrderDiscountUsed) ? 20 : 0;
@@ -99,9 +103,13 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
     },
   });
 
+  const handleFormSubmit = (data: CheckoutFormValues) => {
+    onSubmit({ ...data, paymentMethod });
+  };
+
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={form.handleSubmit(handleFormSubmit)} className="space-y-6">
         {/* Show warning if user is not verified */}
         {user && !user.phoneVerified && (
           <Alert>
@@ -326,6 +334,32 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
             )}
           </div>
           <Separator />
+        </div>
+
+        {/* Payment method selection */}
+        <div className="space-y-4">
+          <Label className="text-base font-medium">Способ оплаты</Label>
+          <RadioGroup value={paymentMethod} onValueChange={(value: "card" | "sbp") => setPaymentMethod(value)}>
+            <div className="flex items-center space-x-3 rounded-md border p-4 hover-elevate cursor-pointer" data-testid="payment-method-card">
+              <RadioGroupItem value="card" id="card" />
+              <Label htmlFor="card" className="flex items-center gap-2 cursor-pointer flex-1">
+                <CreditCard className="h-5 w-5" />
+                <span>Оплата картой</span>
+              </Label>
+            </div>
+            <div className="flex items-center space-x-3 rounded-md border p-4 hover-elevate cursor-pointer" data-testid="payment-method-sbp">
+              <RadioGroupItem value="sbp" id="sbp" />
+              <Label htmlFor="sbp" className="flex items-center gap-2 cursor-pointer flex-1">
+                <QrCode className="h-5 w-5" />
+                <span>Оплата по СБП (QR-код)</span>
+              </Label>
+            </div>
+          </RadioGroup>
+          <p className="text-sm text-muted-foreground">
+            {paymentMethod === "card" 
+              ? "Оплата банковской картой через Т-Банк" 
+              : "Оплата через QR-код из любого банковского приложения"}
+          </p>
         </div>
 
         <div className="flex gap-4">

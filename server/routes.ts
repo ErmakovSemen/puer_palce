@@ -570,6 +570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true, 
         message: "Заказ успешно оформлен",
         orderId: savedOrder.id,
+        paymentMethod: orderData.paymentMethod || "card",
       });
     } catch (error) {
       console.error("[Order] Order processing error:", error);
@@ -1168,7 +1169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize payment for an order
   app.post("/api/payments/init", async (req, res) => {
     try {
-      const { orderId } = req.body;
+      const { orderId, useSBP } = req.body;
 
       if (!orderId) {
         res.status(400).json({ error: "Order ID is required" });
@@ -1341,7 +1342,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? `https://${process.env.REPLIT_DOMAINS}`
         : "https://puerpub.replit.app";
 
-      const paymentRequest = {
+      const paymentRequest: any = {
         Amount: amountInKopecks, // Amount in KOPECKS (SDK does NOT convert, sends as-is)
         OrderId: String(orderId),
         Description: `Заказ #${orderId} - Puer Pub`,
@@ -1359,6 +1360,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         SuccessURL: `${baseUrl}/payment/success?orderId=${orderId}`,
         FailURL: `${baseUrl}/payment/error?orderId=${orderId}`,
       };
+
+      // Add SBP (QR-code payment) if requested
+      if (useSBP) {
+        paymentRequest.PayType = "O"; // "O" = SBP payment with QR-code
+        console.log("[Payment] Using SBP payment method (QR-code)");
+      }
 
       console.log("[Payment] Full payment request:", JSON.stringify(paymentRequest, null, 2));
 
