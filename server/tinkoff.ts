@@ -94,11 +94,8 @@ class TinkoffAPI {
     // Remove Token field if it exists
     delete tokenParams.Token;
     
-    // Remove fields that don't participate in token generation
-    // Per Tinkoff documentation: only primitive root-level fields participate
-    delete tokenParams.NotificationURL;
-    delete tokenParams.SuccessURL;
-    delete tokenParams.FailURL;
+    // Remove nested objects - they don't participate in token generation
+    // Per official SDK: only primitive root-level fields participate
     delete tokenParams.Receipt;  // Receipt does NOT participate in token
     delete tokenParams.DATA;     // DATA does NOT participate in token
     
