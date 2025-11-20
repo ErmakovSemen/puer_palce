@@ -195,6 +195,9 @@ export function getTinkoffClient(): TinkoffAPI {
       throw new Error("Tinkoff credentials not configured");
     }
 
+    console.log("[Tinkoff] Initializing client with TerminalKey:", terminalKey);
+    console.log("[Tinkoff] Password length:", password.length);
+
     tinkoffClient = new TinkoffAPI(terminalKey, password);
   }
 
