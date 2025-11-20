@@ -1277,8 +1277,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const normalizedPhone = normalizePhone(order.phone);
       console.log("[Payment] Phone normalized:", order.phone, "->", normalizedPhone);
 
+      // Define receipt item interface for type safety
+      interface ReceiptItem {
+        Name: string;
+        Price: number;
+        Quantity: number;
+        Amount: number;
+        Tax: string;
+      }
+
       // Prepare receipt items for Tinkoff
-      const receiptItems = orderItems.map((item: any) => {
+      const receiptItems: ReceiptItem[] = orderItems.map((item: any) => {
         const priceInKopecks = Math.round(item.pricePerGram * 100);
         const amountInKopecks = Math.round(item.pricePerGram * item.quantity * 100);
         
@@ -1290,6 +1299,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Tax: "none", // Assuming no VAT
         };
       });
+
+      // Calculate total items amount and discount
+      const totalItemsAmount = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
+      const discountAmount = totalItemsAmount - amountInKopecks;
+
+      // Add discount as separate line item if present
+      if (discountAmount > 0) {
+        receiptItems.push({
+          Name: "Скидка",
+          Price: -discountAmount, // Negative price for discount
+          Quantity: 1,
+          Amount: -discountAmount, // Negative amount
+          Tax: "none",
+        });
+        console.log("[Payment] Discount added to receipt:", discountAmount, "kopecks");
+      }
+
+      // Verify that receipt items total equals payment amount
+      const receiptTotal = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
+      if (receiptTotal !== amountInKopecks) {
+        throw new Error(`Receipt total mismatch: ${receiptTotal} !== ${amountInKopecks}`);
+      }
 
       const baseUrl = process.env.NODE_ENV === "production" 
         ? "https://puerpub.replit.app"
