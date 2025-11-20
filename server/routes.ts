@@ -1295,10 +1295,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         OrderId: String(orderId),
         Description: `Заказ #${orderId} - Puer Pub`,
         DATA: {
+          Email: "onboarding@resend.dev", // Technical email for API compliance
           Phone: normalizedPhone,
         },
         Receipt: {
-          Phone: normalizedPhone,
+          Email: "onboarding@resend.dev", // Technical email for 54-ФЗ compliance
+          Phone: normalizedPhone, // Customer will receive receipt via SMS
           Taxation: "usn_income", // Simplified tax system
           Items: receiptItems,
         },
