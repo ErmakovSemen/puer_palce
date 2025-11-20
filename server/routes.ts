@@ -1341,7 +1341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
 
       const paymentRequest = {
-        Amount: amountInRubles, // Amount in RUBLES (SDK will convert to kopecks)
+        Amount: amountInKopecks, // Amount in KOPECKS (SDK does NOT convert, sends as-is)
         OrderId: String(orderId),
         Description: `Заказ #${orderId} - Puer Pub`,
         DATA: {
