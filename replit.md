@@ -61,7 +61,8 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 - **SMS Receipt Delivery**: Receipts sent to customers via SMS (no customer-facing email collection)
 - **Phone Normalization**: Strict +7XXXXXXXXXX format validation (handles 8xxx, 7xxx, +7xxx inputs)
 - **Discount Reconciliation**: Discounts distributed proportionally across all items by reducing Amount (Tinkoff API doesn't accept negative prices)
-- **Type Safety**: ReceiptItem TypeScript interface enforces structure {Name, Price, Quantity, Amount, Tax}
+- **Type Safety**: ReceiptItem TypeScript interface enforces structure {Name, Price, Quantity, Amount, Tax, PaymentMethod, PaymentObject}
+- **54-ФЗ Compliance**: All receipt items include PaymentMethod ("full_payment") and PaymentObject ("commodity") fields required by Russian tax law
 - **Security**: Server-side recalculation of order totals prevents tampering
 - **API Compliance**: Technical email (onboarding@resend.dev) used for API requirements while SMS delivers receipt to customer
 - **Receipt Math**: Sum of Items.Amount must exactly equal Payment.Amount (proportional discount distribution)
