@@ -1232,9 +1232,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Initialize payment with Tinkoff
       const tinkoffClient = getTinkoffClient();
       const orderItems = JSON.parse(order.items);
-      
-      // Convert total to kopecks (1 RUB = 100 kopecks)
-      const amountInKopecks = Math.round(order.total * 100);
 
       // Normalize phone number to Tinkoff format: +7XXXXXXXXXX (exactly 10 digits after +7)
       const normalizePhone = (phone: string | null | undefined): string => {
@@ -1289,53 +1286,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Prepare receipt items for Tinkoff
-      // NOTE: Tinkoff SDK expects amounts in RUBLES (not kopecks) - it will multiply by 100 internally
+      // IMPORTANT: SDK converts main Amount to kopecks, but Receipt.Items must already be in kopecks!
       const receiptItems: ReceiptItem[] = orderItems.map((item: any) => {
-        const priceInRubles = Number(item.pricePerGram.toFixed(2));
-        const amountInRubles = Number((item.pricePerGram * item.quantity).toFixed(2));
+        const priceInKopecks = Math.round(item.pricePerGram * 100);
+        const amountInKopecks = Math.round(item.pricePerGram * item.quantity * 100);
         
         return {
           Name: item.name,
-          Price: priceInRubles, // Price per unit in RUBLES (SDK will convert to kopecks)
+          Price: priceInKopecks, // Price per unit in KOPECKS
           Quantity: Number(item.quantity.toFixed(2)), // Format as number with 2 decimals
-          Amount: amountInRubles, // Total in RUBLES (before discount, SDK will convert to kopecks)
+          Amount: amountInKopecks, // Total in KOPECKS (before discount)
           Tax: "vat0", // VAT 0% (no VAT, 54-ФЗ compliance)
           PaymentMethod: "full_payment", // Full payment (54-ФЗ compliance)
           PaymentObject: "commodity", // Goods/commodity (54-ФЗ compliance)
         };
       });
 
-      // Calculate total items amount and discount (in RUBLES)
+      // Calculate total items amount and discount (in KOPECKS)
       const amountInRubles = Number((order.total).toFixed(2));
+      const amountInKopecks = Math.round(order.total * 100); // SDK will convert this to kopecks too
       const totalItemsAmount = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
-      const discountAmount = Number((totalItemsAmount - amountInRubles).toFixed(2));
+      const discountAmount = totalItemsAmount - amountInKopecks;
 
-      // Distribute discount proportionally across all items
+      // Distribute discount proportionally across all items (in kopecks)
       if (discountAmount > 0) {
-        console.log("[Payment] Total discount to distribute:", discountAmount, "rubles");
+        console.log("[Payment] Total discount to distribute:", discountAmount, "kopecks");
         
         let distributedDiscount = 0;
         
         // Apply proportional discount to each item except the last one
         for (let i = 0; i < receiptItems.length - 1; i++) {
           const item = receiptItems[i];
-          const itemDiscount = Number(((discountAmount * item.Amount) / totalItemsAmount).toFixed(2));
-          item.Amount = Number((item.Amount - itemDiscount).toFixed(2));
-          distributedDiscount = Number((distributedDiscount + itemDiscount).toFixed(2));
+          const itemDiscount = Math.round((discountAmount * item.Amount) / totalItemsAmount);
+          item.Amount -= itemDiscount;
+          distributedDiscount += itemDiscount;
           console.log(`[Payment] Item "${item.Name}": discount=${itemDiscount}, new Amount=${item.Amount}`);
         }
         
         // Apply remaining discount to last item to handle rounding
         const lastItem = receiptItems[receiptItems.length - 1];
-        const remainingDiscount = Number((discountAmount - distributedDiscount).toFixed(2));
-        lastItem.Amount = Number((lastItem.Amount - remainingDiscount).toFixed(2));
+        const remainingDiscount = discountAmount - distributedDiscount;
+        lastItem.Amount -= remainingDiscount;
         console.log(`[Payment] Last item "${lastItem.Name}": discount=${remainingDiscount}, new Amount=${lastItem.Amount}`);
       }
 
-      // Verify that receipt items total equals payment amount (in RUBLES)
-      const receiptTotal = Number(receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0).toFixed(2));
-      if (Math.abs(receiptTotal - amountInRubles) > 0.01) {
-        throw new Error(`Receipt total mismatch: ${receiptTotal} !== ${amountInRubles}`);
+      // Verify that receipt items total equals payment amount (in KOPECKS)
+      const receiptTotal = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
+      if (receiptTotal !== amountInKopecks) {
+        throw new Error(`Receipt total mismatch: ${receiptTotal} !== ${amountInKopecks}`);
       }
 
       const baseUrl = process.env.NODE_ENV === "production" 
@@ -1368,7 +1366,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Save payment info to order
       await db.update(ordersTable)
         .set({
-          paymentId: paymentResponse.PaymentId,
+          paymentId: String(paymentResponse.PaymentId),
           paymentStatus: paymentResponse.Status,
           paymentUrl: paymentResponse.PaymentURL,
         })
