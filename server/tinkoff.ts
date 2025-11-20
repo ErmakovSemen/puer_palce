@@ -126,7 +126,15 @@ class TinkoffAPI {
 
     const data = await response.json();
 
+    console.log("[Tinkoff API] Full response:", JSON.stringify(data, null, 2));
+
     if (!data.Success) {
+      console.error("[Tinkoff API] Error details:", {
+        Message: data.Message,
+        ErrorCode: data.ErrorCode,
+        Details: data.Details,
+        FullResponse: data
+      });
       throw new Error(data.Message || `Tinkoff API error: ${data.ErrorCode}`);
     }
 
