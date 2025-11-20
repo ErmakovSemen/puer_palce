@@ -1236,6 +1236,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Convert total to kopecks (1 RUB = 100 kopecks)
       const amountInKopecks = Math.round(order.total * 100);
 
+      // Normalize phone number to Tinkoff format: +7XXXXXXXXXX (exactly 10 digits after +7)
+      const normalizePhone = (phone: string | null | undefined): string => {
+        if (!phone) {
+          throw new Error("Phone number is required for payment");
+        }
+
+        // Extract only digits
+        const digitsOnly = phone.replace(/\D/g, '');
+        
+        // Handle different formats:
+        // 10 digits: 9161234567 -> +79161234567
+        // 11 digits starting with 7: 79161234567 -> +79161234567
+        // 11 digits starting with 8: 89161234567 -> +79161234567
+        let normalized: string;
+        
+        if (digitsOnly.length === 10) {
+          // Assume Russian mobile without country code
+          normalized = '+7' + digitsOnly;
+        } else if (digitsOnly.length === 11) {
+          if (digitsOnly.startsWith('7')) {
+            normalized = '+' + digitsOnly;
+          } else if (digitsOnly.startsWith('8')) {
+            normalized = '+7' + digitsOnly.substring(1);
+          } else {
+            throw new Error(`Invalid phone format: must start with 7 or 8 (got ${digitsOnly})`);
+          }
+        } else {
+          throw new Error(`Invalid phone length: expected 10 or 11 digits (got ${digitsOnly.length})`);
+        }
+        
+        // Final validation: must match +7XXXXXXXXXX pattern
+        if (!/^\+7\d{10}$/.test(normalized)) {
+          throw new Error(`Phone normalization failed: ${normalized} doesn't match +7XXXXXXXXXX pattern`);
+        }
+        
+        return normalized;
+      };
+
+      const normalizedPhone = normalizePhone(order.phone);
+      console.log("[Payment] Phone normalized:", order.phone, "->", normalizedPhone);
+
       // Prepare receipt items for Tinkoff
       const receiptItems = orderItems.map((item: any) => ({
         Name: item.name,
@@ -1254,10 +1295,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         OrderId: String(orderId),
         Description: `Заказ #${orderId} - Puer Pub`,
         DATA: {
-          Phone: order.phone,
+          Phone: normalizedPhone,
         },
         Receipt: {
-          Phone: order.phone,
+          Phone: normalizedPhone,
           Taxation: "usn_income", // Simplified tax system
           Items: receiptItems,
         },
