@@ -47,22 +47,40 @@ export type TinkoffNotification = WebhookPayload;
 // HTTP Client implementation for SDK
 class SimpleHttpClient {
   async sendRequest(request: any): Promise<any> {
+    console.log('[Tinkoff HTTP] Full request object:', JSON.stringify(request, null, 2));
+    console.log('[Tinkoff HTTP] Request keys:', Object.keys(request));
+    
     const url = request.url;
     const method = request.method || 'POST';
-    const body = request.body;
-
-    console.log('[Tinkoff HTTP] Request:', { url, method, body: body ? JSON.parse(body) : null });
+    
+    // SDK может передавать данные в разных полях - проверим все
+    const body = request.body || request.payload || request.data || request.json;
+    
+    console.log('[Tinkoff HTTP] Extracted values:', { 
+      url, 
+      method, 
+      body: body ? (typeof body === 'string' ? JSON.parse(body) : body) : null 
+    });
 
     const response = await fetch(url, {
       method,
       headers: {
         'Content-Type': 'application/json',
       },
-      body,
+      body: typeof body === 'string' ? body : JSON.stringify(body),
     });
 
-    const data = await response.json();
-    console.log('[Tinkoff HTTP] Response:', data);
+    const responseText = await response.text();
+    console.log('[Tinkoff HTTP] Raw response:', responseText);
+    
+    let data;
+    try {
+      data = JSON.parse(responseText);
+      console.log('[Tinkoff HTTP] Parsed response:', data);
+    } catch (e) {
+      console.error('[Tinkoff HTTP] Failed to parse response:', e);
+      throw new Error(`Invalid JSON response: ${responseText}`);
+    }
 
     return {
       statusCode: response.status,
