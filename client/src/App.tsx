@@ -7,6 +7,8 @@ import Home from "@/pages/Home";
 import Admin from "@/pages/Admin";
 import Auth from "@/pages/Auth";
 import Profile from "@/pages/Profile";
+import PaymentSuccess from "@/pages/PaymentSuccess";
+import PaymentError from "@/pages/PaymentError";
 import { useDesignMode } from "@/hooks/use-design-mode";
 import { AuthProvider } from "@/hooks/use-auth";
 
@@ -17,6 +19,8 @@ function Router() {
       <Route path="/admin" component={Admin} />
       <Route path="/auth" component={Auth} />
       <Route path="/profile" component={Profile} />
+      <Route path="/payment/success" component={PaymentSuccess} />
+      <Route path="/payment/error" component={PaymentError} />
       <Route component={NotFound} />
     </Switch>
   );

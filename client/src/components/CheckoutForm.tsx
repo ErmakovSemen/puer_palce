@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 const checkoutSchema = z.object({
   name: z.string().min(2, "Имя должно содержать минимум 2 символа"),
   email: z.string().email("Введите корректный email"),
+  receiptEmail: z.string().email("Введите корректный email для чека").optional().or(z.literal("")),
   phone: z.string().min(10, "Введите корректный номер телефона"),
   address: z.string().min(10, "Введите полный адрес доставки"),
   comment: z.string().optional(),
@@ -93,6 +94,7 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
     defaultValues: {
       name: user?.name || "",
       email: user?.email || "",
+      receiptEmail: user?.email || "",
       phone: user?.phone || "",
       address: "",
       comment: "",
@@ -135,6 +137,28 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
               <FormControl>
                 <Input type="email" placeholder="ivan@example.com" {...field} data-testid="input-email" />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="receiptEmail"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email для чека (необязательно)</FormLabel>
+              <FormControl>
+                <Input 
+                  type="email" 
+                  placeholder="Оставьте пустым для использования основного email" 
+                  {...field} 
+                  data-testid="input-receipt-email" 
+                />
+              </FormControl>
+              <p className="text-sm text-muted-foreground mt-1">
+                На этот адрес будет отправлен электронный чек. Если не указать, будет использован основной email
+              </p>
               <FormMessage />
             </FormItem>
           )}

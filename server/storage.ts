@@ -52,6 +52,7 @@ export interface IStorage {
     items: string; 
     total: number;
     usedFirstOrderDiscount?: boolean;
+    receiptEmail?: string;
   }): Promise<DbOrder>;
   updateOrderStatus(orderId: number, status: string, expectedOldStatus?: string): Promise<DbOrder | undefined>;
   
@@ -316,6 +317,7 @@ export class MemStorage implements IStorage {
     items: string; 
     total: number;
     usedFirstOrderDiscount?: boolean;
+    receiptEmail?: string;
   }): Promise<DbOrder> {
     // MemStorage doesn't persist orders, return mock order
     return {
@@ -330,6 +332,10 @@ export class MemStorage implements IStorage {
       total: orderData.total,
       status: "pending",
       usedFirstOrderDiscount: orderData.usedFirstOrderDiscount ?? false,
+      paymentId: null,
+      paymentStatus: null,
+      paymentUrl: null,
+      receiptEmail: orderData.receiptEmail ?? null,
       createdAt: new Date().toISOString(),
     };
   }
@@ -706,6 +712,7 @@ export class DbStorage implements IStorage {
     items: string; 
     total: number;
     usedFirstOrderDiscount?: boolean;
+    receiptEmail?: string;
   }): Promise<DbOrder> {
     const [order] = await db.insert(ordersTable).values({
       userId: orderData.userId ?? null,
@@ -717,6 +724,7 @@ export class DbStorage implements IStorage {
       items: orderData.items,
       total: orderData.total,
       usedFirstOrderDiscount: orderData.usedFirstOrderDiscount ?? false,
+      receiptEmail: orderData.receiptEmail ?? null,
     }).returning();
     
     return order;

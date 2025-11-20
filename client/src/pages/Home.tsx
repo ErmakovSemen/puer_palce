@@ -306,9 +306,11 @@ export default function Home() {
 
   const orderMutation = useMutation({
     mutationFn: async (orderData: any) => {
-      return await apiRequest("POST", "/api/orders", orderData);
+      const response = await apiRequest("POST", "/api/orders", orderData);
+      const data = await response.json();
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data: any) => {
       if (user) {
         // Authenticated: cart cleared on server, invalidate queries
         queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
@@ -319,11 +321,33 @@ export default function Home() {
         setGuestCartItems([]);
         localStorage.removeItem('guestCart');
       }
-      setIsCheckoutOpen(false);
-      setIsSuccessDialogOpen(true);
       
       // Track order completion in Yandex Metrika
       trackEvent('order_completed');
+      
+      setIsCheckoutOpen(false);
+      
+      // Initialize payment and redirect to Tinkoff payment page
+      try {
+        const paymentResponse = await apiRequest("POST", "/api/payments/init", {
+          orderId: data.orderId,
+        });
+        const paymentData = await paymentResponse.json();
+        
+        if (paymentData.success && paymentData.paymentUrl) {
+          // Redirect to Tinkoff payment page
+          window.location.href = paymentData.paymentUrl;
+        } else {
+          throw new Error("Failed to initialize payment");
+        }
+      } catch (error) {
+        console.error("Payment initialization error:", error);
+        toast({
+          title: "Ошибка инициализации платежа",
+          description: "Не удалось перейти к оплате. Попробуйте позже.",
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: any) => {
       toast({

@@ -225,7 +225,8 @@ export const insertOrderSchema = createInsertSchema(orders, {
   total: z.number().min(0),
   status: z.string().default("pending"),
   usedFirstOrderDiscount: z.boolean().default(false),
-}).omit({ id: true, createdAt: true });
+  receiptEmail: z.string().email().optional().nullable(),
+}).omit({ id: true, createdAt: true, paymentId: true, paymentStatus: true, paymentUrl: true });
 
 export const updateOrderStatusSchema = z.object({
   status: z.enum(["pending", "paid", "cancelled", "completed"], {

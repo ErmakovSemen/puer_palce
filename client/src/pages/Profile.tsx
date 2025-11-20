@@ -29,6 +29,11 @@ interface DbOrder {
   items: string;
   total: number;
   createdAt: string;
+  status: string;
+  paymentId: string | null;
+  paymentStatus: string | null;
+  paymentUrl: string | null;
+  receiptEmail: string | null;
 }
 
 interface OrderItem {
@@ -385,17 +390,40 @@ export default function Profile() {
                     minute: '2-digit',
                   });
 
+                  // Determine payment status label
+                  const getPaymentStatusInfo = () => {
+                    if (order.status === "cancelled") {
+                      return { label: "Отменён", variant: "destructive" as const };
+                    }
+                    if (!order.paymentId || !order.paymentStatus) {
+                      return { label: "Ожидает оплаты", variant: "secondary" as const };
+                    }
+                    if (order.paymentStatus === "CONFIRMED") {
+                      return { label: "Оплачен", variant: "default" as const };
+                    }
+                    if (order.paymentStatus === "REJECTED") {
+                      return { label: "Отклонён", variant: "destructive" as const };
+                    }
+                    return { label: "Ожидает оплаты", variant: "secondary" as const };
+                  };
+
+                  const paymentStatus = getPaymentStatusInfo();
+                  const canPay = order.status !== "cancelled" && order.paymentStatus !== "CONFIRMED";
+
                   return (
                     <Card key={order.id} data-testid={`card-order-${order.id}`}>
                       <CardContent className="pt-6">
                         <div className="flex items-start justify-between mb-4">
-                          <div>
+                          <div className="flex-1">
                             <h3 className="font-semibold text-lg">
                               Заказ №{order.id}
                             </h3>
                             <p className="text-sm text-muted-foreground mt-1" data-testid={`text-order-date-${order.id}`}>
                               {orderDate}
                             </p>
+                            <Badge variant={paymentStatus.variant} className="mt-2" data-testid={`badge-payment-status-${order.id}`}>
+                              {paymentStatus.label}
+                            </Badge>
                           </div>
                           <Badge className="bg-primary text-primary-foreground border-[3px] border-double border-black" data-testid={`badge-order-total-${order.id}`}>
                             {order.total.toFixed(2)} ₽
@@ -453,6 +481,47 @@ export default function Profile() {
                             )}
                           </div>
                         </div>
+
+                        {/* Pay Button for unpaid orders */}
+                        {canPay && (
+                          <div className="mt-4">
+                            <Separator className="mb-4" />
+                            <Button
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch("/api/payments/init", {
+                                    method: "POST",
+                                    headers: {
+                                      "Content-Type": "application/json",
+                                    },
+                                    body: JSON.stringify({ orderId: order.id }),
+                                  });
+                                  const data = await response.json();
+                                  if (data.success && data.paymentUrl) {
+                                    window.location.href = data.paymentUrl;
+                                  } else {
+                                    toast({
+                                      title: "Ошибка",
+                                      description: "Не удалось инициировать платёж",
+                                      variant: "destructive",
+                                    });
+                                  }
+                                } catch (error) {
+                                  console.error("Payment initialization error:", error);
+                                  toast({
+                                    title: "Ошибка",
+                                    description: "Не удалось инициировать платёж",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                              className="w-full bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
+                              data-testid={`button-pay-order-${order.id}`}
+                            >
+                              Оплатить заказ
+                            </Button>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   );

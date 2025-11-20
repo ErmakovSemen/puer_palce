@@ -10,8 +10,9 @@ import { setupAuth } from "./auth";
 import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification } from "./telegram";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
-import { users as usersTable } from "@shared/schema";
+import { users as usersTable, orders as ordersTable } from "@shared/schema";
 import { eq, sql, desc } from "drizzle-orm";
+import { getTinkoffClient } from "./tinkoff";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -524,6 +525,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         items: JSON.stringify(orderData.items),
         total: finalTotal,
         usedFirstOrderDiscount,
+        receiptEmail: orderData.receiptEmail || orderData.email,
       });
       console.log("[Order] Order saved to database, ID:", savedOrder.id);
       
@@ -1160,6 +1162,261 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Admin] Stats error:", error);
       res.status(500).json({ error: "Failed to get statistics" });
+    }
+  });
+
+  // Payment routes
+  // Initialize payment for an order
+  app.post("/api/payments/init", async (req, res) => {
+    try {
+      const { orderId } = req.body;
+
+      if (!orderId) {
+        res.status(400).json({ error: "Order ID is required" });
+        return;
+      }
+
+      // Get order from database
+      const order = await db.query.orders.findFirst({
+        where: eq(ordersTable.id, orderId),
+      });
+
+      if (!order) {
+        res.status(404).json({ error: "Order not found" });
+        return;
+      }
+
+      // Security: Verify order ownership
+      // Normalize userId - treat empty strings as null
+      const orderUserId = order.userId?.trim() || null;
+      
+      if (req.isAuthenticated()) {
+        const userId = (req.user as any).id;
+        // Authenticated users can only init payment for their own orders
+        if (orderUserId !== null && orderUserId !== userId) {
+          res.status(403).json({ error: "Access denied" });
+          return;
+        }
+        // Authenticated users cannot init payment for guest orders
+        if (orderUserId === null) {
+          res.status(403).json({ error: "Cannot access guest order" });
+          return;
+        }
+      } else {
+        // Unauthenticated users can only init payment for guest orders (userId === null)
+        if (orderUserId !== null) {
+          res.status(401).json({ error: "Authentication required" });
+          return;
+        }
+      }
+
+      // Check order status - only allow payment for pending/unpaid orders
+      if (order.status === "paid") {
+        res.status(400).json({ error: "Order already paid" });
+        return;
+      }
+      if (order.status === "cancelled") {
+        res.status(400).json({ error: "Order is cancelled" });
+        return;
+      }
+
+      // Check if payment already initialized
+      if (order.paymentId && order.paymentStatus === "NEW") {
+        res.json({
+          success: true,
+          paymentUrl: order.paymentUrl,
+          paymentId: order.paymentId,
+        });
+        return;
+      }
+
+      // Initialize payment with Tinkoff
+      const tinkoffClient = getTinkoffClient();
+      const orderItems = JSON.parse(order.items);
+      
+      // Convert total to kopecks (1 RUB = 100 kopecks)
+      const amountInKopecks = Math.round(order.total * 100);
+
+      // Prepare receipt items for Tinkoff
+      const receiptItems = orderItems.map((item: any) => ({
+        Name: item.name,
+        Price: Math.round(item.pricePerGram * 100), // Price per unit in kopecks
+        Quantity: item.quantity,
+        Amount: Math.round(item.pricePerGram * item.quantity * 100), // Total in kopecks
+        Tax: "none", // Assuming no VAT
+      }));
+
+      const baseUrl = process.env.NODE_ENV === "production" 
+        ? "https://puerpub.replit.app"
+        : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+
+      const paymentRequest = {
+        Amount: amountInKopecks,
+        OrderId: String(orderId),
+        Description: `Заказ #${orderId} - Puer Pub`,
+        DATA: {
+          Email: order.receiptEmail || order.email,
+          Phone: order.phone,
+        },
+        Receipt: {
+          Email: order.receiptEmail || order.email,
+          Phone: order.phone,
+          Taxation: "usn_income", // Simplified tax system
+          Items: receiptItems,
+        },
+        NotificationURL: `${baseUrl}/api/payments/notification`,
+        SuccessURL: `${baseUrl}/payment/success?orderId=${orderId}`,
+        FailURL: `${baseUrl}/payment/error?orderId=${orderId}`,
+      };
+
+      const paymentResponse = await tinkoffClient.init(paymentRequest);
+
+      // Save payment info to order
+      await db.update(ordersTable)
+        .set({
+          paymentId: paymentResponse.PaymentId,
+          paymentStatus: paymentResponse.Status,
+          paymentUrl: paymentResponse.PaymentURL,
+        })
+        .where(eq(ordersTable.id, orderId));
+
+      console.log("[Payment] Payment initialized for order:", orderId, "PaymentId:", paymentResponse.PaymentId);
+
+      res.json({
+        success: true,
+        paymentUrl: paymentResponse.PaymentURL,
+        paymentId: paymentResponse.PaymentId,
+      });
+    } catch (error: any) {
+      console.error("[Payment] Failed to initialize payment:", error);
+      res.status(500).json({ error: error.message || "Failed to initialize payment" });
+    }
+  });
+
+  // Webhook for payment notifications from Tinkoff
+  app.post("/api/payments/notification", async (req, res) => {
+    try {
+      const notification = req.body;
+      console.log("[Payment] Received notification:", notification);
+
+      // Verify notification signature
+      const tinkoffClient = getTinkoffClient();
+      if (!tinkoffClient.verifyNotification(notification)) {
+        console.error("[Payment] Invalid notification signature");
+        res.status(400).send("Invalid signature");
+        return;
+      }
+
+      const orderId = parseInt(notification.OrderId);
+      const paymentStatus = notification.Status;
+
+      // Update order payment status
+      await db.update(ordersTable)
+        .set({
+          paymentStatus: paymentStatus,
+          status: paymentStatus === "CONFIRMED" ? "paid" : 
+                  paymentStatus === "REJECTED" ? "cancelled" : "pending",
+        })
+        .where(eq(ordersTable.id, orderId));
+
+      console.log("[Payment] Order", orderId, "payment status updated to:", paymentStatus);
+
+      // If payment confirmed, award XP to user
+      if (paymentStatus === "CONFIRMED") {
+        const order = await db.query.orders.findFirst({
+          where: eq(ordersTable.id, orderId),
+        });
+
+        if (order?.userId) {
+          const xpToAdd = Math.floor(order.total);
+          await db.update(usersTable)
+            .set({
+              xp: sql`${usersTable.xp} + ${xpToAdd}`,
+            })
+            .where(eq(usersTable.id, order.userId));
+
+          console.log("[Payment] Added", xpToAdd, "XP to user:", order.userId);
+        }
+      }
+
+      res.send(tinkoffClient.getNotificationSuccessResponse());
+    } catch (error) {
+      console.error("[Payment] Notification processing failed:", error);
+      res.status(500).send("Internal server error");
+    }
+  });
+
+  // Check payment status for an order
+  app.get("/api/payments/check/:orderId", async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.orderId);
+
+      const order = await db.query.orders.findFirst({
+        where: eq(ordersTable.id, orderId),
+      });
+
+      if (!order) {
+        res.status(404).json({ error: "Order not found" });
+        return;
+      }
+
+      // Security: Verify order ownership
+      // Normalize userId - treat empty strings as null
+      const orderUserId = order.userId?.trim() || null;
+      
+      if (req.isAuthenticated()) {
+        const userId = (req.user as any).id;
+        // Authenticated users can only check payment for their own orders
+        if (orderUserId !== null && orderUserId !== userId) {
+          res.status(403).json({ error: "Access denied" });
+          return;
+        }
+        // Authenticated users cannot check payment for guest orders
+        if (orderUserId === null) {
+          res.status(403).json({ error: "Cannot access guest order" });
+          return;
+        }
+      } else {
+        // Unauthenticated users can only check payment for guest orders (userId === null)
+        if (orderUserId !== null) {
+          res.status(401).json({ error: "Authentication required" });
+          return;
+        }
+      }
+
+      if (!order.paymentId) {
+        res.json({
+          status: "not_initialized",
+          paymentStatus: null,
+        });
+        return;
+      }
+
+      // Get latest payment status from Tinkoff
+      const tinkoffClient = getTinkoffClient();
+      const paymentState = await tinkoffClient.getState(order.paymentId);
+
+      // Update our database if status changed
+      if (paymentState.Status !== order.paymentStatus) {
+        await db.update(ordersTable)
+          .set({
+            paymentStatus: paymentState.Status,
+            status: paymentState.Status === "CONFIRMED" ? "paid" : 
+                    paymentState.Status === "REJECTED" ? "cancelled" : "pending",
+          })
+          .where(eq(ordersTable.id, orderId));
+
+        console.log("[Payment] Order", orderId, "status synchronized:", paymentState.Status);
+      }
+
+      res.json({
+        status: "initialized",
+        paymentStatus: paymentState.Status,
+        paymentUrl: order.paymentUrl,
+      });
+    } catch (error: any) {
+      console.error("[Payment] Failed to check payment status:", error);
+      res.status(500).json({ error: error.message || "Failed to check payment status" });
     }
   });
 
