@@ -58,7 +58,17 @@ class TinkoffAPI {
 
   constructor(terminalKey: string, password: string) {
     this.terminalKey = terminalKey;
-    this.password = password;
+    // Decode HTML entities from Replit Secrets (&amp; → &)
+    this.password = password
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'");
+    
+    console.log("[Tinkoff] Initializing client with TerminalKey:", terminalKey);
+    console.log("[Tinkoff] Password length:", this.password.length);
+    console.log("[Tinkoff] Password (first 3 chars):", this.password.substring(0, 3));
   }
 
   private generateToken(params: Record<string, any>): string {
