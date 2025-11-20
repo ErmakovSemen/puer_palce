@@ -1298,7 +1298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Price: priceInKopecks, // Price per unit in kopecks
           Quantity: Number(item.quantity.toFixed(2)), // Format as number with 2 decimals
           Amount: amountInKopecks, // Total in kopecks (before discount)
-          Tax: "none", // Assuming no VAT
+          Tax: "vat0", // VAT 0% (no VAT, 54-ФЗ compliance)
           PaymentMethod: "full_payment", // Full payment (54-ФЗ compliance)
           PaymentObject: "commodity", // Goods/commodity (54-ФЗ compliance)
         };
