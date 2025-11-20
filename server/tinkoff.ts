@@ -204,17 +204,31 @@ class TinkoffAPI {
 // Singleton instance
 let tinkoffClient: TinkoffAPI | null = null;
 
+function decodeHTMLEntities(text: string): string {
+  // Decode common HTML entities that might appear in secrets
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
 export function getTinkoffClient(): TinkoffAPI {
   if (!tinkoffClient) {
     const terminalKey = process.env.TINKOFF_TERMINAL_KEY;
-    const password = process.env.TINKOFF_SECRET_KEY;
+    let password = process.env.TINKOFF_SECRET_KEY;
 
     if (!terminalKey || !password) {
       throw new Error("Tinkoff credentials not configured");
     }
 
+    // Decode HTML entities in password (Replit Secrets may encode &)
+    password = decodeHTMLEntities(password);
+
     console.log("[Tinkoff] Initializing client with TerminalKey:", terminalKey);
     console.log("[Tinkoff] Password length:", password.length);
+    console.log("[Tinkoff] Password (first 3 chars):", password.substring(0, 3));
 
     tinkoffClient = new TinkoffAPI(terminalKey, password);
   }
