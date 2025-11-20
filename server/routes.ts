@@ -1336,9 +1336,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error(`Receipt total mismatch: ${receiptTotal} !== ${amountInKopecks}`);
       }
 
-      const baseUrl = process.env.NODE_ENV === "production" 
-        ? "https://puerpub.replit.app"
-        : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      // Use REPLIT_DOMAINS if available (development), otherwise production domain
+      const baseUrl = process.env.REPLIT_DOMAINS 
+        ? `https://${process.env.REPLIT_DOMAINS}`
+        : "https://puerpub.replit.app";
 
       const paymentRequest = {
         Amount: amountInKopecks, // Amount in KOPECKS (SDK does NOT convert, sends as-is)
