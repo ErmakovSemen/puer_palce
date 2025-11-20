@@ -1284,6 +1284,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         Quantity: number;
         Amount: number;
         Tax: string;
+        PaymentMethod: string;
+        PaymentObject: string;
       }
 
       // Prepare receipt items for Tinkoff
@@ -1297,6 +1299,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Quantity: Number(item.quantity.toFixed(2)), // Format as number with 2 decimals
           Amount: amountInKopecks, // Total in kopecks (before discount)
           Tax: "none", // Assuming no VAT
+          PaymentMethod: "full_payment", // Full payment (54-ФЗ compliance)
+          PaymentObject: "commodity", // Goods/commodity (54-ФЗ compliance)
         };
       });
 
