@@ -224,16 +224,11 @@ function decodeHTMLEntities(text: string): string {
 
 export function getTinkoffClient(): TinkoffAPI {
   if (!tinkoffClient) {
-    const terminalKey = process.env.TINKOFF_TERMINAL_KEY;
-    let password = process.env.TINKOFF_SECRET_KEY;
+    // DEMO терминал для тестирования
+    const terminalKey = '1763124099431DEMO';
+    const password = 'suxJor&fYBP#feUa';
 
-    if (!terminalKey || !password) {
-      throw new Error('Tinkoff credentials not configured');
-    }
-
-    password = decodeHTMLEntities(password);
-
-    console.log('[Tinkoff] Creating singleton client');
+    console.log('[Tinkoff] Creating singleton client (DEMO)');
     console.log('[Tinkoff] TerminalKey:', terminalKey);
     console.log('[Tinkoff] Password length:', password.length);
 
