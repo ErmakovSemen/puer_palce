@@ -62,18 +62,27 @@ class TinkoffAPI {
   }
 
   private generateToken(params: Record<string, any>): string {
-    // Add Password to params for token generation
-    const tokenParams: Record<string, any> = { ...params, Password: this.password };
+    // Clone params for token generation
+    const tokenParams: Record<string, any> = { ...params };
     
     // Remove Token field if it exists
     delete tokenParams.Token;
     
-    // Remove Receipt and DATA fields as they are not included in token generation
-    delete tokenParams.Receipt;
-    delete tokenParams.DATA;
+    // Remove URL fields - they don't participate in token generation
     delete tokenParams.NotificationURL;
     delete tokenParams.SuccessURL;
     delete tokenParams.FailURL;
+    
+    // Serialize Receipt and DATA to JSON strings if they exist
+    if (tokenParams.Receipt) {
+      tokenParams.Receipt = JSON.stringify(tokenParams.Receipt);
+    }
+    if (tokenParams.DATA) {
+      tokenParams.DATA = JSON.stringify(tokenParams.DATA);
+    }
+    
+    // Add Password to params for token generation
+    tokenParams.Password = this.password;
     
     // Sort keys alphabetically
     const sortedKeys = Object.keys(tokenParams).sort();
