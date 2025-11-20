@@ -60,17 +60,17 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 - **Payment Processing**: Integrated Tinkoff Acquiring API for secure online payments with 54-ФЗ compliance
 - **SMS Receipt Delivery**: Receipts sent to customers via SMS (no customer-facing email collection)
 - **Phone Normalization**: Strict +7XXXXXXXXXX format validation (handles 8xxx, 7xxx, +7xxx inputs)
-- **Discount Reconciliation**: Negative line item added to Receipt.Items to ensure total matches payment amount
+- **Discount Reconciliation**: Discounts distributed proportionally across all items by reducing Amount (Tinkoff API doesn't accept negative prices)
 - **Type Safety**: ReceiptItem TypeScript interface enforces structure {Name, Price, Quantity, Amount, Tax}
 - **Security**: Server-side recalculation of order totals prevents tampering
 - **API Compliance**: Technical email (onboarding@resend.dev) used for API requirements while SMS delivers receipt to customer
-- **Receipt Math**: Sum of Items.Amount must exactly equal Payment.Amount (discount added as separate line item)
+- **Receipt Math**: Sum of Items.Amount must exactly equal Payment.Amount (proportional discount distribution)
 
 ### Bug Fixes
 - Fixed registration flow to correctly handle optional email/name fields (empty strings not sent to backend)
 - Added backend validation to prevent loyalty discount tampering through API manipulation
 - Fixed cache invalidation: user data now refreshes after order creation
-- Fixed Tinkoff payment receipt total mismatch by adding discount as negative line item
+- Fixed Tinkoff payment receipt: changed from negative line item to proportional discount distribution (Tinkoff API requirement)
 
 ## User Preferences
 
