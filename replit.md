@@ -58,6 +58,9 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 
 ### Tinkoff Acquiring Payment Integration (January 2025)
 - **Payment Processing**: Integrated Tinkoff Acquiring API for secure online payments with 54-ФЗ compliance
+- **Custom Implementation**: Built custom HTTP client using fetch - **NO SDK** used (official `@jfkz/tinkoff-payment-sdk` has hardcoded 100x multiplier causing ErrorCode 308)
+- **Token Algorithm**: SHA-256 hash of sorted primitive fields (Amount, OrderId, Description, URLs, Password) - Receipt/DATA objects excluded from hash
+- **Amount Units**: All monetary values in kopecks (Math.round(rubles * 100)) - API expects kopecks, not rubles
 - **SMS Receipt Delivery**: Receipts sent to customers via SMS (no customer-facing email collection)
 - **Phone Normalization**: Strict +7XXXXXXXXXX format validation (handles 8xxx, 7xxx, +7xxx inputs)
 - **Discount Reconciliation**: Discounts distributed proportionally across all items by reducing Amount (Tinkoff API doesn't accept negative prices)
@@ -66,6 +69,8 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 - **Security**: Server-side recalculation of order totals prevents tampering
 - **API Compliance**: Technical email (onboarding@resend.dev) used for API requirements while SMS delivers receipt to customer
 - **Receipt Math**: Sum of Items.Amount must exactly equal Payment.Amount (proportional discount distribution)
+- **Webhook Verification**: Token verification for incoming payment notifications (AUTHORIZED, CONFIRMED, REJECTED statuses)
+- **XP Accrual**: Loyalty points awarded only on CONFIRMED status, not on AUTHORIZED or REJECTED
 
 ### Bug Fixes
 - Fixed registration flow to correctly handle optional email/name fields (empty strings not sent to backend)
@@ -128,4 +133,4 @@ Powered by Express.js and TypeScript, providing a RESTful API. Drizzle ORM inter
 
 ### Configuration Management
 
--   **Environment Variables**: `DATABASE_URL`, `NODE_ENV`, `ADMIN_PASSWORD`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `SMSRU_API_KEY` (for SMS verification), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (for admin notifications).
+-   **Environment Variables**: `DATABASE_URL`, `NODE_ENV`, `ADMIN_PASSWORD`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `SMSRU_API_KEY` (for SMS verification), `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (for admin notifications), `TINKOFF_TERMINAL_KEY`, `TINKOFF_SECRET_KEY` (for Tinkoff Acquiring payment processing).

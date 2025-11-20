@@ -76,8 +76,6 @@ class TinkoffAPI {
       .replace(/&#039;/g, "'");
 
     console.log('[Tinkoff] Initializing with TerminalKey:', terminalKey);
-    console.log('[Tinkoff] Password length:', this.password.length);
-    console.log('[Tinkoff] Password (first 3 chars):', this.password.substring(0, 3));
   }
 
   private generateToken(params: Record<string, any>): string {
@@ -224,13 +222,17 @@ function decodeHTMLEntities(text: string): string {
 
 export function getTinkoffClient(): TinkoffAPI {
   if (!tinkoffClient) {
-    // DEMO терминал для тестирования
-    const terminalKey = '1763124099431DEMO';
-    const password = 'suxJor&fYBP#feUa';
+    const terminalKey = process.env.TINKOFF_TERMINAL_KEY;
+    let password = process.env.TINKOFF_SECRET_KEY;
 
-    console.log('[Tinkoff] Creating singleton client (DEMO)');
+    if (!terminalKey || !password) {
+      throw new Error('Tinkoff credentials not configured');
+    }
+
+    password = decodeHTMLEntities(password);
+
+    console.log('[Tinkoff] Creating singleton client');
     console.log('[Tinkoff] TerminalKey:', terminalKey);
-    console.log('[Tinkoff] Password length:', password.length);
 
     tinkoffClient = new TinkoffAPI(terminalKey, password);
   }
