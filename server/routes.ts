@@ -444,6 +444,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get personalized product recommendations based on purchase history (requires auth)
+  app.get("/api/recommendations", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ error: "Необходима авторизация" });
+    }
+    
+    try {
+      const userId = (req.user as any).id;
+      
+      // Get user's completed/paid orders
+      const userOrders = await storage.getUserOrders(userId);
+      const completedOrders = userOrders.filter((order: any) => 
+        order.status === 'paid' || order.status === 'completed'
+      );
+      
+      // If no purchases yet, return empty recommendations
+      if (completedOrders.length === 0) {
+        return res.json([]);
+      }
+      
+      // Extract product IDs from order items
+      const purchasedProductIds = new Set<number>();
+      completedOrders.forEach((order: any) => {
+        try {
+          const items = JSON.parse(order.items);
+          items.forEach((item: any) => {
+            if (item.id) {
+              purchasedProductIds.add(item.id);
+            }
+          });
+        } catch (e) {
+          console.error("[Recommendations] Failed to parse order items:", e);
+        }
+      });
+      
+      // Get all products
+      const allProducts = await storage.getProducts();
+      
+      // Get details of purchased products
+      const purchasedProducts = allProducts.filter((p: any) => 
+        purchasedProductIds.has(p.id)
+      );
+      
+      // Analyze user preferences
+      const teaTypePreferences = new Map<string, number>();
+      const effectPreferences = new Map<string, number>();
+      let categoryPreference = 'tea';
+      
+      purchasedProducts.forEach((product: any) => {
+        // Count tea types
+        if (product.teaType) {
+          teaTypePreferences.set(
+            product.teaType, 
+            (teaTypePreferences.get(product.teaType) || 0) + 1
+          );
+        }
+        
+        // Count effects
+        if (product.effects && Array.isArray(product.effects)) {
+          product.effects.forEach((effect: string) => {
+            effectPreferences.set(effect, (effectPreferences.get(effect) || 0) + 1);
+          });
+        }
+        
+        // Track category
+        if (product.category) {
+          categoryPreference = product.category;
+        }
+      });
+      
+      // Score and rank products
+      const scoredProducts = allProducts
+        .filter((p: any) => 
+          !purchasedProductIds.has(p.id) && // Exclude already purchased
+          !p.outOfStock // Exclude out of stock
+        )
+        .map((product: any) => {
+          let score = 0;
+          
+          // Same tea type gets high score
+          if (product.teaType && teaTypePreferences.has(product.teaType)) {
+            score += (teaTypePreferences.get(product.teaType) || 0) * 10;
+          }
+          
+          // Matching effects get points
+          if (product.effects && Array.isArray(product.effects)) {
+            product.effects.forEach((effect: string) => {
+              if (effectPreferences.has(effect)) {
+                score += (effectPreferences.get(effect) || 0) * 5;
+              }
+            });
+          }
+          
+          // Same category gets bonus
+          if (product.category === categoryPreference) {
+            score += 3;
+          }
+          
+          return { ...product, score };
+        })
+        .filter((p: any) => p.score > 0) // Only include products with some relevance
+        .sort((a: any, b: any) => b.score - a.score) // Sort by score descending
+        .slice(0, 6); // Top 6 recommendations
+      
+      // Remove score from response
+      const recommendations = scoredProducts.map(({ score, ...product }) => product);
+      
+      res.json(recommendations);
+    } catch (error) {
+      console.error("[Recommendations] Failed to get recommendations:", error);
+      res.status(500).json({ error: "Ошибка получения рекомендаций" });
+    }
+  });
+
   // Order placement route
   app.post("/api/orders", async (req, res) => {
     try {
