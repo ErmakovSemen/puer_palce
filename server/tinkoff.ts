@@ -87,11 +87,20 @@ class TinkoffAPI {
     // Sort keys alphabetically
     const sortedKeys = Object.keys(tokenParams).sort();
     
+    console.log("[Token] Sorted keys:", sortedKeys);
+    console.log("[Token] Token params:", JSON.stringify(tokenParams, null, 2));
+    
     // Concatenate values
     const values = sortedKeys.map(key => tokenParams[key]).join("");
     
+    console.log("[Token] Concatenated string for hashing:", values);
+    
     // Generate SHA-256 hash
-    return crypto.createHash("sha256").update(values).digest("hex");
+    const token = crypto.createHash("sha256").update(values).digest("hex");
+    
+    console.log("[Token] Generated token:", token);
+    
+    return token;
   }
 
   async init(request: TinkoffInitRequest): Promise<TinkoffInitResponse> {
