@@ -68,12 +68,18 @@ class TinkoffAPI {
     // Remove Token field if it exists
     delete tokenParams.Token;
     
-    // Remove fields that don't participate in token generation
+    // Remove URL fields - they don't participate in token generation
     delete tokenParams.NotificationURL;
     delete tokenParams.SuccessURL;
     delete tokenParams.FailURL;
-    delete tokenParams.Receipt;
-    delete tokenParams.DATA;
+    
+    // Serialize Receipt and DATA to compact JSON (no whitespace)
+    if (tokenParams.Receipt) {
+      tokenParams.Receipt = JSON.stringify(tokenParams.Receipt);
+    }
+    if (tokenParams.DATA) {
+      tokenParams.DATA = JSON.stringify(tokenParams.DATA);
+    }
     
     // Add Password to params for token generation
     tokenParams.Password = this.password;
