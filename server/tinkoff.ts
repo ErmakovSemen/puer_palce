@@ -71,6 +71,22 @@ class TinkoffAPI {
     console.log("[Tinkoff] Password (first 3 chars):", this.password.substring(0, 3));
   }
 
+  private sortObjectKeys(obj: any): any {
+    if (obj === null || typeof obj !== 'object') {
+      return obj;
+    }
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.sortObjectKeys(item));
+    }
+    
+    const sorted: any = {};
+    Object.keys(obj).sort().forEach(key => {
+      sorted[key] = this.sortObjectKeys(obj[key]);
+    });
+    return sorted;
+  }
+
   private generateToken(params: Record<string, any>): string {
     // Clone params for token generation
     const tokenParams: Record<string, any> = { ...params };
@@ -83,12 +99,14 @@ class TinkoffAPI {
     delete tokenParams.SuccessURL;
     delete tokenParams.FailURL;
     
-    // Serialize Receipt and DATA to compact JSON (no whitespace)
+    // Serialize Receipt and DATA to compact JSON with sorted keys
     if (tokenParams.Receipt) {
-      tokenParams.Receipt = JSON.stringify(tokenParams.Receipt);
+      const sortedReceipt = this.sortObjectKeys(tokenParams.Receipt);
+      tokenParams.Receipt = JSON.stringify(sortedReceipt);
     }
     if (tokenParams.DATA) {
-      tokenParams.DATA = JSON.stringify(tokenParams.DATA);
+      const sortedData = this.sortObjectKeys(tokenParams.DATA);
+      tokenParams.DATA = JSON.stringify(sortedData);
     }
     
     // Add Password to params for token generation
