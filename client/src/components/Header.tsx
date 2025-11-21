@@ -43,7 +43,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
             </h1>
           </Link>
           
-          <div className="flex items-center gap-1 md:gap-2">
+          <div className="flex items-center gap-3 md:gap-4">
             {/* User auth button */}
             {!isAdmin && (
               <>
@@ -53,13 +53,13 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-12 w-12 relative"
+                        className="h-16 w-16 relative"
                         data-testid="button-user-menu"
                       >
-                        <User className="w-6 h-6" />
+                        <User className="w-12 h-12" />
                         {!user.firstOrderDiscountUsed && (
                           <Badge 
-                            className="absolute -top-1 -right-1 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold z-10"
+                            className="absolute -top-1 -right-2 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold z-10"
                             data-testid="badge-discount-available"
                           >
                             20%
@@ -111,14 +111,14 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
               <Button
                 variant="ghost"
                 size="icon"
-                className="relative h-12 w-12"
+                className="relative h-16 w-16"
                 onClick={() => {
                   trackEvent('cart_opened');
                   onCartClick();
                 }}
                 data-testid="button-cart"
               >
-                <ShoppingCart className="w-6 h-6" />
+                <ShoppingCart className="w-12 h-12" />
                 {cartItemCount > 0 && (
                   <Badge 
                     className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-primary text-primary-foreground border border-primary-border z-20"
