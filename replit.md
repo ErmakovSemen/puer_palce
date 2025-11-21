@@ -43,6 +43,11 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 
 ### Phone-Based Authentication with SMS Verification
 - **SMS.ru Integration**: Implemented SMS verification system using SMS.ru API (cost-effective at 1-2₽ per SMS vs Twilio's $0.76)
+- **Template Support**: Added support for SMS.ru templates to reduce cost from ~2₽ to ~1₽ per SMS
+  - Automatic mode switching: uses template if `SMSRU_TEMPLATE_ID` env variable is set, otherwise falls back to regular SMS
+  - Template text: "Ваш код подтверждения: #COMMENT#. Код действителен 5 минут."
+  - Template parameter: code passed via `comment` field, reducing SMS length and cost
+  - Backward compatible: existing deployments continue to work without template configuration
 - **Security**: SMS codes are hashed before storage, 5-minute expiry, 3 verification attempts max, rate limit 3 SMS per 10 minutes per phone
 - **Authentication Flows**:
   - Registration: Phone → Password → Email (optional) → SMS verification → Account activation

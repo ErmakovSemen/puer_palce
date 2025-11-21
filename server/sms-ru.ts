@@ -33,17 +33,34 @@ export async function sendSmsCode(phone: string, code: string): Promise<void> {
     ? '7' + cleanPhone.slice(1) 
     : cleanPhone;
 
-  const message = `Ваш код подтверждения: ${code}. Код действителен 5 минут.`;
+  const templateId = process.env.SMSRU_TEMPLATE_ID;
+  const useTemplate = !!templateId;
 
   console.log(`[SMS.ru] Sending verification code to ${formattedPhone}`);
 
-  const params = new URLSearchParams({
-    api_id: apiKey,
-    to: formattedPhone,
-    msg: message,
-    from: 'PuerPub',
-    json: '1',
-  });
+  let params: URLSearchParams;
+  
+  if (useTemplate) {
+    console.log(`[SMS.ru] Using template ${templateId} (cost-effective mode ~1₽/SMS)`);
+    params = new URLSearchParams({
+      api_id: apiKey,
+      to: formattedPhone,
+      msg_id: templateId,
+      comment: code,
+      from: 'PuerPub',
+      json: '1',
+    });
+  } else {
+    console.log(`[SMS.ru] Using regular SMS mode (~2₽/SMS). Set SMSRU_TEMPLATE_ID to reduce cost.`);
+    const message = `Ваш код подтверждения: ${code}. Код действителен 5 минут.`;
+    params = new URLSearchParams({
+      api_id: apiKey,
+      to: formattedPhone,
+      msg: message,
+      from: 'PuerPub',
+      json: '1',
+    });
+  }
 
   try {
     const response = await fetch(`https://sms.ru/sms/send?${params.toString()}`, {
