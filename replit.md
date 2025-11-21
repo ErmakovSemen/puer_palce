@@ -72,13 +72,13 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 - **Type Safety**: ReceiptItem TypeScript interface enforces structure {Name, Price, Quantity, Amount, Tax, PaymentMethod, PaymentObject}
 - **54-ФЗ Compliance**: All receipt items include Tax ("vat0" for 0% VAT), PaymentMethod ("full_payment"), and PaymentObject ("commodity") required by Russian tax law
 - **Security**: Server-side recalculation of order totals prevents tampering
-- **API Compliance**: Technical email (onboarding@resend.dev) used for API requirements while SMS delivers receipt to customer
 - **Receipt Math**: Sum of Items.Amount must exactly equal Payment.Amount (proportional discount distribution)
 - **Webhook Verification**: Token verification for incoming payment notifications (AUTHORIZED, CONFIRMED, REJECTED statuses)
 - **XP Accrual**: Loyalty points awarded only on CONFIRMED status, not on AUTHORIZED or REJECTED
 - **SMS Receipt Testing**: Successfully passed Tinkoff test #8 (receipt formation) using test terminal - implemented TinkoffAPI.cancel() method for payment cancellation, verified Receipt with Phone field transmitted correctly to Tinkoff API
 - **Receipt Activation**: SMS receipts activated after passing mandatory Tinkoff tests #7 and #8 in merchant account
-- **SMS Receipt Format Fix**: Corrected Receipt.Phone format from +79XXXXXXXXX to 79XXXXXXXXX (Tinkoff requires phone without + prefix for SMS delivery), removed Email from Receipt to prioritize SMS-only delivery
+- **SMS Receipt Format Fix**: Corrected Receipt.Phone format from +79XXXXXXXXX to 79XXXXXXXXX (Tinkoff requires phone without + prefix for SMS delivery)
+- **SMS Receipt Email Removal**: Completely removed Email field from both Receipt and DATA objects in Tinkoff Init payload - Tinkoff documentation specifies that presence of ANY Email field forces receipt delivery via email instead of SMS, blocking SMS delivery even when Phone is correctly formatted
 
 ### SBP (Fast Payment System) Integration (January 2025)
 - **Automatic Quick Pay Button**: SBP appears automatically as a Quick Pay button on Tinkoff's hosted payment page alongside card payment and T-Pay

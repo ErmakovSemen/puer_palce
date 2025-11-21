@@ -1462,8 +1462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         OrderId: String(orderId),
         Description: `Заказ #${orderId} - Puer Pub`,
         DATA: {
-          Email: "onboarding@resend.dev", // Technical email for API compliance
-          Phone: normalizedPhone,
+          Phone: phoneForReceipt, // Normalized phone in 79XXXXXXXXX format (no Email to ensure SMS receipt delivery)
         },
         Receipt: {
           Phone: phoneForReceipt, // Customer will receive receipt via SMS (format: 79XXXXXXXXX without +)
