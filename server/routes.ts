@@ -1554,32 +1554,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Cancel payment (TEMPORARY ENDPOINT FOR TINKOFF TEST #8)
-  // WARNING: This endpoint is NOT protected by authentication
-  // It should be REMOVED after passing Tinkoff test #8
-  // Or protected with isAdmin middleware for production use
-  app.post("/api/payments/cancel/:paymentId", async (req, res) => {
-    try {
-      const paymentId = req.params.paymentId;
-
-      console.log("[Payment] Cancel request for PaymentId:", paymentId);
-
-      const tinkoffClient = getTinkoffClient();
-      const cancelResponse = await tinkoffClient.cancel(paymentId);
-
-      res.json({
-        success: true,
-        data: cancelResponse,
-      });
-    } catch (error) {
-      console.error("[Payment] Cancel failed:", error);
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : "Cancel failed",
-      });
-    }
-  });
-
   // Check payment status for an order
   app.get("/api/payments/check/:orderId", async (req, res) => {
     try {

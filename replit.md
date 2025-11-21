@@ -76,6 +76,8 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 - **Receipt Math**: Sum of Items.Amount must exactly equal Payment.Amount (proportional discount distribution)
 - **Webhook Verification**: Token verification for incoming payment notifications (AUTHORIZED, CONFIRMED, REJECTED statuses)
 - **XP Accrual**: Loyalty points awarded only on CONFIRMED status, not on AUTHORIZED or REJECTED
+- **SMS Receipt Testing**: Successfully passed Tinkoff test #8 (receipt formation) using test terminal - implemented TinkoffAPI.cancel() method for payment cancellation, verified Receipt with Phone field transmitted correctly to Tinkoff API
+- **Receipt Activation**: SMS receipts activated after passing mandatory Tinkoff tests #7 and #8 in merchant account
 
 ### SBP (Fast Payment System) Integration (January 2025)
 - **Automatic Quick Pay Button**: SBP appears automatically as a Quick Pay button on Tinkoff's hosted payment page alongside card payment and T-Pay
