@@ -1386,7 +1386,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const normalizedPhone = normalizePhone(order.phone);
-      console.log("[Payment] Phone normalized:", order.phone, "->", normalizedPhone);
+      // Tinkoff requires phone WITHOUT "+" for Receipt.Phone (79XXXXXXXXX format)
+      const phoneForReceipt = normalizedPhone.replace(/^\+/, '');
+      console.log("[Payment] Phone normalized:", order.phone, "->", normalizedPhone, "Receipt format:", phoneForReceipt);
 
       // Define receipt item interface for type safety
       interface ReceiptItem {
@@ -1464,8 +1466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Phone: normalizedPhone,
         },
         Receipt: {
-          Email: "onboarding@resend.dev", // Technical email for 54-ФЗ compliance
-          Phone: normalizedPhone, // Customer will receive receipt via SMS
+          Phone: phoneForReceipt, // Customer will receive receipt via SMS (format: 79XXXXXXXXX without +)
           Taxation: "usn_income", // Simplified tax system
           Items: receiptItems,
         },
