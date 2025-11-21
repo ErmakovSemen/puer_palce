@@ -7,6 +7,7 @@ import CategoryNavigation from "@/components/CategoryNavigation";
 import CartDrawer from "@/components/CartDrawer";
 import CheckoutForm from "@/components/CheckoutForm";
 import TeaQuiz from "@/components/TeaQuiz";
+import RecommendedProducts from "@/components/RecommendedProducts";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import {
   Dialog,
@@ -451,6 +452,14 @@ export default function Home() {
           </div>
         ) : (
           <>
+            {/* Recommendations based on purchase history */}
+            {user && (
+              <RecommendedProducts
+                onAddToCart={addToCart}
+                onProductClick={setSelectedProductId}
+              />
+            )}
+
             {/* Tea Products */}
             {teaProducts.length > 0 && (
               <div className="mb-12">

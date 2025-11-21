@@ -1,6 +1,6 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Redirect, Link } from "wouter";
+import { Redirect, Link, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText, CheckCircle, AlertCircle, Gift, ShoppingBag } from "lucide-react";
+import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText, CheckCircle, AlertCircle, Gift, ShoppingBag, Sparkles } from "lucide-react";
+import type { Product } from "@shared/schema";
 import { useState } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -61,6 +62,11 @@ export default function Profile() {
 
   const { data: orders = [], isLoading: isOrdersLoading } = useQuery<DbOrder[]>({
     queryKey: ['/api/orders'],
+    enabled: !!user,
+  });
+
+  const { data: recommendations = [] } = useQuery<Product[]>({
+    queryKey: ['/api/recommendations'],
     enabled: !!user,
   });
 
@@ -203,6 +209,39 @@ export default function Profile() {
               )}
             </Button>
           </div>
+
+          {/* Personalized Recommendations */}
+          {recommendations && recommendations.length > 0 && (
+            <div className="mt-8">
+              <Card data-testid="card-recommendations">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Sparkles className="w-6 h-6 text-amber-500" />
+                    <h3 className="font-serif text-xl font-semibold">
+                      Персональные рекомендации
+                    </h3>
+                  </div>
+                  <p className="text-muted-foreground mb-4">
+                    На основе вашей истории покупок мы подобрали {recommendations.length} {
+                      recommendations.length === 1 ? 'товар' :
+                      recommendations.length < 5 ? 'товара' : 'товаров'
+                    }, которые могут вам понравиться
+                  </p>
+                  <Link href="/">
+                    <Button 
+                      variant="default" 
+                      size="default"
+                      className="w-full sm:w-auto"
+                      data-testid="button-view-recommendations"
+                    >
+                      <ShoppingBag className="w-4 h-4 mr-2" />
+                      Посмотреть рекомендации
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
 
