@@ -29,11 +29,8 @@ export default function RecommendedProducts({ onAddToCart, onProductClick }: Rec
           Рекомендуем вам
         </h2>
       </div>
-      <p className="text-muted-foreground mb-4 text-sm">
-        На основе ваших предыдущих покупок
-      </p>
       <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-        {recommendations.map((product) => (
+        {recommendations.slice(0, 4).map((product) => (
           <ProductCard
             key={product.id}
             {...product}

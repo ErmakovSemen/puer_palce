@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Home, ArrowLeft, Gift, ShoppingBag, Award } from "lucide-react";
+import { SiTelegram, SiVk } from "react-icons/si";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { trackEvent } from "@/lib/metrics";
@@ -415,14 +416,36 @@ export default function Auth() {
       {/* Form Section */}
       <div className="flex items-center justify-center p-8">
         <div className="w-full max-w-md">
-          {/* Home Button */}
-          <div className="mb-6">
+          {/* Home Button and Social Icons */}
+          <div className="mb-6 flex items-center justify-between">
             <Link href="/">
               <Button variant="ghost" size="sm" data-testid="button-home">
                 <Home className="h-4 w-4 mr-2" />
                 На главную
               </Button>
             </Link>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                asChild
+                data-testid="link-telegram"
+              >
+                <a href="https://t.me/puerpub" target="_blank" rel="noopener noreferrer">
+                  <SiTelegram className="w-5 h-5" />
+                </a>
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                asChild
+                data-testid="link-vk"
+              >
+                <a href="https://vk.com/puerpab" target="_blank" rel="noopener noreferrer">
+                  <SiVk className="w-5 h-5" />
+                </a>
+              </Button>
+            </div>
           </div>
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8">

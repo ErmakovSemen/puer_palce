@@ -1,5 +1,4 @@
 import { ShoppingCart, User, LogOut } from "lucide-react";
-import { SiTelegram, SiVk } from "react-icons/si";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
@@ -45,29 +44,6 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
           </Link>
           
           <div className="flex items-center gap-1 md:gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden md:flex"
-              asChild
-              data-testid="link-telegram"
-            >
-              <a href="https://t.me/puerpub" target="_blank" rel="noopener noreferrer">
-                <SiTelegram className="w-5 h-5" />
-              </a>
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden md:flex"
-              asChild
-              data-testid="link-vk"
-            >
-              <a href="https://vk.com/puerpab" target="_blank" rel="noopener noreferrer">
-                <SiVk className="w-5 h-5" />
-              </a>
-            </Button>
-            
             {/* User auth button */}
             {!isAdmin && (
               <>
