@@ -72,11 +72,11 @@ export default function ProductCard({
 
   return (
     <Card 
-      className="overflow-hidden hover-elevate transition-all duration-300 cursor-pointer group/card" 
+      className="overflow-hidden hover-elevate transition-all duration-300 cursor-pointer group/card flex flex-col h-full" 
       data-testid={`card-product-${id}`}
       onClick={() => onClick(id)}
     >
-      <div className="h-36 sm:h-48 overflow-hidden relative group">
+      <div className="h-36 sm:h-48 overflow-hidden relative group flex-shrink-0">
         {imageList.length > 0 ? (
           <>
             <img 
@@ -133,7 +133,7 @@ export default function ProductCard({
           </div>
         )}
       </div>
-      <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
+      <div className="p-3 sm:p-4 flex flex-col gap-2 sm:gap-3 flex-grow">
         <div className="space-y-1.5 sm:space-y-2">
           <h3 className="font-serif text-base sm:text-xl font-semibold text-foreground line-clamp-2" data-testid={`text-product-name-${id}`}>
             {name}
@@ -175,7 +175,7 @@ export default function ProductCard({
         <p className="hidden text-muted-foreground text-sm leading-relaxed line-clamp-2" data-testid={`text-product-description-${id}`}>
           {description}
         </p>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 mt-auto">
           <span className="text-lg sm:text-xl font-semibold transition-colors duration-300 text-foreground group-hover/card:text-primary" data-testid={`text-product-price-${id}`}>
             {isTeaware ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
           </span>

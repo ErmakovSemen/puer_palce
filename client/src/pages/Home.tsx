@@ -464,16 +464,17 @@ export default function Home() {
             {teaProducts.length > 0 && (
               <div className="mb-12">
                 <h2 className="font-serif text-2xl font-semibold mb-4" data-testid="heading-tea-section">
-                  Чай
+                  Все товары
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
                   {teaProducts.map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      {...product}
-                      onAddToCart={addToCart}
-                      onClick={setSelectedProductId}
-                    />
+                    <div key={product.id} className="h-full">
+                      <ProductCard
+                        {...product}
+                        onAddToCart={addToCart}
+                        onClick={setSelectedProductId}
+                      />
+                    </div>
                   ))}
                 </div>
               </div>
@@ -487,12 +488,13 @@ export default function Home() {
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
                   {teawareProducts.map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      {...product}
-                      onAddToCart={addToCart}
-                      onClick={setSelectedProductId}
-                    />
+                    <div key={product.id} className="h-full">
+                      <ProductCard
+                        {...product}
+                        onAddToCart={addToCart}
+                        onClick={setSelectedProductId}
+                      />
+                    </div>
                   ))}
                 </div>
               </div>
