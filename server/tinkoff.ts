@@ -201,6 +201,43 @@ class TinkoffAPI {
     return data;
   }
 
+  async cancel(paymentId: string): Promise<any> {
+    const params = {
+      TerminalKey: this.terminalKey,
+      PaymentId: paymentId,
+    };
+
+    const token = this.generateToken(params);
+
+    console.log('[Tinkoff] Cancelling payment:', paymentId);
+
+    const response = await fetch(`${this.apiUrl}/Cancel`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...params,
+        Token: token,
+      }),
+    });
+
+    const data = await response.json();
+
+    console.log('[Tinkoff] Cancel response:', JSON.stringify(data, null, 2));
+
+    if (!data.Success) {
+      console.error('[Tinkoff] Cancel error:', {
+        Message: data.Message,
+        ErrorCode: data.ErrorCode,
+        Details: data.Details,
+      });
+      throw new Error(data.Message || `Tinkoff API error: ${data.ErrorCode}`);
+    }
+
+    return data;
+  }
+
   verifyNotification(notification: TinkoffNotification): boolean {
     const params: any = { ...notification };
     delete params.Token;
