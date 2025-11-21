@@ -83,7 +83,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                         <User className="w-6 h-6" />
                         {!user.firstOrderDiscountUsed && (
                           <Badge 
-                            className="absolute -top-1 -right-1 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold animate-pulse"
+                            className="absolute -top-1 -right-1 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold z-10"
                             data-testid="badge-discount-available"
                           >
                             20%
@@ -120,7 +120,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                     <Link href="/auth">
                       Войти
                       <Badge 
-                        className="absolute -top-1 -right-1 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold animate-pulse"
+                        className="absolute -top-1 -right-1 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold z-10"
                         data-testid="badge-login-discount"
                       >
                         20%
@@ -145,7 +145,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                 <ShoppingCart className="w-6 h-6" />
                 {cartItemCount > 0 && (
                   <Badge 
-                    className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-primary text-primary-foreground border border-primary-border"
+                    className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-primary text-primary-foreground border border-primary-border z-20"
                     data-testid="badge-cart-count"
                   >
                     {cartItemCount}
