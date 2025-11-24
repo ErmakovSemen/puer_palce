@@ -121,15 +121,28 @@ export async function sendOrderNotification(order: DbOrder): Promise<void> {
   }
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export async function sendFailedReceiptSmsNotification(
   orderNumber: number,
   phone: string,
   smsText: string
 ): Promise<void> {
+  // Escape HTML entities in user data to prevent Telegram API rejection
+  const escapedSmsText = escapeHtml(smsText);
+  const escapedPhone = escapeHtml(phone);
+  
   let message = `<b>⚠️ НЕ УДАЛОСЬ ОТПРАВИТЬ SMS С ЧЕКОМ</b>\n\n`;
   message += `<b>Заказ:</b> #${orderNumber}\n`;
-  message += `<b>Телефон:</b> ${phone}\n\n`;
-  message += `<b>Текст сообщения:</b>\n<code>${smsText}</code>\n\n`;
+  message += `<b>Телефон:</b> ${escapedPhone}\n\n`;
+  message += `<b>Текст сообщения:</b>\n<code>${escapedSmsText}</code>\n\n`;
   message += `<i>Пожалуйста, отправьте сообщение клиенту вручную</i>`;
   
   const success = await sendTelegramMessage(message);

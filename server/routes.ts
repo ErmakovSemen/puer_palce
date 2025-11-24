@@ -120,6 +120,11 @@ async function checkAndSendReceipt(
       } catch (error) {
         console.error(`[Receipt Retry #${attemptNumber}] ⚠️ Failed to send SMS for order ${orderId}:`, error);
         console.error(`[Receipt Retry #${attemptNumber}] ⚠️ MANUAL ACTION: Send receipt to ${customerPhone}: ${receiptUrl}`);
+        
+        // Send Telegram notification to admin about SMS delivery failure
+        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}. Puer Pub`;
+        await sendFailedReceiptSmsNotification(orderId, customerPhone, smsText);
+        
         // Receipt found and saved, but SMS failed - still return true to stop retries
         return true;
       }
