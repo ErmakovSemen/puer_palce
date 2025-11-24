@@ -8,7 +8,7 @@ import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
 import { setupAuth } from "./auth";
 import { normalizePhone } from "./utils";
-import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification } from "./telegram";
+import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification } from "./telegram";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
 import { users as usersTable, orders as ordersTable } from "@shared/schema";
@@ -170,7 +170,10 @@ async function scheduleReceiptRetry(
         console.error(`[Receipt Retry #${attemptNumber}] ⚠️ CRITICAL: All retry attempts exhausted for order ${orderId}`);
         console.error(`[Receipt Retry] ⚠️ MANUAL ACTION: Check Tinkoff merchant account for receipt URL`);
         console.error(`[Receipt Retry] Order: ${orderId}, PaymentId: ${paymentId}, Phone: ${customerPhone}`);
-        // TODO: Send Telegram notification to admin
+        
+        // Send Telegram notification to admin with SMS text
+        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: [ссылка из ЛК Tinkoff]. Puer Pub`;
+        await sendFailedReceiptSmsNotification(orderId, customerPhone, smsText);
       } else {
         // Schedule next attempt
         await scheduleNext();

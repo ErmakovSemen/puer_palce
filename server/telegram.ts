@@ -120,3 +120,23 @@ export async function sendOrderNotification(order: DbOrder): Promise<void> {
     throw new Error('Failed to send Telegram notification');
   }
 }
+
+export async function sendFailedReceiptSmsNotification(
+  orderNumber: number,
+  phone: string,
+  smsText: string
+): Promise<void> {
+  let message = `<b>⚠️ НЕ УДАЛОСЬ ОТПРАВИТЬ SMS С ЧЕКОМ</b>\n\n`;
+  message += `<b>Заказ:</b> #${orderNumber}\n`;
+  message += `<b>Телефон:</b> ${phone}\n\n`;
+  message += `<b>Текст сообщения:</b>\n<code>${smsText}</code>\n\n`;
+  message += `<i>Пожалуйста, отправьте сообщение клиенту вручную</i>`;
+  
+  const success = await sendTelegramMessage(message);
+  
+  if (success) {
+    console.log(`[Telegram] ✅ Sent failed SMS notification for order #${orderNumber}`);
+  } else {
+    console.error(`[Telegram] ⚠️ Failed to send notification for order #${orderNumber}`);
+  }
+}
