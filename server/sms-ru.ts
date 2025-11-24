@@ -189,9 +189,11 @@ export async function sendReceiptSms(phone: string, receiptUrl: string, orderNum
   
   try {
     await sendSms(phone, message);
-    console.log(`[SMS.ru] Receipt SMS sent successfully for order #${orderNumber}`);
+    console.log(`[SMS.ru] ✅ Receipt SMS sent successfully for order #${orderNumber}`);
   } catch (error) {
-    console.error(`[SMS.ru] Failed to send receipt SMS for order #${orderNumber}:`, error);
+    console.error(`[SMS.ru] ⚠️ CRITICAL: Failed to send receipt SMS for order #${orderNumber}. Phone: ${phone}. Error:`, error);
+    console.error(`[SMS.ru] ⚠️ Manual action required: Re-send receipt to ${phone}: ${receiptUrl}`);
     // Don't throw - we don't want to fail the webhook if SMS fails
+    // But log prominently so support can manually retry
   }
 }

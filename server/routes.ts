@@ -1529,13 +1529,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             console.log("[Payment] Receipt URL saved for order:", orderId);
 
-            // Send SMS with receipt link
+            // Send SMS with receipt link (normalize phone first)
             try {
-              await sendReceiptSms(order.phone, receiptUrl, orderId);
+              const normalizedPhone = normalizePhone(order.phone);
+              await sendReceiptSms(normalizedPhone, receiptUrl, orderId);
             } catch (error) {
-              console.error("[Payment] Failed to send receipt SMS, but continuing:", error);
-              // Don't fail the webhook if SMS sending fails
+              console.error("[Payment] ⚠️ CRITICAL: Failed to send receipt SMS for order:", orderId, error);
+              // Don't fail the webhook if SMS sending fails, but log prominently for manual retry
             }
+          } else {
+            // No receipt URL available - this is unusual and should be investigated
+            console.error("[Payment] ⚠️ CRITICAL: No receipt URL available for confirmed payment. OrderId:", orderId, "PaymentId:", notification.PaymentId);
+            console.error("[Payment] Full GetState response for debugging:", JSON.stringify(paymentState, null, 2));
+            // TODO: Consider sending admin notification via Telegram for manual resolution
           }
 
           // Award XP to user if authenticated
