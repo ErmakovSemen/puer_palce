@@ -6,6 +6,18 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 
 ## Recent Changes (December 2024)
 
+### Phone Normalization System (January 2025)
+- **Centralized Utility**: Created `normalizePhone()` in `server/utils.ts` - single source of truth for phone format conversion
+- **Unified Format**: All phone numbers stored as `+7XXXXXXXXXX` (Russian mobile format with country code)
+- **Multi-Level Enforcement**:
+  - Auth flows: Registration, login, SMS verification, password reset all normalize phones before processing
+  - Storage layer: `createUser`, `updateUser`, `createOrder`, SMS verification methods enforce normalization
+  - Lookup methods: `getUserByPhone` normalizes for exact match, `searchUserByPhone` supports partial search (min 3 digits)
+  - Payment integration: Tinkoff payment payload uses normalized phone (converted to `79XXXXXXXXX` format)
+- **Input Flexibility**: Accepts formats `7XXX`, `8XXX`, `+7XXX`, `9XXX` and converts to canonical `+7XXXXXXXXXX`
+- **Admin Search**: Partial phone search requires minimum 3 digits, prevents false positives from empty queries
+- **Bug Fix**: Resolved issue where users couldn't login/recover password due to phone format mismatch between registration and lookup
+
 ### Out-of-Stock Product Management (January 2025)
 - **Database Schema**: Added `outOfStock` boolean field to products table
 - **Admin Interface**: Added checkbox in product form to mark products as out of stock

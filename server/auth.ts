@@ -8,6 +8,7 @@ import { storage } from "./storage";
 import { User as SelectUser, updateUserSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 import { generateVerificationCode, sendSmsCode } from "./sms-ru";
+import { normalizePhone } from "./utils";
 
 declare global {
   namespace Express {
@@ -54,11 +55,18 @@ export function setupAuth(app: Express) {
     new LocalStrategy(
       { usernameField: 'phone' },
       async (phone, password, done) => {
-        const user = await storage.getUserByPhone(phone);
-        if (!user || !(await comparePasswords(password, user.password))) {
+        try {
+          // Normalize phone number before searching
+          const normalizedPhone = normalizePhone(phone);
+          const user = await storage.getUserByPhone(normalizedPhone);
+          if (!user || !(await comparePasswords(password, user.password))) {
+            return done(null, false);
+          } else {
+            return done(null, user);
+          }
+        } catch (error) {
+          // If phone normalization fails, authentication fails
           return done(null, false);
-        } else {
-          return done(null, user);
         }
       }
     ),
@@ -74,6 +82,9 @@ export function setupAuth(app: Express) {
     try {
       const data = insertUserSchema.parse(req.body);
       
+      // Normalize phone number to consistent format
+      const normalizedPhone = normalizePhone(data.phone);
+      
       // Check if email already exists (only if email is provided)
       if (data.email) {
         const existingUser = await storage.getUserByEmail(data.email);
@@ -82,15 +93,16 @@ export function setupAuth(app: Express) {
         }
       }
 
-      // Check if phone already exists
-      const existingPhone = await storage.getUserByPhone(data.phone);
+      // Check if phone already exists (using normalized format)
+      const existingPhone = await storage.getUserByPhone(normalizedPhone);
       if (existingPhone) {
         return res.status(400).json({ error: "Номер телефона уже используется" });
       }
 
-      // Create user (phone not yet verified)
+      // Create user with normalized phone (phone not yet verified)
       const user = await storage.createUser({
         ...data,
+        phone: normalizedPhone,
         password: await hashPassword(data.password),
       });
 
@@ -129,6 +141,12 @@ export function setupAuth(app: Express) {
     
     try {
       const data = updateUserSchema.parse(req.body);
+      
+      // Normalize phone if being updated
+      if (data.phone) {
+        data.phone = normalizePhone(data.phone);
+      }
+      
       const updated = await storage.updateUser(req.user!.id, data);
       
       if (!updated) {
@@ -152,8 +170,11 @@ export function setupAuth(app: Express) {
         type: z.enum(["registration", "password_reset"]),
       }).parse(req.body);
 
+      // Normalize phone number
+      const normalizedPhone = normalizePhone(phone);
+
       // Check rate limit
-      const canSend = await storage.checkSmsRateLimit(phone);
+      const canSend = await storage.checkSmsRateLimit(normalizedPhone);
       if (!canSend) {
         return res.status(429).json({ 
           error: "Слишком много попыток. Попробуйте через 10 минут." 
@@ -162,7 +183,7 @@ export function setupAuth(app: Express) {
 
       // For password reset, check if user exists
       if (type === "password_reset") {
-        const user = await storage.getUserByPhone(phone);
+        const user = await storage.getUserByPhone(normalizedPhone);
         if (!user) {
           return res.status(404).json({ error: "Пользователь с таким номером не найден" });
         }
@@ -172,11 +193,11 @@ export function setupAuth(app: Express) {
       const code = generateVerificationCode();
       const hashedCode = await hashPassword(code);
 
-      // Save to database
-      await storage.createSmsVerification(phone, hashedCode, type);
+      // Save to database with normalized phone
+      await storage.createSmsVerification(normalizedPhone, hashedCode, type);
 
       // Send SMS
-      await sendSmsCode(phone, code);
+      await sendSmsCode(normalizedPhone, code);
 
       // Clean up expired codes
       await storage.cleanupExpiredSmsVerifications();
@@ -199,8 +220,11 @@ export function setupAuth(app: Express) {
         type: z.enum(["registration", "password_reset"]),
       }).parse(req.body);
 
+      // Normalize phone number
+      const normalizedPhone = normalizePhone(phone);
+
       // Get verification record
-      const verification = await storage.getSmsVerification(phone, type);
+      const verification = await storage.getSmsVerification(normalizedPhone, type);
       if (!verification) {
         return res.status(400).json({ error: "Код не найден или истёк" });
       }
@@ -229,7 +253,7 @@ export function setupAuth(app: Express) {
 
       // For registration type, mark phone as verified and log in
       if (type === "registration") {
-        const user = await storage.getUserByPhone(phone);
+        const user = await storage.getUserByPhone(normalizedPhone);
         if (!user) {
           return res.status(404).json({ error: "Пользователь не найден" });
         }
@@ -273,8 +297,11 @@ export function setupAuth(app: Express) {
         newPassword: z.string().min(6, "Пароль должен содержать минимум 6 символов"),
       }).parse(req.body);
 
+      // Normalize phone number
+      const normalizedPhone = normalizePhone(phone);
+
       // Find user
-      const user = await storage.getUserByPhone(phone);
+      const user = await storage.getUserByPhone(normalizedPhone);
       if (!user) {
         return res.status(404).json({ error: "Пользователь не найден" });
       }

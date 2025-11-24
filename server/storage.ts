@@ -1,5 +1,6 @@
 import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { normalizePhone } from "./utils";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -158,13 +159,18 @@ export class MemStorage implements IStorage {
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find(
-      (user) => user.phone === phone,
+      (user) => user.phone === normalizePhone(phone),
     );
   }
 
   async searchUserByPhone(phone: string): Promise<User | undefined> {
+    // Extract only digits for flexible search (supports partial phone numbers)
+    const digitsOnly = phone.replace(/\D/g, '');
+    // Require at least 3 digits to prevent false positives
+    if (digitsOnly.length < 3) return undefined;
+    
     return Array.from(this.users.values()).find(
-      (user) => user.phone && user.phone.includes(phone),
+      (user) => user.phone && user.phone.includes(digitsOnly),
     );
   }
 
@@ -175,7 +181,7 @@ export class MemStorage implements IStorage {
       id,
       name: insertUser.name ?? null,
       email: insertUser.email ?? null,
-      phone: insertUser.phone,
+      phone: normalizePhone(insertUser.phone),
       phoneVerified: false,
       xp: 0,
       firstOrderDiscountUsed: false,
@@ -188,7 +194,11 @@ export class MemStorage implements IStorage {
     const user = this.users.get(id);
     if (!user) return undefined;
     
-    const updated: User = { ...user, ...data };
+    const updated: User = { 
+      ...user, 
+      ...data,
+      phone: data.phone ? normalizePhone(data.phone) : user.phone,
+    };
     this.users.set(id, updated);
     return updated;
   }
@@ -325,7 +335,7 @@ export class MemStorage implements IStorage {
       userId: orderData.userId ?? null,
       name: orderData.name,
       email: orderData.email,
-      phone: orderData.phone,
+      phone: normalizePhone(orderData.phone),
       address: orderData.address,
       comment: orderData.comment ?? null,
       items: orderData.items,
@@ -392,7 +402,7 @@ export class MemStorage implements IStorage {
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString(); // 5 minutes
     return {
       id: 1,
-      phone,
+      phone: normalizePhone(phone),
       code: hashedCode,
       type,
       attempts: 0,
@@ -402,6 +412,8 @@ export class MemStorage implements IStorage {
   }
 
   async getSmsVerification(phone: string, type: "registration" | "password_reset"): Promise<SmsVerification | undefined> {
+    // Normalize phone for lookup
+    normalizePhone(phone);
     return undefined;
   }
 
@@ -541,25 +553,36 @@ export class DbStorage implements IStorage {
   }
 
   async getUserByPhone(phone: string): Promise<User | undefined> {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.phone, phone));
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.phone, normalizePhone(phone)));
     return user;
   }
 
   async searchUserByPhone(phone: string): Promise<User | undefined> {
     const { like } = await import("drizzle-orm");
-    const [user] = await db.select().from(usersTable).where(like(usersTable.phone, `%${phone}%`));
+    // Extract only digits for flexible search (supports partial phone numbers)
+    const digitsOnly = phone.replace(/\D/g, '');
+    // Require at least 3 digits to prevent false positives
+    if (digitsOnly.length < 3) return undefined;
+    
+    const [user] = await db.select().from(usersTable).where(like(usersTable.phone, `%${digitsOnly}%`));
     return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(usersTable).values(insertUser).returning();
+    const [user] = await db.insert(usersTable).values({
+      ...insertUser,
+      phone: normalizePhone(insertUser.phone),
+    }).returning();
     return user;
   }
 
   async updateUser(id: string, data: { name?: string; phone?: string }): Promise<User | undefined> {
     const [user] = await db
       .update(usersTable)
-      .set(data)
+      .set({
+        ...data,
+        phone: data.phone ? normalizePhone(data.phone) : undefined,
+      })
       .where(eq(usersTable.id, id))
       .returning();
     return user;
@@ -718,7 +741,7 @@ export class DbStorage implements IStorage {
       userId: orderData.userId ?? null,
       name: orderData.name,
       email: orderData.email,
-      phone: orderData.phone,
+      phone: normalizePhone(orderData.phone),
       address: orderData.address,
       comment: orderData.comment ?? null,
       items: orderData.items,
@@ -874,7 +897,7 @@ export class DbStorage implements IStorage {
     const [verification] = await db
       .insert(smsVerificationsTable)
       .values({
-        phone,
+        phone: normalizePhone(phone),
         code: hashedCode,
         type,
         expiresAt,
@@ -890,7 +913,7 @@ export class DbStorage implements IStorage {
       .from(smsVerificationsTable)
       .where(
         and(
-          eq(smsVerificationsTable.phone, phone),
+          eq(smsVerificationsTable.phone, normalizePhone(phone)),
           eq(smsVerificationsTable.type, type)
         )
       )
@@ -932,7 +955,7 @@ export class DbStorage implements IStorage {
       .from(smsVerificationsTable)
       .where(
         and(
-          eq(smsVerificationsTable.phone, phone),
+          eq(smsVerificationsTable.phone, normalizePhone(phone)),
           sql`${smsVerificationsTable.createdAt} > ${tenMinutesAgo}`
         )
       );

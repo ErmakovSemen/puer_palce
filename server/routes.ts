@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
 import { setupAuth } from "./auth";
+import { normalizePhone } from "./utils";
 import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification } from "./telegram";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
@@ -704,6 +705,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
+      // Pass phone as-is to searchUserByPhone (it will handle partial searches)
       const user = await storage.searchUserByPhone(phone);
       if (!user) {
         res.status(404).json({ error: "User not found" });
@@ -1347,44 +1349,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tinkoffClient = getTinkoffClient();
       const orderItems = JSON.parse(order.items);
 
-      // Normalize phone number to Tinkoff format: +7XXXXXXXXXX (exactly 10 digits after +7)
-      const normalizePhone = (phone: string | null | undefined): string => {
-        if (!phone) {
-          throw new Error("Phone number is required for payment");
-        }
-
-        // Extract only digits
-        const digitsOnly = phone.replace(/\D/g, '');
-        
-        // Handle different formats:
-        // 10 digits: 9161234567 -> +79161234567
-        // 11 digits starting with 7: 79161234567 -> +79161234567
-        // 11 digits starting with 8: 89161234567 -> +79161234567
-        let normalized: string;
-        
-        if (digitsOnly.length === 10) {
-          // Assume Russian mobile without country code
-          normalized = '+7' + digitsOnly;
-        } else if (digitsOnly.length === 11) {
-          if (digitsOnly.startsWith('7')) {
-            normalized = '+' + digitsOnly;
-          } else if (digitsOnly.startsWith('8')) {
-            normalized = '+7' + digitsOnly.substring(1);
-          } else {
-            throw new Error(`Invalid phone format: must start with 7 or 8 (got ${digitsOnly})`);
-          }
-        } else {
-          throw new Error(`Invalid phone length: expected 10 or 11 digits (got ${digitsOnly.length})`);
-        }
-        
-        // Final validation: must match +7XXXXXXXXXX pattern
-        if (!/^\+7\d{10}$/.test(normalized)) {
-          throw new Error(`Phone normalization failed: ${normalized} doesn't match +7XXXXXXXXXX pattern`);
-        }
-        
-        return normalized;
-      };
-
+      // Normalize phone using centralized utility (returns +7XXXXXXXXXX format)
+      if (!order.phone) {
+        res.status(400).json({ error: "Phone number is required for payment" });
+        return;
+      }
+      
       const normalizedPhone = normalizePhone(order.phone);
       // Tinkoff requires phone WITHOUT "+" for Receipt.Phone (79XXXXXXXXX format)
       const phoneForReceipt = normalizedPhone.replace(/^\+/, '');
