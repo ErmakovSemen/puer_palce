@@ -2,6 +2,7 @@ import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
+import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 
@@ -42,13 +43,52 @@ const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
     VariantProps<typeof toastVariants>
->(({ className, variant, ...props }, ref) => {
+>(({ className, variant, onOpenChange, ...props }, ref) => {
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const opacity = useTransform([x, y], ([latestX, latestY]) => {
+    const distance = Math.sqrt(latestX * latestX + latestY * latestY)
+    return Math.max(0, 1 - distance / 150)
+  })
+
+  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const threshold = 50
+    const { offset } = info
+    
+    // Check if swiped in any direction beyond threshold
+    const swipedUp = offset.y < -threshold
+    const swipedLeft = offset.x < -threshold
+    const swipedRight = offset.x > threshold
+    
+    if (swipedUp || swipedLeft || swipedRight) {
+      // Close the toast
+      onOpenChange?.(false)
+    } else {
+      // Reset position if not swiped enough
+      x.set(0)
+      y.set(0)
+    }
+  }
+
   return (
     <ToastPrimitives.Root
       ref={ref}
       className={cn(toastVariants({ variant }), className)}
+      onOpenChange={onOpenChange}
+      asChild
       {...props}
-    />
+    >
+      <motion.div
+        style={{ x, y, opacity }}
+        drag
+        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+        dragElastic={0.2}
+        onDragEnd={handleDragEnd}
+        className="touch-pan-y"
+      >
+        {props.children}
+      </motion.div>
+    </ToastPrimitives.Root>
   )
 })
 Toast.displayName = ToastPrimitives.Root.displayName
