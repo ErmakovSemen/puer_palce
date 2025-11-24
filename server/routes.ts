@@ -54,6 +54,130 @@ function escapeXml(unsafe: string): string {
     .replace(/'/g, '&apos;');
 }
 
+// Receipt retry system - Tinkoff generates receipts asynchronously (2-10 minutes)
+async function checkAndSendReceipt(
+  orderId: number, 
+  paymentId: string, 
+  customerPhone: string, 
+  attemptNumber: number
+): Promise<boolean> {
+  try {
+    console.log(`[Receipt Retry #${attemptNumber}] Checking receipt for order ${orderId}, payment ${paymentId}`);
+    
+    // First check if receipt was already delivered to avoid duplicate SMS
+    const existingOrder = await db.query.orders.findFirst({
+      where: eq(ordersTable.id, orderId),
+      columns: { receiptUrl: true }
+    });
+    
+    if (existingOrder?.receiptUrl) {
+      console.log(`[Receipt Retry #${attemptNumber}] Receipt already delivered for order ${orderId}, skipping`);
+      return true; // Already done, stop retries
+    }
+    
+    const tinkoffClient = getTinkoffClient();
+    const paymentState = await tinkoffClient.getState(paymentId);
+    
+    // Extract receipt URL from response
+    let receiptUrl: string | null = null;
+    
+    if (typeof paymentState.Receipt === 'string') {
+      receiptUrl = paymentState.Receipt;
+    } else if (paymentState.Receipt?.Url) {
+      receiptUrl = paymentState.Receipt.Url;
+    } else if (paymentState.ReceiptUrl) {
+      receiptUrl = paymentState.ReceiptUrl;
+    }
+    
+    if (receiptUrl) {
+      console.log(`[Receipt Retry #${attemptNumber}] ✅ Receipt URL found:`, receiptUrl);
+      
+      // Save to database
+      await db.update(ordersTable)
+        .set({ receiptUrl: receiptUrl })
+        .where(eq(ordersTable.id, orderId));
+      
+      console.log(`[Receipt Retry #${attemptNumber}] Receipt URL saved to database`);
+      
+      // Send SMS
+      try {
+        const normalizedPhone = normalizePhone(customerPhone);
+        await sendReceiptSms(normalizedPhone, receiptUrl, orderId);
+        console.log(`[Receipt Retry #${attemptNumber}] ✅ Receipt SMS sent successfully for order ${orderId}`);
+        return true;
+      } catch (error) {
+        console.error(`[Receipt Retry #${attemptNumber}] ⚠️ Failed to send SMS for order ${orderId}:`, error);
+        console.error(`[Receipt Retry #${attemptNumber}] ⚠️ MANUAL ACTION: Send receipt to ${customerPhone}: ${receiptUrl}`);
+        // Receipt found and saved, but SMS failed - still return true to stop retries
+        return true;
+      }
+    } else {
+      console.log(`[Receipt Retry #${attemptNumber}] Receipt not ready yet for order ${orderId}`);
+      return false;
+    }
+  } catch (error) {
+    console.error(`[Receipt Retry #${attemptNumber}] Error checking receipt for order ${orderId}:`, error);
+    return false;
+  }
+}
+
+async function scheduleReceiptRetry(
+  orderId: number, 
+  paymentId: string, 
+  customerPhone: string
+): Promise<void> {
+  // Retry delays: immediate, then +3min, +7min, +12min from webhook
+  // Incremental delays: [0, 3, 4, 5] minutes (0 = immediate check)
+  const incrementalDelays = [0, 3, 4, 5]; // minutes between attempts
+  const absoluteTimings = ['immediate', '+3min', '+7min', '+12min']; // for logging
+  
+  console.log(`[Receipt Retry] Will check receipt at: ${absoluteTimings.join(', ')} for order ${orderId}`);
+  
+  let currentAttempt = 0;
+  
+  const scheduleNext = async () => {
+    if (currentAttempt >= incrementalDelays.length) {
+      return; // All attempts exhausted
+    }
+    
+    const delay = incrementalDelays[currentAttempt];
+    const attemptNumber = currentAttempt + 1;
+    currentAttempt++;
+    
+    const executeCheck = async () => {
+      const success = await checkAndSendReceipt(orderId, paymentId, customerPhone, attemptNumber);
+      
+      if (success) {
+        console.log(`[Receipt Retry #${attemptNumber}] ✅ Receipt delivery complete for order ${orderId}, cancelling remaining retries`);
+        // Don't schedule next attempt - stop here
+        return;
+      }
+      
+      if (attemptNumber === incrementalDelays.length) {
+        // Final attempt failed
+        console.error(`[Receipt Retry #${attemptNumber}] ⚠️ CRITICAL: All retry attempts exhausted for order ${orderId}`);
+        console.error(`[Receipt Retry] ⚠️ MANUAL ACTION: Check Tinkoff merchant account for receipt URL`);
+        console.error(`[Receipt Retry] Order: ${orderId}, PaymentId: ${paymentId}, Phone: ${customerPhone}`);
+        // TODO: Send Telegram notification to admin
+      } else {
+        // Schedule next attempt
+        await scheduleNext();
+      }
+    };
+    
+    if (delay === 0) {
+      // Immediate check
+      await executeCheck();
+    } else {
+      // Delayed check
+      setTimeout(executeCheck, delay * 60 * 1000);
+    }
+  };
+  
+  // Start with immediate check
+  await scheduleNext();
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup user authentication (email/password)
   setupAuth(app);
@@ -818,7 +942,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/orders", requireAdminAuth, async (req, res) => {
     try {
       const statusFilter = req.query.status as string | undefined;
-      const orders = await storage.getOrders(statusFilter);
+      const offset = parseInt(req.query.offset as string) || 0;
+      const limit = parseInt(req.query.limit as string) || 10;
+      
+      const orders = await storage.getOrders(statusFilter, offset, limit);
       res.json(orders);
     } catch (error) {
       console.error("[Admin] Get orders error:", error);
@@ -1530,6 +1657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Save receipt URL to order and send SMS
           if (receiptUrl) {
+            // Receipt available immediately - send now
             await db.update(ordersTable)
               .set({ receiptUrl: receiptUrl })
               .where(eq(ordersTable.id, orderId));
@@ -1548,13 +1676,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               console.error("[Payment] Customer phone (raw):", order.phone);
               console.error("[Payment] ⚠️ MANUAL ACTION: Send receipt to customer manually");
               // Don't fail the webhook - graceful degradation
-              // TODO: Add Telegram notification or structured retry queue for ops team
             }
           } else {
-            // No receipt URL available - this is unusual and should be investigated
-            console.error("[Payment] ⚠️ CRITICAL: No receipt URL available for confirmed payment. OrderId:", orderId, "PaymentId:", notification.PaymentId);
-            console.error("[Payment] Full GetState response for debugging:", JSON.stringify(paymentState, null, 2));
-            // TODO: Consider sending admin notification via Telegram for manual resolution
+            // Receipt not ready yet - Tinkoff generates them asynchronously (2-10 minutes)
+            console.log("[Payment] Receipt not available immediately for order:", orderId);
+            console.log("[Payment] Scheduling delayed retry checks (Tinkoff receipts are generated asynchronously)");
+            
+            // Schedule retry attempts: 3min, 7min, 12min
+            scheduleReceiptRetry(orderId, notification.PaymentId, order.phone);
           }
 
           // Award XP to user if authenticated

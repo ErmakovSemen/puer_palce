@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,15 +38,24 @@ const STATUS_VARIANTS: Record<string, "default" | "secondary" | "destructive" | 
 
 export default function AdminOrderManagement({ adminPassword }: AdminOrderManagementProps) {
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [offset, setOffset] = useState(0);
+  const [allOrders, setAllOrders] = useState<DbOrder[]>([]);
   const { toast } = useToast();
 
-  // Get all orders query
-  const { data: ordersData, isLoading } = useQuery({
-    queryKey: ['/api/admin/orders', statusFilter],
+  const limit = 10;
+
+  // Get orders query with pagination
+  const { data: ordersData, isLoading, isFetching } = useQuery({
+    queryKey: ['/api/admin/orders', statusFilter, offset],
     queryFn: async () => {
-      const url = statusFilter === "all" 
-        ? getApiUrl('/api/admin/orders')
-        : getApiUrl(`/api/admin/orders?status=${statusFilter}`);
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") {
+        params.set('status', statusFilter);
+      }
+      params.set('offset', offset.toString());
+      params.set('limit', limit.toString());
+      
+      const url = getApiUrl(`/api/admin/orders?${params.toString()}`);
       
       const res = await fetch(url, {
         headers: { 'X-Admin-Password': adminPassword },
@@ -59,7 +68,30 @@ export default function AdminOrderManagement({ adminPassword }: AdminOrderManage
     },
   });
 
-  const orders = ordersData || [];
+  // Reset offset when filter changes
+  useEffect(() => {
+    setOffset(0);
+    setAllOrders([]);
+  }, [statusFilter]);
+
+  // Append new orders to all orders
+  useEffect(() => {
+    if (ordersData) {
+      if (offset === 0) {
+        // First page - replace all
+        setAllOrders(ordersData);
+      } else {
+        // Subsequent pages - append
+        setAllOrders(prev => [...prev, ...ordersData]);
+      }
+    }
+  }, [ordersData, offset]);
+
+  const hasMore = (ordersData?.length || 0) === limit;
+
+  const loadMore = () => {
+    setOffset(prev => prev + limit);
+  };
 
   // Update order status mutation
   const updateStatusMutation = useMutation({
@@ -80,7 +112,12 @@ export default function AdminOrderManagement({ adminPassword }: AdminOrderManage
       return await res.json() as DbOrder;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/admin/orders'] });
+      // Invalidate all order queries (including with different filters/offsets)
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          Array.isArray(query.queryKey) && 
+          query.queryKey[0] === '/api/admin/orders'
+      });
       toast({
         title: "Успешно",
         description: "Статус заказа обновлен",
@@ -130,11 +167,11 @@ export default function AdminOrderManagement({ adminPassword }: AdminOrderManage
           </div>
         </CardHeader>
         <CardContent>
-          {orders.length === 0 ? (
+          {allOrders.length === 0 && !isLoading ? (
             <p className="text-muted-foreground">Нет заказов</p>
           ) : (
             <div className="space-y-4">
-              {orders.map((order) => {
+              {allOrders.map((order) => {
                 const items = JSON.parse(order.items);
                 const orderDate = new Date(order.createdAt);
                 
@@ -229,6 +266,19 @@ export default function AdminOrderManagement({ adminPassword }: AdminOrderManage
                   </Card>
                 );
               })}
+              
+              {/* Load more button */}
+              {hasMore && (
+                <div className="flex justify-center pt-4">
+                  <Button 
+                    onClick={loadMore}
+                    disabled={isFetching}
+                    data-testid="button-load-more"
+                  >
+                    {isFetching ? "Загрузка..." : "Загрузить ещё 10 заказов"}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>

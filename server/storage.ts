@@ -41,7 +41,7 @@ export interface IStorage {
   
   // Orders
   getOrder(orderId: number): Promise<DbOrder | undefined>;
-  getOrders(statusFilter?: string): Promise<DbOrder[]>;
+  getOrders(statusFilter?: string, offset?: number, limit?: number): Promise<DbOrder[]>;
   getUserOrders(userId: string): Promise<DbOrder[]>;
   createOrder(orderData: { 
     userId?: string | null; 
@@ -312,7 +312,7 @@ export class MemStorage implements IStorage {
     return [];
   }
 
-  async getOrders(statusFilter?: string): Promise<DbOrder[]> {
+  async getOrders(statusFilter?: string, offset?: number, limit?: number): Promise<DbOrder[]> {
     // MemStorage doesn't persist orders, return empty array
     return [];
   }
@@ -704,14 +704,18 @@ export class DbStorage implements IStorage {
     return order;
   }
 
-  async getOrders(statusFilter?: string): Promise<DbOrder[]> {
+  async getOrders(statusFilter?: string, offset: number = 0, limit: number = 10): Promise<DbOrder[]> {
     let query = db.select().from(ordersTable);
     
     if (statusFilter) {
       query = query.where(eq(ordersTable.status, statusFilter)) as any;
     }
     
-    const orders = await query.orderBy(desc(ordersTable.createdAt));
+    const orders = await query
+      .orderBy(desc(ordersTable.createdAt))
+      .limit(limit)
+      .offset(offset);
+    
     return orders;
   }
 
