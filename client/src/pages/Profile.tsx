@@ -8,9 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText, CheckCircle, AlertCircle, Gift, ShoppingBag, Sparkles } from "lucide-react";
+import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText, CheckCircle, AlertCircle, Gift, ShoppingBag, Sparkles, MapPin } from "lucide-react";
 import type { Product } from "@shared/schema";
 import { useState } from "react";
+import { SavedAddresses } from "@/components/SavedAddresses";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
@@ -50,6 +51,7 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [showLoyaltyModal, setShowLoyaltyModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showAddressesModal, setShowAddressesModal] = useState(false);
   const [showOrdersModal, setShowOrdersModal] = useState(false);
 
   const form = useForm<UpdateUser>({
@@ -191,6 +193,17 @@ export default function Profile() {
             >
               <FileText className="w-4 h-4 mr-2" />
               Личные данные
+            </Button>
+
+            <Button 
+              variant="outline" 
+              size="default"
+              onClick={() => setShowAddressesModal(true)}
+              data-testid="button-view-addresses"
+              className="hover-elevate active-elevate-2"
+            >
+              <MapPin className="w-4 h-4 mr-2" />
+              Мои адреса
             </Button>
 
             <Button 
@@ -567,6 +580,21 @@ export default function Profile() {
                 })}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Saved Addresses Modal */}
+      <Dialog open={showAddressesModal} onOpenChange={setShowAddressesModal}>
+        <DialogContent className="max-w-xl max-h-[80vh] overflow-y-auto" data-testid="dialog-addresses">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5" />
+              Мои адреса
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-4">
+            <SavedAddresses />
           </div>
         </DialogContent>
       </Dialog>

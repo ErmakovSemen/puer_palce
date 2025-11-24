@@ -806,6 +806,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("[Order] Cart cleared for user:", userId);
       }
       
+      // Save address if requested (for authenticated users only)
+      if (orderData.saveAddress && userId && orderData.address) {
+        try {
+          const newAddress = await storage.createSavedAddress({
+            userId,
+            address: orderData.address,
+            isDefault: false,
+          });
+          if (newAddress) {
+            console.log("[Order] Address saved for user:", userId);
+          } else {
+            console.log("[Order] Address limit reached, not saved");
+          }
+        } catch (error) {
+          console.error("[Order] Failed to save address:", error);
+          // Don't block order creation if address saving fails
+        }
+      }
+      
       // Send email notification
       try {
         await sendOrderNotification(orderData);

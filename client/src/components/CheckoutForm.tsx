@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,15 +11,18 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
 import { AlertCircle, Mail, Phone, MessageCircle, Truck, UserCircle } from "lucide-react";
-import type { SiteSettings } from "@shared/schema";
+import type { SiteSettings, SavedAddress } from "@shared/schema";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
@@ -28,6 +32,7 @@ const checkoutSchema = z.object({
   phone: z.string().min(10, "Введите корректный номер телефона"),
   address: z.string().min(10, "Введите полный адрес доставки"),
   comment: z.string().optional(),
+  saveAddress: z.boolean().optional(),
 });
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
@@ -71,6 +76,15 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
     queryKey: ["/api/site-settings"],
   });
   
+  // Fetch saved addresses for authenticated users
+  const { data: savedAddresses = [] } = useQuery<SavedAddress[]>({
+    queryKey: ['/api/addresses'],
+    enabled: !!user,
+  });
+  
+  // Find default address
+  const defaultAddress = savedAddresses.find(addr => addr.isDefault);
+  
   // Copy to clipboard function
   const copyToClipboard = async (text: string, label: string) => {
     try {
@@ -96,8 +110,16 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
       phone: user?.phone || "",
       address: "",
       comment: "",
+      saveAddress: false,
     },
   });
+
+  // Update address field when saved addresses are loaded
+  useEffect(() => {
+    if (defaultAddress && !form.getValues('address')) {
+      form.setValue('address', defaultAddress.address);
+    }
+  }, [defaultAddress, form]);
 
   return (
     <Form {...form}>
@@ -154,6 +176,40 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
           )}
         />
 
+        {/* Saved Addresses Select - only for authenticated users */}
+        {user && savedAddresses.length > 0 && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Выбрать сохранённый адрес</label>
+            <Select
+              onValueChange={(value) => {
+                const selectedAddress = savedAddresses.find(addr => addr.id.toString() === value);
+                if (selectedAddress) {
+                  form.setValue('address', selectedAddress.address);
+                }
+              }}
+              data-testid="select-saved-address"
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Выберите адрес из сохранённых" />
+              </SelectTrigger>
+              <SelectContent>
+                {savedAddresses.map((address) => (
+                  <SelectItem 
+                    key={address.id} 
+                    value={address.id.toString()}
+                    data-testid={`select-address-${address.id}`}
+                  >
+                    {address.isDefault && "⭐ "}
+                    {address.address.length > 50 
+                      ? `${address.address.substring(0, 50)}...` 
+                      : address.address}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <FormField
           control={form.control}
           name="address"
@@ -171,6 +227,40 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
             </FormItem>
           )}
         />
+
+        {/* Save Address Checkbox - only for authenticated users */}
+        {user && (
+          <FormField
+            control={form.control}
+            name="saveAddress"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                <FormControl>
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={savedAddresses.length >= 10}
+                    data-testid="checkbox-save-address"
+                  />
+                </FormControl>
+                <div className="space-y-1 leading-none">
+                  <FormLabel className="cursor-pointer">
+                    Запомнить адрес
+                  </FormLabel>
+                  {savedAddresses.length >= 10 ? (
+                    <FormDescription>
+                      Достигнут лимит сохранённых адресов (максимум 10)
+                    </FormDescription>
+                  ) : (
+                    <FormDescription>
+                      Сохранить этот адрес для быстрого выбора в будущем
+                    </FormDescription>
+                  )}
+                </div>
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           control={form.control}
