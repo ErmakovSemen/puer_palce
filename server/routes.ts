@@ -14,6 +14,7 @@ import { db } from "./db";
 import { users as usersTable, orders as ordersTable } from "@shared/schema";
 import { eq, sql, desc } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
+import { sendReceiptSms } from "./sms-ru";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -1499,21 +1500,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("[Payment] Order", orderId, "payment status updated to:", paymentStatus);
 
-      // If payment confirmed, award XP to user
+      // If payment confirmed, process receipt and award XP
       if (paymentStatus === "CONFIRMED") {
         const order = await db.query.orders.findFirst({
           where: eq(ordersTable.id, orderId),
         });
 
-        if (order?.userId) {
-          const xpToAdd = Math.floor(order.total);
-          await db.update(usersTable)
-            .set({
-              xp: sql`${usersTable.xp} + ${xpToAdd}`,
-            })
-            .where(eq(usersTable.id, order.userId));
+        if (order) {
+          // Get full payment state to extract receipt URL
+          const paymentState = await tinkoffClient.getState(notification.PaymentId);
+          console.log("[Payment] Full GetState response:", JSON.stringify(paymentState, null, 2));
 
-          console.log("[Payment] Added", xpToAdd, "XP to user:", order.userId);
+          // Extract receipt URL if available (field name may vary - check logs)
+          let receiptUrl = null;
+          if (paymentState.Receipt) {
+            receiptUrl = paymentState.Receipt;
+          } else if (paymentState.ReceiptUrl) {
+            receiptUrl = paymentState.ReceiptUrl;
+          }
+
+          console.log("[Payment] Receipt URL extracted:", receiptUrl);
+
+          // Save receipt URL to order and send SMS
+          if (receiptUrl) {
+            await db.update(ordersTable)
+              .set({ receiptUrl: receiptUrl })
+              .where(eq(ordersTable.id, orderId));
+            
+            console.log("[Payment] Receipt URL saved for order:", orderId);
+
+            // Send SMS with receipt link
+            try {
+              await sendReceiptSms(order.phone, receiptUrl, orderId);
+            } catch (error) {
+              console.error("[Payment] Failed to send receipt SMS, but continuing:", error);
+              // Don't fail the webhook if SMS sending fails
+            }
+          }
+
+          // Award XP to user if authenticated
+          if (order.userId) {
+            const xpToAdd = Math.floor(order.total);
+            await db.update(usersTable)
+              .set({
+                xp: sql`${usersTable.xp} + ${xpToAdd}`,
+              })
+              .where(eq(usersTable.id, order.userId));
+
+            console.log("[Payment] Added", xpToAdd, "XP to user:", order.userId);
+          }
         }
       }
 
