@@ -28,10 +28,10 @@ Powered by Express.js and TypeScript, providing a RESTful API. Drizzle ORM inter
 -   **Site Settings Management**: Admin interface for managing contact information (email, phone, Telegram) and delivery details, displayed dynamically on the frontend.
 -   **First Order Discount System**: 20% discount automatically applied to a registered user's first order, tracked in the database and validated server-side.
 -   **Loyalty Program**: XP-based progression (1 RUB = 1 XP) for authenticated and phone-verified users, offering tiered discounts.
--   **Order Management**: Admin panel for viewing, filtering, and updating order statuses.
+-   **Order Management**: Admin panel for viewing, filtering, and updating order statuses with pagination support (10 orders per page, load-more functionality).
 -   **User Management**: Admin tools to search users by phone, view profiles, manage loyalty levels, and view order history.
 -   **Payment Processing**: Integrated Tinkoff Acquiring API for secure online payments (54-ФЗ compliant), with custom implementation for token generation and amount handling (in kopecks). Supports proportional discount distribution. Includes SBP (Fast Payment System) integration via Tinkoff's hosted payment page.
--   **SMS Receipt Delivery**: Custom system to fetch Tinkoff receipt URLs and send them via SMS.ru for confirmed payments.
+-   **Delayed SMS Receipt Delivery**: Intelligent retry system for sending receipt URLs via SMS.ru. Performs immediate check when payment confirmed, then retries at +3, +7, +12 minutes to handle Tinkoff's asynchronous receipt generation (typically 2-10 minutes). Includes duplicate prevention via DB checks and comprehensive error logging with manual recovery instructions.
 -   **Chinese-Inspired Decorative Elements**: Uniform double-border badges, specific coloring for tea types/effects, and decorative dividers.
 -   **Progressive Web App (PWA)**: Installable, offline-first experience with manifest, custom icons, and intelligent service worker caching.
 -   **Native Mobile App (Capacitor)**: Android application built from the same codebase, utilizing Capacitor to wrap the web app, with automated APK build via GitHub Actions.
