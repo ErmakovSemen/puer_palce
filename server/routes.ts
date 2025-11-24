@@ -1900,17 +1900,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle fiscalization notification (Status = "RECEIPT")
       if (paymentStatus === "RECEIPT") {
         console.log("[Payment] Received fiscalization notification for order:", orderId);
+        console.log("[Payment] Full RECEIPT notification:", JSON.stringify(notification, null, 2));
         
-        // Extract receipt URL from notification
-        const receiptUrl = notification.Receipt?.ReceiptUrl;
+        // Extract receipt URL from notification - try multiple possible locations
+        let receiptUrl: string | null = null;
+        
+        // Try various possible receipt URL locations in notification
+        if (notification.Receipt?.ReceiptUrl) {
+          receiptUrl = notification.Receipt.ReceiptUrl;
+        } else if (notification.ReceiptUrl) {
+          receiptUrl = notification.ReceiptUrl;
+        } else if (notification.Receipt?.Url) {
+          receiptUrl = notification.Receipt.Url;
+        } else if (notification.Receipts && Array.isArray(notification.Receipts) && notification.Receipts.length > 0) {
+          const receiptWithUrl = notification.Receipts.find((r: any) => r.Url || r.ReceiptUrl);
+          if (receiptWithUrl) {
+            receiptUrl = receiptWithUrl.Url || receiptWithUrl.ReceiptUrl;
+          }
+        }
         
         if (!receiptUrl) {
-          console.warn("[Payment] No receipt URL in fiscalization notification for order:", orderId);
+          console.warn("[Payment] No receipt URL found in fiscalization notification for order:", orderId);
+          console.warn("[Payment] Available notification fields:", Object.keys(notification));
           res.send(tinkoffClient.getNotificationSuccessResponse());
           return;
         }
 
-        console.log("[Payment] Receipt URL received:", receiptUrl);
+        console.log("[Payment] Receipt URL extracted:", receiptUrl);
 
         // Find order
         const order = await db.query.orders.findFirst({
@@ -2037,11 +2053,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Don't fail the webhook - graceful degradation
             }
           } else {
-            // Receipt not ready yet - Tinkoff generates them asynchronously (2-10 minutes)
+            // Receipt not ready yet - schedule fallback retries as insurance
+            // PRIMARY: Wait for RECEIPT webhook notification from Tinkoff (typically 2-10 minutes)
+            // FALLBACK: Poll GetState API in case webhook is missed (webhooks are best-effort)
             console.log("[Payment] Receipt not available immediately for order:", orderId);
-            console.log("[Payment] Scheduling delayed retry checks (Tinkoff receipts are generated asynchronously)");
+            console.log("[Payment] PRIMARY: Waiting for RECEIPT webhook notification from Tinkoff");
+            console.log("[Payment] FALLBACK: Scheduling GetState polling retries as insurance");
             
-            // Schedule retry attempts: 3min, 7min, 12min
+            // Schedule retry attempts: +3min, +7min, +12min from payment confirmation
             scheduleReceiptRetry(orderId, notification.PaymentId, order.phone);
           }
 
@@ -2062,80 +2081,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.send(tinkoffClient.getNotificationSuccessResponse());
     } catch (error) {
       console.error("[Payment] Notification processing failed:", error);
-      res.status(500).send("Internal server error");
-    }
-  });
-
-  // Webhook for fiscalization notifications from Tinkoff
-  app.post("/api/payments/notification-fiscalization", async (req, res) => {
-    try {
-      const notification = req.body;
-      console.log("[Fiscalization] Received notification:", JSON.stringify(notification, null, 2));
-
-      // Verify notification signature
-      const tinkoffClient = getTinkoffClient();
-      if (!tinkoffClient.verifyNotification(notification)) {
-        console.error("[Fiscalization] Invalid notification signature");
-        res.status(400).send("Invalid signature");
-        return;
-      }
-
-      const orderId = parseInt(notification.OrderId);
-      const receiptUrl = notification.Receipt?.ReceiptUrl;
-
-      if (!receiptUrl) {
-        console.warn("[Fiscalization] No receipt URL in notification for order:", orderId);
-        res.send(tinkoffClient.getNotificationSuccessResponse());
-        return;
-      }
-
-      console.log("[Fiscalization] Receipt URL received for order:", orderId, "URL:", receiptUrl);
-
-      // Find order
-      const order = await db.query.orders.findFirst({
-        where: eq(ordersTable.id, orderId),
-      });
-
-      if (!order) {
-        console.error("[Fiscalization] Order not found:", orderId);
-        res.status(404).send("Order not found");
-        return;
-      }
-
-      // Check if receipt already saved (duplicate notification)
-      if (order.receiptUrl === receiptUrl) {
-        console.log("[Fiscalization] Receipt already saved for order:", orderId, "- skipping duplicate");
-        res.send(tinkoffClient.getNotificationSuccessResponse());
-        return;
-      }
-
-      // Save receipt URL to database
-      await db.update(ordersTable)
-        .set({ receiptUrl: receiptUrl })
-        .where(eq(ordersTable.id, orderId));
-
-      console.log("[Fiscalization] Receipt URL saved to database for order:", orderId);
-
-      // Send SMS with receipt
-      try {
-        const normalizedPhone = normalizePhone(order.phone);
-        await sendReceiptSms(normalizedPhone, receiptUrl, orderId);
-        console.log("[Fiscalization] ✅ Receipt SMS sent successfully to", normalizedPhone);
-      } catch (error) {
-        console.error("[Fiscalization] ⚠️ Failed to send receipt SMS for order:", orderId);
-        console.error("[Fiscalization] Error:", error);
-        console.error("[Fiscalization] Receipt URL:", receiptUrl);
-        console.error("[Fiscalization] Customer phone:", order.phone);
-        console.error("[Fiscalization] ⚠️ MANUAL ACTION: Send receipt to customer manually");
-        
-        // Send Telegram notification to admin
-        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}. Puer Pub`;
-        await sendFailedReceiptSmsNotification(orderId, order.phone, smsText);
-      }
-
-      res.send(tinkoffClient.getNotificationSuccessResponse());
-    } catch (error) {
-      console.error("[Fiscalization] Notification processing failed:", error);
       res.status(500).send("Internal server error");
     }
   });
