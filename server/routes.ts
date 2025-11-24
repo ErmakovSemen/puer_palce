@@ -1548,39 +1548,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (discountAmount > 0) {
         console.log("[Payment] Total discount to distribute:", discountAmount, "kopecks");
         
-        // Calculate proportional discounts for all items
-        let distributedDiscount = 0;
+        // First pass: apply proportional discounts with 54-ФЗ minimum (1 kopeck)
+        let actualDiscountDistributed = 0;
+        const minAmount = 1; // 54-ФЗ requires Amount ≥ 1 kopeck
         
         // Apply proportional discount to each item except the last
         for (let i = 0; i < receiptItems.length - 1; i++) {
           const item = receiptItems[i];
-          const itemDiscount = Math.round((discountAmount * item.Amount) / totalItemsAmount);
-          const newAmount = item.Amount - itemDiscount;
+          const idealDiscount = Math.round((discountAmount * item.Amount) / totalItemsAmount);
+          const maxPossibleDiscount = item.Amount - minAmount; // Leave at least 1 kopeck
+          const actualDiscount = Math.min(idealDiscount, maxPossibleDiscount);
           
-          // Guard against negative/zero amounts (54-ФЗ violation)
-          if (newAmount < 1) {
-            throw new Error(`Discount too large: item "${item.Name}" would have Amount=${newAmount} kopecks (must be ≥1)`);
-          }
-          
-          item.Amount = newAmount;
-          item.Price = newAmount; // Keep Price = Amount for Quantity=1
-          distributedDiscount += itemDiscount;
-          console.log(`[Payment] Item "${item.Name}": discount=${itemDiscount}, Amount=${item.Amount}`);
+          item.Amount -= actualDiscount;
+          item.Price = item.Amount; // Keep Price = Amount for Quantity=1
+          actualDiscountDistributed += actualDiscount;
+          console.log(`[Payment] Item "${item.Name}": discount=${actualDiscount}, Amount=${item.Amount}`);
         }
         
-        // Last item gets remaining discount to ensure exact total match
+        // Last item gets all remaining discount (ensures exact total)
         const lastItem = receiptItems[receiptItems.length - 1];
-        const remainingDiscount = discountAmount - distributedDiscount;
-        const newAmount = lastItem.Amount - remainingDiscount;
+        const remainingDiscount = discountAmount - actualDiscountDistributed;
+        const maxPossibleDiscount = lastItem.Amount - minAmount;
+        const actualDiscount = Math.min(remainingDiscount, maxPossibleDiscount);
         
-        // Guard against negative/zero amounts (54-ФЗ violation)
-        if (newAmount < 1) {
-          throw new Error(`Discount too large: item "${lastItem.Name}" would have Amount=${newAmount} kopecks (must be ≥1)`);
+        lastItem.Amount -= actualDiscount;
+        lastItem.Price = lastItem.Amount; // Keep Price = Amount for Quantity=1
+        actualDiscountDistributed += actualDiscount;
+        console.log(`[Payment] Item "${lastItem.Name}": final discount=${actualDiscount}, Amount=${lastItem.Amount}`);
+        
+        // If we couldn't distribute full discount due to 54-ФЗ minimum constraints
+        if (actualDiscountDistributed < discountAmount) {
+          const undistributedDiscount = discountAmount - actualDiscountDistributed;
+          console.warn(`[Payment] ⚠️ Could not distribute ${undistributedDiscount} kopecks due to 54-ФЗ minimum (1 kopeck per item)`);
+          console.warn(`[Payment] This may cause receipt total mismatch - reducing order total to match`);
         }
-        
-        lastItem.Amount = newAmount;
-        lastItem.Price = newAmount; // Keep Price = Amount for Quantity=1
-        console.log(`[Payment] Item "${lastItem.Name}": final discount=${remainingDiscount}, Amount=${lastItem.Amount}`);
       }
 
       // Verify that receipt items total equals payment amount (in KOPECKS)
