@@ -1897,6 +1897,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orderId = parseInt(notification.OrderId);
       const paymentStatus = notification.Status;
 
+      // Handle fiscalization notification (Status = "RECEIPT")
+      if (paymentStatus === "RECEIPT") {
+        console.log("[Payment] Received fiscalization notification for order:", orderId);
+        
+        // Extract receipt URL from notification
+        const receiptUrl = notification.Receipt?.ReceiptUrl;
+        
+        if (!receiptUrl) {
+          console.warn("[Payment] No receipt URL in fiscalization notification for order:", orderId);
+          res.send(tinkoffClient.getNotificationSuccessResponse());
+          return;
+        }
+
+        console.log("[Payment] Receipt URL received:", receiptUrl);
+
+        // Find order
+        const order = await db.query.orders.findFirst({
+          where: eq(ordersTable.id, orderId),
+        });
+
+        if (!order) {
+          console.error("[Payment] Order not found:", orderId);
+          res.status(404).send("Order not found");
+          return;
+        }
+
+        // Check if receipt already saved (duplicate notification)
+        if (order.receiptUrl === receiptUrl) {
+          console.log("[Payment] Receipt already saved for order:", orderId, "- skipping duplicate");
+          res.send(tinkoffClient.getNotificationSuccessResponse());
+          return;
+        }
+
+        // Update payment status and save receipt URL
+        await db.update(ordersTable)
+          .set({ 
+            paymentStatus: paymentStatus,
+            receiptUrl: receiptUrl,
+          })
+          .where(eq(ordersTable.id, orderId));
+
+        console.log("[Payment] Receipt URL saved to database for order:", orderId);
+
+        // Send SMS with receipt
+        try {
+          const normalizedPhone = normalizePhone(order.phone);
+          await sendReceiptSms(normalizedPhone, receiptUrl, orderId);
+          console.log("[Payment] ✅ Receipt SMS sent successfully to", normalizedPhone);
+        } catch (error) {
+          console.error("[Payment] ⚠️ Failed to send receipt SMS for order:", orderId);
+          console.error("[Payment] Error:", error);
+          console.error("[Payment] Receipt URL:", receiptUrl);
+          console.error("[Payment] Customer phone:", order.phone);
+          console.error("[Payment] ⚠️ MANUAL ACTION: Send receipt to customer manually");
+          
+          // Try to send Telegram notification to admin (don't fail webhook if this fails)
+          try {
+            const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}. Puer Pub`;
+            await sendFailedReceiptSmsNotification(orderId, order.phone, smsText);
+          } catch (telegramError) {
+            console.error("[Payment] ⚠️ Failed to send Telegram notification:", telegramError);
+            // Continue anyway - receipt is already saved
+          }
+        }
+
+        res.send(tinkoffClient.getNotificationSuccessResponse());
+        return;
+      }
+
       // Update order payment status
       await db.update(ordersTable)
         .set({
