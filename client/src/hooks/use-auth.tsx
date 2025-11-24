@@ -7,6 +7,7 @@ import {
 import { insertUserSchema, User as SelectUser, InsertUser } from "@shared/schema";
 import { getQueryFn, apiRequest, queryClient } from "../lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { migrateGuestCart } from "@/lib/migrateCart";
 
 type AuthContextType = {
   user: SelectUser | null;
@@ -37,8 +38,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/login", credentials);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
+    onSuccess: async (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
+      // Migrate guest cart to user's cart
+      await migrateGuestCart();
     },
     onError: (error: Error) => {
       toast({

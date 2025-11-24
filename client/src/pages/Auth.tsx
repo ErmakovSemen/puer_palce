@@ -12,6 +12,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { trackEvent } from "@/lib/metrics";
 import { useToast } from "@/hooks/use-toast";
+import { migrateGuestCart } from "@/lib/migrateCart";
 
 type VerificationStep = "register" | "verify-phone";
 type ForgotStep = "phone" | "verify-code" | "new-password";
@@ -72,7 +73,7 @@ export default function Auth() {
       const res = await apiRequest("POST", "/api/auth/verify-phone", data);
       return await res.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (data: any) => {
       if (data.user) {
         // Registration verification - user is now logged in
         queryClient.setQueryData(["/api/user"], data.user);
@@ -83,6 +84,9 @@ export default function Auth() {
         
         // Track successful registration in Yandex Metrika
         trackEvent('registration_completed');
+        
+        // Migrate guest cart to user's cart
+        await migrateGuestCart();
       } else if (data.verified) {
         // Password reset verification
         toast({
