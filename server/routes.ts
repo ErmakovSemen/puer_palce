@@ -1050,6 +1050,140 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sync order with Tinkoff - for manual recovery when webhook fails
+  app.post("/api/admin/orders/:id/sync", requireAdminAuth, async (req, res) => {
+    try {
+      const orderId = parseInt(req.params.id);
+      const { paymentId, receiptUrl: manualReceiptUrl } = req.body; // Optional overrides
+      
+      console.log(`[Admin] Manual sync requested for order ${orderId}, paymentId override:`, paymentId, ', receiptUrl override:', manualReceiptUrl);
+      
+      // Get order from database
+      const order = await db.query.orders.findFirst({
+        where: eq(ordersTable.id, orderId),
+      });
+      
+      if (!order) {
+        res.status(404).json({ error: "Order not found" });
+        return;
+      }
+      
+      // Determine which payment ID to use
+      const paymentIdToUse = paymentId || order.paymentId;
+      
+      if (!paymentIdToUse) {
+        res.status(400).json({ 
+          error: "No payment ID available. Order has no paymentId and none was provided in request." 
+        });
+        return;
+      }
+      
+      console.log(`[Admin] Syncing order ${orderId} with Tinkoff using PaymentId: ${paymentIdToUse}`);
+      
+      // Get payment state from Tinkoff
+      const tinkoffClient = getTinkoffClient();
+      const paymentState = await tinkoffClient.getState(paymentIdToUse);
+      
+      console.log(`[Admin] Received payment state:`, JSON.stringify(paymentState, null, 2));
+      
+      // Extract payment status
+      const tinkoffStatus = paymentState.Status;
+      
+      // Extract receipt URL from response
+      let receiptUrl: string | null = null;
+      
+      // Try Receipts array first (primary location for fiscal receipts)
+      if (paymentState.Receipts && Array.isArray(paymentState.Receipts) && paymentState.Receipts.length > 0) {
+        const receiptWithUrl = paymentState.Receipts.find((r: any) => r.Url);
+        if (receiptWithUrl) {
+          receiptUrl = receiptWithUrl.Url;
+        }
+      }
+      
+      // Fallback to legacy fields if Receipts array not available
+      if (!receiptUrl) {
+        if (typeof paymentState.Receipt === 'string') {
+          receiptUrl = paymentState.Receipt;
+        } else if (paymentState.Receipt?.Url) {
+          receiptUrl = paymentState.Receipt.Url;
+        } else if (paymentState.ReceiptUrl) {
+          receiptUrl = paymentState.ReceiptUrl;
+        }
+      }
+      
+      console.log(`[Admin] Extracted receipt URL from Tinkoff:`, receiptUrl);
+      console.log(`[Admin] Tinkoff status:`, tinkoffStatus);
+      
+      // Use manual receipt URL if provided, otherwise use Tinkoff's response, otherwise keep existing
+      const finalReceiptUrl = manualReceiptUrl || receiptUrl || order.receiptUrl;
+      console.log(`[Admin] Final receipt URL to use:`, finalReceiptUrl);
+      
+      // Determine order status based on payment status
+      let orderStatus: string = order.status;
+      if (tinkoffStatus === "CONFIRMED") {
+        orderStatus = "paid";
+      } else if (tinkoffStatus === "REJECTED") {
+        orderStatus = "cancelled";
+      }
+      
+      // Update order in database
+      await db.update(ordersTable)
+        .set({
+          paymentId: paymentIdToUse,
+          paymentStatus: tinkoffStatus,
+          status: orderStatus,
+          receiptUrl: finalReceiptUrl,
+        })
+        .where(eq(ordersTable.id, orderId));
+      
+      console.log(`[Admin] Order ${orderId} updated in database`);
+      
+      // Send SMS with receipt if available and payment is confirmed
+      let smsSent = false;
+      if (finalReceiptUrl && tinkoffStatus === "CONFIRMED") {
+        try {
+          const normalizedPhone = normalizePhone(order.phone);
+          await sendReceiptSms(normalizedPhone, finalReceiptUrl, orderId);
+          smsSent = true;
+          console.log(`[Admin] Receipt SMS sent successfully to ${normalizedPhone}`);
+        } catch (error) {
+          console.error(`[Admin] Failed to send receipt SMS:`, error);
+          // Don't fail the whole operation if SMS fails
+        }
+      }
+      
+      // Award XP if payment is confirmed and user is authenticated
+      let xpAwarded = false;
+      if (tinkoffStatus === "CONFIRMED" && order.userId && orderStatus !== order.status) {
+        const xpToAdd = Math.floor(order.total);
+        await db.update(usersTable)
+          .set({
+            xp: sql`${usersTable.xp} + ${xpToAdd}`,
+          })
+          .where(eq(usersTable.id, order.userId));
+        xpAwarded = true;
+        console.log(`[Admin] Added ${xpToAdd} XP to user ${order.userId}`);
+      }
+      
+      res.json({
+        success: true,
+        orderId,
+        paymentId: paymentIdToUse,
+        paymentStatus: tinkoffStatus,
+        orderStatus,
+        receiptUrl,
+        smsSent,
+        xpAwarded,
+      });
+    } catch (error) {
+      console.error("[Admin] Order sync error:", error);
+      res.status(500).json({ 
+        error: "Failed to sync order with Tinkoff",
+        details: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Cart routes
   app.get("/api/cart", requireAuth, async (req: any, res) => {
     try {
