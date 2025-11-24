@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema, updateOrderStatusSchema, insertCartItemSchema, updateCartItemSchema, updateSiteSettingsSchema } from "@shared/schema";
+import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema, updateOrderStatusSchema, insertCartItemSchema, updateCartItemSchema, updateSiteSettingsSchema, insertSavedAddressSchema } from "@shared/schema";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
@@ -1112,6 +1112,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Cart] Clear cart error:", error);
       res.status(500).json({ error: "Failed to clear cart" });
+    }
+  });
+
+  // Saved Addresses routes
+  app.get("/api/addresses", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const addresses = await storage.getSavedAddresses(userId);
+      res.json(addresses);
+    } catch (error) {
+      console.error("[Addresses] Get addresses error:", error);
+      res.status(500).json({ error: "Ошибка получения адресов" });
+    }
+  });
+
+  app.post("/api/addresses", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const addressData = insertSavedAddressSchema.parse({
+        ...req.body,
+        userId,
+      });
+      
+      const newAddress = await storage.createSavedAddress(addressData);
+      
+      if (!newAddress) {
+        res.status(400).json({ error: "Достигнут лимит сохранённых адресов (максимум 10)" });
+        return;
+      }
+      
+      res.status(201).json(newAddress);
+    } catch (error) {
+      console.error("[Addresses] Create address error:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        res.status(400).json({ error: "Некорректные данные адреса" });
+      } else {
+        res.status(500).json({ error: "Ошибка сохранения адреса" });
+      }
+    }
+  });
+
+  app.delete("/api/addresses/:id", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user.id;
+      const deleted = await storage.deleteSavedAddress(id, userId);
+      
+      if (!deleted) {
+        res.status(404).json({ error: "Адрес не найден" });
+        return;
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Addresses] Delete address error:", error);
+      res.status(500).json({ error: "Ошибка удаления адреса" });
+    }
+  });
+
+  app.patch("/api/addresses/:id/default", requireAuth, async (req: any, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const userId = req.user.id;
+      const updatedAddress = await storage.setDefaultAddress(id, userId);
+      
+      if (!updatedAddress) {
+        res.status(404).json({ error: "Адрес не найден" });
+        return;
+      }
+      
+      res.json(updatedAddress);
+    } catch (error) {
+      console.error("[Addresses] Set default address error:", error);
+      res.status(500).json({ error: "Ошибка установки адреса по умолчанию" });
     }
   });
 
