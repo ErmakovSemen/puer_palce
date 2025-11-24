@@ -79,14 +79,26 @@ async function checkAndSendReceipt(
     const paymentState = await tinkoffClient.getState(paymentId);
     
     // Extract receipt URL from response
+    // Tinkoff returns fiscal receipts in Receipts array with Url field
     let receiptUrl: string | null = null;
     
-    if (typeof paymentState.Receipt === 'string') {
-      receiptUrl = paymentState.Receipt;
-    } else if (paymentState.Receipt?.Url) {
-      receiptUrl = paymentState.Receipt.Url;
-    } else if (paymentState.ReceiptUrl) {
-      receiptUrl = paymentState.ReceiptUrl;
+    // Try Receipts array first (primary location for fiscal receipts)
+    if (paymentState.Receipts && Array.isArray(paymentState.Receipts) && paymentState.Receipts.length > 0) {
+      const receiptWithUrl = paymentState.Receipts.find((r: any) => r.Url);
+      if (receiptWithUrl) {
+        receiptUrl = receiptWithUrl.Url;
+      }
+    }
+    
+    // Fallback to legacy fields if Receipts array not available
+    if (!receiptUrl) {
+      if (typeof paymentState.Receipt === 'string') {
+        receiptUrl = paymentState.Receipt;
+      } else if (paymentState.Receipt?.Url) {
+        receiptUrl = paymentState.Receipt.Url;
+      } else if (paymentState.ReceiptUrl) {
+        receiptUrl = paymentState.ReceiptUrl;
+      }
     }
     
     if (receiptUrl) {
@@ -1499,54 +1511,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
         PaymentObject: string;
       }
 
-      // Prepare receipt items for Tinkoff
-      // IMPORTANT: SDK converts main Amount to kopecks, but Receipt.Items must already be in kopecks!
+      // Prepare receipt items for Tinkoff (54-ФЗ compliance)
+      // For weight-based items (tea sold by gram), we use Quantity=1 and full line total as Price/Amount
+      // This ensures Tinkoff displays the actual product name and correct price on the fiscal receipt
       const receiptItems: ReceiptItem[] = orderItems.map((item: any) => {
-        const priceInKopecks = Math.round(item.pricePerGram * 100);
+        // Calculate full line total in kopecks (before any discounts)
         const amountInKopecks = Math.round(item.pricePerGram * item.quantity * 100);
         
+        // For fiscal receipts: display full item description with quantity info in the name
+        let itemName = item.name;
+        if (item.quantity !== 1) {
+          // Add weight/quantity info to product name for clarity on receipt
+          itemName = `${item.name} - ${item.quantity}g`;
+        }
+        
         return {
-          Name: item.name,
-          Price: priceInKopecks, // Price per unit in KOPECKS
-          Quantity: Number(item.quantity.toFixed(2)), // Format as number with 2 decimals
-          Amount: amountInKopecks, // Total in KOPECKS (before discount)
+          Name: itemName, // Product name with quantity (e.g., "Лунный свет - 25g")
+          Price: amountInKopecks, // Full line price in KOPECKS (equals Amount)
+          Quantity: 1, // Always 1 for simplified fiscal receipt display
+          Amount: amountInKopecks, // Total in KOPECKS (must equal Price * Quantity)
           Tax: "vat0", // VAT 0% (no VAT, 54-ФЗ compliance)
           PaymentMethod: "full_payment", // Full payment (54-ФЗ compliance)
           PaymentObject: "commodity", // Goods/commodity (54-ФЗ compliance)
         };
       });
 
-      // Calculate total items amount and discount (in KOPECKS)
-      const amountInRubles = Number((order.total).toFixed(2));
-      const amountInKopecks = Math.round(order.total * 100); // SDK will convert this to kopecks too
+      // Calculate payment amount in kopecks
+      const amountInKopecks = Math.round(order.total * 100);
+      
+      // Calculate sum of receipt items (before discount adjustment)
       const totalItemsAmount = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
       const discountAmount = totalItemsAmount - amountInKopecks;
 
-      // Distribute discount proportionally across all items (in kopecks)
+      // Distribute any discount proportionally across all items
+      // This handles loyalty discounts, first-order discounts, etc.
       if (discountAmount > 0) {
         console.log("[Payment] Total discount to distribute:", discountAmount, "kopecks");
         
+        // Calculate proportional discounts for all items
         let distributedDiscount = 0;
         
-        // Apply proportional discount to each item except the last one
+        // Apply proportional discount to each item except the last
         for (let i = 0; i < receiptItems.length - 1; i++) {
           const item = receiptItems[i];
           const itemDiscount = Math.round((discountAmount * item.Amount) / totalItemsAmount);
-          item.Amount -= itemDiscount;
+          const newAmount = item.Amount - itemDiscount;
+          
+          // Guard against negative/zero amounts (54-ФЗ violation)
+          if (newAmount < 1) {
+            throw new Error(`Discount too large: item "${item.Name}" would have Amount=${newAmount} kopecks (must be ≥1)`);
+          }
+          
+          item.Amount = newAmount;
+          item.Price = newAmount; // Keep Price = Amount for Quantity=1
           distributedDiscount += itemDiscount;
-          console.log(`[Payment] Item "${item.Name}": discount=${itemDiscount}, new Amount=${item.Amount}`);
+          console.log(`[Payment] Item "${item.Name}": discount=${itemDiscount}, Amount=${item.Amount}`);
         }
         
-        // Apply remaining discount to last item to handle rounding
+        // Last item gets remaining discount to ensure exact total match
         const lastItem = receiptItems[receiptItems.length - 1];
         const remainingDiscount = discountAmount - distributedDiscount;
-        lastItem.Amount -= remainingDiscount;
-        console.log(`[Payment] Last item "${lastItem.Name}": discount=${remainingDiscount}, new Amount=${lastItem.Amount}`);
+        const newAmount = lastItem.Amount - remainingDiscount;
+        
+        // Guard against negative/zero amounts (54-ФЗ violation)
+        if (newAmount < 1) {
+          throw new Error(`Discount too large: item "${lastItem.Name}" would have Amount=${newAmount} kopecks (must be ≥1)`);
+        }
+        
+        lastItem.Amount = newAmount;
+        lastItem.Price = newAmount; // Keep Price = Amount for Quantity=1
+        console.log(`[Payment] Item "${lastItem.Name}": final discount=${remainingDiscount}, Amount=${lastItem.Amount}`);
       }
 
       // Verify that receipt items total equals payment amount (in KOPECKS)
       const receiptTotal = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
       if (receiptTotal !== amountInKopecks) {
+        console.error("[Payment] Receipt total mismatch:", {
+          receiptTotal,
+          amountInKopecks,
+          diff: receiptTotal - amountInKopecks,
+          items: receiptItems.map(i => ({ name: i.Name, amount: i.Amount, price: i.Price }))
+        });
         throw new Error(`Receipt total mismatch: ${receiptTotal} !== ${amountInKopecks}`);
       }
 
@@ -1638,19 +1683,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const paymentState = await tinkoffClient.getState(notification.PaymentId);
           console.log("[Payment] Full GetState response:", JSON.stringify(paymentState, null, 2));
 
-          // Extract receipt URL from response (proper field navigation)
+          // Extract receipt URL from response
+          // Tinkoff returns fiscal receipts in Receipts array with Url field
           let receiptUrl: string | null = null;
           
-          // Tinkoff may return receipt in different fields - try all possibilities
-          if (typeof paymentState.Receipt === 'string') {
-            // Direct string (less common)
-            receiptUrl = paymentState.Receipt;
-          } else if (paymentState.Receipt?.Url) {
-            // Receipt object with Url property (most common)
-            receiptUrl = paymentState.Receipt.Url;
-          } else if (paymentState.ReceiptUrl) {
-            // Direct ReceiptUrl field
-            receiptUrl = paymentState.ReceiptUrl;
+          // Try Receipts array first (primary location for fiscal receipts)
+          if (paymentState.Receipts && Array.isArray(paymentState.Receipts) && paymentState.Receipts.length > 0) {
+            // Find the first receipt with a URL (usually lk.platformaofd.ru)
+            const receiptWithUrl = paymentState.Receipts.find((r: any) => r.Url);
+            if (receiptWithUrl) {
+              receiptUrl = receiptWithUrl.Url;
+            }
+          }
+          
+          // Fallback to legacy fields if Receipts array not available
+          if (!receiptUrl) {
+            if (typeof paymentState.Receipt === 'string') {
+              receiptUrl = paymentState.Receipt;
+            } else if (paymentState.Receipt?.Url) {
+              receiptUrl = paymentState.Receipt.Url;
+            } else if (paymentState.ReceiptUrl) {
+              receiptUrl = paymentState.ReceiptUrl;
+            }
           }
 
           console.log("[Payment] Receipt URL extracted:", receiptUrl);
