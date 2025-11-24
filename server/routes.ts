@@ -1511,11 +1511,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const paymentState = await tinkoffClient.getState(notification.PaymentId);
           console.log("[Payment] Full GetState response:", JSON.stringify(paymentState, null, 2));
 
-          // Extract receipt URL if available (field name may vary - check logs)
-          let receiptUrl = null;
-          if (paymentState.Receipt) {
+          // Extract receipt URL from response (proper field navigation)
+          let receiptUrl: string | null = null;
+          
+          // Tinkoff may return receipt in different fields - try all possibilities
+          if (typeof paymentState.Receipt === 'string') {
+            // Direct string (less common)
             receiptUrl = paymentState.Receipt;
+          } else if (paymentState.Receipt?.Url) {
+            // Receipt object with Url property (most common)
+            receiptUrl = paymentState.Receipt.Url;
           } else if (paymentState.ReceiptUrl) {
+            // Direct ReceiptUrl field
             receiptUrl = paymentState.ReceiptUrl;
           }
 
@@ -1534,8 +1541,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const normalizedPhone = normalizePhone(order.phone);
               await sendReceiptSms(normalizedPhone, receiptUrl, orderId);
             } catch (error) {
-              console.error("[Payment] ⚠️ CRITICAL: Failed to send receipt SMS for order:", orderId, error);
-              // Don't fail the webhook if SMS sending fails, but log prominently for manual retry
+              // This catches both normalization errors and SMS sending errors
+              console.error("[Payment] ⚠️ CRITICAL: Failed to send receipt SMS for order:", orderId);
+              console.error("[Payment] Error details:", error);
+              console.error("[Payment] Receipt URL:", receiptUrl);
+              console.error("[Payment] Customer phone (raw):", order.phone);
+              console.error("[Payment] ⚠️ MANUAL ACTION: Send receipt to customer manually");
+              // Don't fail the webhook - graceful degradation
+              // TODO: Add Telegram notification or structured retry queue for ops team
             }
           } else {
             // No receipt URL available - this is unusual and should be investigated
