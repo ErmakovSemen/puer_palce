@@ -58,7 +58,25 @@ interface TinkoffNotification {
   Token: string;
 }
 
-export type { TinkoffInitResponse, TinkoffNotification };
+interface TinkoffFiscalizationNotification {
+  TerminalKey: string;
+  OrderId: string;
+  Success: boolean;
+  Status: string;
+  PaymentId: string;
+  ErrorCode: string;
+  Amount: number;
+  Token: string;
+  Receipt?: {
+    ReceiptUrl?: string;
+    FnNumber?: string;
+    EcrRegistrationNumber?: string;
+    FiscalDocumentNumber?: number;
+    FiscalDocumentAttribute?: number;
+  };
+}
+
+export type { TinkoffInitResponse, TinkoffNotification, TinkoffFiscalizationNotification };
 
 class TinkoffAPI {
   private terminalKey: string;
