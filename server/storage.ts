@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { normalizePhone } from "./utils";
 
@@ -76,6 +76,12 @@ export interface IStorage {
   // Site Settings
   getSiteSettings(): Promise<import("@shared/schema").SiteSettings | undefined>;
   updateSiteSettings(settings: import("@shared/schema").UpdateSiteSettings): Promise<import("@shared/schema").SiteSettings | undefined>;
+  
+  // Saved Addresses
+  getSavedAddresses(userId: string): Promise<SavedAddress[]>;
+  createSavedAddress(address: InsertSavedAddress): Promise<SavedAddress | null>;
+  deleteSavedAddress(id: number, userId: string): Promise<boolean>;
+  setDefaultAddress(id: number, userId: string): Promise<SavedAddress | undefined>;
   
   // Session store for auth
   sessionStore: any;
@@ -445,7 +451,7 @@ export class MemStorage implements IStorage {
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable, siteSettings as siteSettingsTable } from "@shared/schema";
+import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable, siteSettings as siteSettingsTable, savedAddresses as savedAddressesTable } from "@shared/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
@@ -1017,6 +1023,79 @@ export class DbStorage implements IStorage {
       .returning();
     
     return updated;
+  }
+
+  async getSavedAddresses(userId: string): Promise<SavedAddress[]> {
+    const addresses = await db
+      .select()
+      .from(savedAddressesTable)
+      .where(eq(savedAddressesTable.userId, userId))
+      .orderBy(desc(savedAddressesTable.isDefault), desc(savedAddressesTable.createdAt));
+    
+    return addresses;
+  }
+
+  async createSavedAddress(address: InsertSavedAddress): Promise<SavedAddress | null> {
+    // Check if user already has 10 addresses
+    const existingAddresses = await db
+      .select()
+      .from(savedAddressesTable)
+      .where(eq(savedAddressesTable.userId, address.userId));
+    
+    if (existingAddresses.length >= 10) {
+      return null;
+    }
+
+    // If this is marked as default, unset other default addresses
+    if (address.isDefault) {
+      await db
+        .update(savedAddressesTable)
+        .set({ isDefault: false })
+        .where(eq(savedAddressesTable.userId, address.userId));
+    }
+
+    const [newAddress] = await db
+      .insert(savedAddressesTable)
+      .values(address)
+      .returning();
+    
+    return newAddress;
+  }
+
+  async deleteSavedAddress(id: number, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(savedAddressesTable)
+      .where(
+        and(
+          eq(savedAddressesTable.id, id),
+          eq(savedAddressesTable.userId, userId)
+        )
+      )
+      .returning();
+    
+    return result.length > 0;
+  }
+
+  async setDefaultAddress(id: number, userId: string): Promise<SavedAddress | undefined> {
+    // First, unset all default addresses for this user
+    await db
+      .update(savedAddressesTable)
+      .set({ isDefault: false })
+      .where(eq(savedAddressesTable.userId, userId));
+    
+    // Then set the specified address as default
+    const [updatedAddress] = await db
+      .update(savedAddressesTable)
+      .set({ isDefault: true })
+      .where(
+        and(
+          eq(savedAddressesTable.id, id),
+          eq(savedAddressesTable.userId, userId)
+        )
+      )
+      .returning();
+    
+    return updatedAddress;
   }
 }
 
