@@ -2,7 +2,7 @@ import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
-import { motion, useMotionValue, useTransform, PanInfo } from "framer-motion"
+import { motion, useMotionValue, useTransform, PanInfo, useAnimation } from "framer-motion"
 
 import { cn } from "@/lib/utils"
 
@@ -43,30 +43,54 @@ const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> &
     VariantProps<typeof toastVariants>
->(({ className, variant, onOpenChange, ...props }, ref) => {
+>(({ className, variant, onOpenChange, children, ...props }, ref) => {
+  const controls = useAnimation()
   const x = useMotionValue(0)
   const y = useMotionValue(0)
-  const opacity = useTransform([x, y], ([latestX, latestY]) => {
-    const distance = Math.sqrt(latestX * latestX + latestY * latestY)
-    return Math.max(0, 1 - distance / 150)
+  const [isDismissing, setIsDismissing] = React.useState(false)
+  
+  const opacity = useTransform([x, y], ([latestX, latestY]): number => {
+    if (isDismissing) return 0
+    const xVal = latestX as number
+    const yVal = latestY as number
+    const distance = Math.sqrt(xVal * xVal + yVal * yVal)
+    return Math.max(0, 1 - distance / 200)
   })
 
-  const handleDragEnd = (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+  const handleDragEnd = async (_event: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
     const threshold = 50
     const { offset } = info
     
-    // Check if swiped in any direction beyond threshold
+    // Determine swipe direction
     const swipedUp = offset.y < -threshold
     const swipedLeft = offset.x < -threshold
     const swipedRight = offset.x > threshold
     
     if (swipedUp || swipedLeft || swipedRight) {
-      // Close the toast
+      setIsDismissing(true)
+      
+      // Animate toast off-screen in the swipe direction
+      const exitDistance = 300
+      const targetX = swipedLeft ? -exitDistance : swipedRight ? exitDistance : 0
+      const targetY = swipedUp ? -exitDistance : 0
+      
+      // Animate to off-screen position
+      await controls.start({
+        x: targetX,
+        y: targetY,
+        opacity: 0,
+        transition: { duration: 0.2, ease: "easeOut" }
+      })
+      
+      // Close after animation completes
       onOpenChange?.(false)
     } else {
-      // Reset position if not swiped enough
-      x.set(0)
-      y.set(0)
+      // Reset position with spring animation
+      controls.start({
+        x: 0,
+        y: 0,
+        transition: { type: "spring", damping: 25, stiffness: 300 }
+      })
     }
   }
 
@@ -80,13 +104,15 @@ const Toast = React.forwardRef<
     >
       <motion.div
         style={{ x, y, opacity }}
+        animate={controls}
         drag
-        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-        dragElastic={0.2}
+        dragConstraints={{ left: -200, right: 200, top: -200, bottom: 50 }}
+        dragElastic={0.1}
         onDragEnd={handleDragEnd}
         className="touch-pan-y"
+        data-testid="toast-swipeable"
       >
-        {props.children}
+        {children}
       </motion.div>
     </ToastPrimitives.Root>
   )
