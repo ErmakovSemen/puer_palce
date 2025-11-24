@@ -92,6 +92,20 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, aiming to deliv
 - **SMS Receipt Format Fix**: Corrected Receipt.Phone format from +79XXXXXXXXX to 79XXXXXXXXX (Tinkoff requires phone without + prefix for SMS delivery)
 - **SMS Receipt Email Removal**: Completely removed Email field from both Receipt and DATA objects in Tinkoff Init payload - Tinkoff documentation specifies that presence of ANY Email field forces receipt delivery via email instead of SMS, blocking SMS delivery even when Phone is correctly formatted
 
+### SMS Receipt Delivery System (January 2025)
+- **Custom Implementation**: Workaround for Tinkoff limitation (native SMS receipts not supported) - fetches receipt URL from GetState API and sends via SMS.ru
+- **Payment Webhook Flow**: On CONFIRMED status, webhook calls `TinkoffAPI.getState(paymentId)` to retrieve receipt URL, saves to database, and sends SMS
+- **URL Extraction**: Handles multiple Tinkoff response formats: `Receipt.Url` (most common), direct `ReceiptUrl`, or `Receipt` string
+- **Phone Normalization**: Uses centralized `normalizePhone()` before SMS delivery to ensure SMS.ru compatibility
+- **SMS Message Format**: "Спасибо за заказ #N! Ваш чек: {url}. Puer Pub" - concise message with order number and receipt link
+- **Database Schema**: Added `receiptUrl` (text, nullable) field to orders table for storing Tinkoff-generated receipt URLs
+- **Error Handling**: 
+  - Graceful degradation: webhook doesn't fail if SMS sending fails
+  - Comprehensive CRITICAL logging with manual recovery instructions (phone, receipt URL, error details)
+  - Missing receipt URL logged with full GetState response for debugging
+- **Cost**: ~2₽ per receipt SMS via SMS.ru (regular SMS mode, no template support for receipts)
+- **Future Enhancements**: TODO for Telegram admin notifications and structured retry queue for failed deliveries
+
 ### SBP (Fast Payment System) Integration (January 2025)
 - **Automatic Quick Pay Button**: SBP appears automatically as a Quick Pay button on Tinkoff's hosted payment page alongside card payment and T-Pay
 - **No Frontend Selection**: Users are redirected to Tinkoff payment page where they can choose between card, T-Pay, or SBP (no selection needed in checkout form)
