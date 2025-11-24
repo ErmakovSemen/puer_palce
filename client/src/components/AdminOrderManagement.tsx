@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Package, User, Mail, Phone, MapPin, MessageSquare } from "lucide-react";
+import { Package, User, Mail, Phone, MapPin, MessageSquare, AlertTriangle } from "lucide-react";
 import { queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -174,17 +174,28 @@ export default function AdminOrderManagement({ adminPassword }: AdminOrderManage
               {allOrders.map((order) => {
                 const items = JSON.parse(order.items);
                 const orderDate = new Date(order.createdAt);
+                const isMissingReceipt = order.status === 'paid' && !order.receiptUrl;
                 
                 return (
                   <Card key={order.id} data-testid={`card-order-${order.id}`}>
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <CardTitle className="text-lg">Заказ #{order.id}</CardTitle>
                             <Badge variant={STATUS_VARIANTS[order.status]} data-testid={`badge-status-${order.id}`}>
                               {STATUS_LABELS[order.status as keyof typeof STATUS_LABELS]}
                             </Badge>
+                            {isMissingReceipt && (
+                              <Badge 
+                                variant="destructive" 
+                                className="flex items-center gap-1"
+                                data-testid={`badge-missing-receipt-${order.id}`}
+                              >
+                                <AlertTriangle className="h-3 w-3" />
+                                Нет чека
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-sm text-muted-foreground">
                             {format(orderDate, 'd MMMM yyyy, HH:mm', { locale: ru })}
