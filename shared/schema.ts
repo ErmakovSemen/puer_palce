@@ -291,3 +291,27 @@ export const updateSiteSettingsSchema = z.object({
 export type InsertSiteSettings = z.infer<typeof insertSiteSettingsSchema>;
 export type UpdateSiteSettings = z.infer<typeof updateSiteSettingsSchema>;
 export type SiteSettings = typeof siteSettings.$inferSelect;
+
+// Saved Addresses table
+export const savedAddresses = pgTable("saved_addresses", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  address: text("address").notNull(),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertSavedAddressSchema = createInsertSchema(savedAddresses, {
+  userId: z.string(),
+  address: z.string().min(10, "Введите полный адрес доставки"),
+  isDefault: z.boolean().default(false),
+}).omit({ id: true, createdAt: true });
+
+export const updateSavedAddressSchema = z.object({
+  address: z.string().min(10, "Введите полный адрес доставки").optional(),
+  isDefault: z.boolean().optional(),
+});
+
+export type InsertSavedAddress = z.infer<typeof insertSavedAddressSchema>;
+export type UpdateSavedAddress = z.infer<typeof updateSavedAddressSchema>;
+export type SavedAddress = typeof savedAddresses.$inferSelect;
