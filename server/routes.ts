@@ -54,35 +54,34 @@ function escapeXml(unsafe: string): string {
     .replace(/'/g, '&apos;');
 }
 
-// Receipt retry system - Tinkoff generates receipts asynchronously (2-10 minutes)
-async function checkAndSendReceipt(
+// Receipt fallback system - Tinkoff RECEIPT webhooks may be delayed or missed
+// This polls GetState API as backup, but checks DB before sending to prevent duplicates
+async function checkAndSendReceiptFallback(
   orderId: number, 
   paymentId: string, 
   customerPhone: string, 
   attemptNumber: number
 ): Promise<boolean> {
   try {
-    console.log(`[Receipt Retry #${attemptNumber}] Checking receipt for order ${orderId}, payment ${paymentId}`);
+    console.log(`[Receipt Fallback #${attemptNumber}] Checking receipt for order ${orderId}`);
     
-    // First check if receipt was already delivered to avoid duplicate SMS
+    // CRITICAL: Check if SMS already sent (receiptUrl saved means SMS was sent)
     const existingOrder = await db.query.orders.findFirst({
       where: eq(ordersTable.id, orderId),
       columns: { receiptUrl: true }
     });
     
     if (existingOrder?.receiptUrl) {
-      console.log(`[Receipt Retry #${attemptNumber}] Receipt already delivered for order ${orderId}, skipping`);
-      return true; // Already done, stop retries
+      console.log(`[Receipt Fallback #${attemptNumber}] SMS already sent for order ${orderId}, stopping`);
+      return true; // Already done, stop fallback
     }
     
     const tinkoffClient = getTinkoffClient();
     const paymentState = await tinkoffClient.getState(paymentId);
     
-    // Extract receipt URL from response
-    // Tinkoff returns fiscal receipts in Receipts array with Url field
+    // Extract receipt URL from GetState response
     let receiptUrl: string | null = null;
     
-    // Try Receipts array first (primary location for fiscal receipts)
     if (paymentState.Receipts && Array.isArray(paymentState.Receipts) && paymentState.Receipts.length > 0) {
       const receiptWithUrl = paymentState.Receipts.find((r: any) => r.Url);
       if (receiptWithUrl) {
@@ -90,7 +89,6 @@ async function checkAndSendReceipt(
       }
     }
     
-    // Fallback to legacy fields if Receipts array not available
     if (!receiptUrl) {
       if (typeof paymentState.Receipt === 'string') {
         receiptUrl = paymentState.Receipt;
@@ -102,100 +100,93 @@ async function checkAndSendReceipt(
     }
     
     if (receiptUrl) {
-      console.log(`[Receipt Retry #${attemptNumber}] ✅ Receipt URL found:`, receiptUrl);
+      console.log(`[Receipt Fallback #${attemptNumber}] Receipt URL found:`, receiptUrl);
       
-      // Save to database
+      // Double-check DB again before saving/sending (race condition protection)
+      const recheck = await db.query.orders.findFirst({
+        where: eq(ordersTable.id, orderId),
+        columns: { receiptUrl: true }
+      });
+      
+      if (recheck?.receiptUrl) {
+        console.log(`[Receipt Fallback #${attemptNumber}] SMS already sent (race), stopping`);
+        return true;
+      }
+      
+      // Save to database first
       await db.update(ordersTable)
         .set({ receiptUrl: receiptUrl })
         .where(eq(ordersTable.id, orderId));
       
-      console.log(`[Receipt Retry #${attemptNumber}] Receipt URL saved to database`);
+      console.log(`[Receipt Fallback #${attemptNumber}] Receipt URL saved`);
       
       // Send SMS
       try {
         const normalizedPhone = normalizePhone(customerPhone);
         await sendReceiptSms(normalizedPhone, receiptUrl, orderId);
-        console.log(`[Receipt Retry #${attemptNumber}] ✅ Receipt SMS sent successfully for order ${orderId}`);
+        console.log(`[Receipt Fallback #${attemptNumber}] ✅ SMS sent for order ${orderId}`);
         return true;
       } catch (error) {
-        console.error(`[Receipt Retry #${attemptNumber}] ⚠️ Failed to send SMS for order ${orderId}:`, error);
-        console.error(`[Receipt Retry #${attemptNumber}] ⚠️ MANUAL ACTION: Send receipt to ${customerPhone}: ${receiptUrl}`);
-        
-        // Send Telegram notification to admin about SMS delivery failure
+        console.error(`[Receipt Fallback #${attemptNumber}] SMS failed for order ${orderId}:`, error);
         const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}`;
         await sendFailedReceiptSmsNotification(orderId, customerPhone, smsText);
-        
-        // Receipt found and saved, but SMS failed - still return true to stop retries
-        return true;
+        return true; // Receipt saved, stop retries even if SMS failed
       }
     } else {
-      console.log(`[Receipt Retry #${attemptNumber}] Receipt not ready yet for order ${orderId}`);
+      console.log(`[Receipt Fallback #${attemptNumber}] Receipt not ready for order ${orderId}`);
       return false;
     }
   } catch (error) {
-    console.error(`[Receipt Retry #${attemptNumber}] Error checking receipt for order ${orderId}:`, error);
+    console.error(`[Receipt Fallback #${attemptNumber}] Error for order ${orderId}:`, error);
     return false;
   }
 }
 
-async function scheduleReceiptRetry(
-  orderId: number, 
-  paymentId: string, 
-  customerPhone: string
-): Promise<void> {
-  // Retry delays: immediate, then +3min, +7min, +12min from webhook
-  // Incremental delays: [0, 3, 4, 5] minutes (0 = immediate check)
-  const incrementalDelays = [0, 3, 4, 5]; // minutes between attempts
-  const absoluteTimings = ['immediate', '+3min', '+7min', '+12min']; // for logging
+// Track active fallback timers to cancel when webhook delivers first
+const activeFallbackTimers = new Map<number, NodeJS.Timeout[]>();
+
+// Cancel all pending fallback timers for an order (called when webhook delivers receipt)
+function cancelReceiptFallback(orderId: number): void {
+  const timers = activeFallbackTimers.get(orderId);
+  if (timers) {
+    timers.forEach(t => clearTimeout(t));
+    activeFallbackTimers.delete(orderId);
+    console.log(`[Receipt Fallback] Cancelled pending timers for order ${orderId}`);
+  }
+}
+
+// Schedule fallback receipt checks (only runs if RECEIPT webhook doesn't arrive first)
+function scheduleReceiptFallback(orderId: number, paymentId: string, customerPhone: string): void {
+  // Cancel any existing timers for this order first (prevent duplicate scheduling)
+  cancelReceiptFallback(orderId);
   
-  console.log(`[Receipt Retry] Will check receipt at: ${absoluteTimings.join(', ')} for order ${orderId}`);
+  // Delays: 3min, 7min, 12min after CONFIRMED (giving webhook time to arrive first)
+  const delays = [3, 7, 12]; // minutes
   
-  let currentAttempt = 0;
+  console.log(`[Receipt Fallback] Scheduled for order ${orderId} at: +3min, +7min, +12min`);
   
-  const scheduleNext = async () => {
-    if (currentAttempt >= incrementalDelays.length) {
-      return; // All attempts exhausted
-    }
-    
-    const delay = incrementalDelays[currentAttempt];
-    const attemptNumber = currentAttempt + 1;
-    currentAttempt++;
-    
-    const executeCheck = async () => {
-      const success = await checkAndSendReceipt(orderId, paymentId, customerPhone, attemptNumber);
+  const timers: NodeJS.Timeout[] = [];
+  
+  delays.forEach((delayMinutes, index) => {
+    const timer = setTimeout(async () => {
+      const attemptNumber = index + 1;
+      const success = await checkAndSendReceiptFallback(orderId, paymentId, customerPhone, attemptNumber);
       
       if (success) {
-        console.log(`[Receipt Retry #${attemptNumber}] ✅ Receipt delivery complete for order ${orderId}, cancelling remaining retries`);
-        // Don't schedule next attempt - stop here
-        return;
-      }
-      
-      if (attemptNumber === incrementalDelays.length) {
-        // Final attempt failed
-        console.error(`[Receipt Retry #${attemptNumber}] ⚠️ CRITICAL: All retry attempts exhausted for order ${orderId}`);
-        console.error(`[Receipt Retry] ⚠️ MANUAL ACTION: Check Tinkoff merchant account for receipt URL`);
-        console.error(`[Receipt Retry] Order: ${orderId}, PaymentId: ${paymentId}, Phone: ${customerPhone}`);
-        
-        // Send Telegram notification to admin with SMS text
-        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: [ссылка из ЛК Tinkoff]`;
+        console.log(`[Receipt Fallback #${attemptNumber}] Complete for order ${orderId}`);
+        // Cancel remaining timers
+        cancelReceiptFallback(orderId);
+      } else if (attemptNumber === delays.length) {
+        console.error(`[Receipt Fallback] CRITICAL: All attempts exhausted for order ${orderId}`);
+        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: [см. ЛК Tinkoff]`;
         await sendFailedReceiptSmsNotification(orderId, customerPhone, smsText);
-      } else {
-        // Schedule next attempt
-        await scheduleNext();
+        activeFallbackTimers.delete(orderId);
       }
-    };
-    
-    if (delay === 0) {
-      // Immediate check
-      await executeCheck();
-    } else {
-      // Delayed check
-      setTimeout(executeCheck, delay * 60 * 1000);
-    }
-  };
+    }, delayMinutes * 60 * 1000);
+    timers.push(timer);
+  });
   
-  // Start with immediate check
-  await scheduleNext();
+  activeFallbackTimers.set(orderId, timers);
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1960,6 +1951,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log("[Payment] Receipt URL saved to database for order:", orderId);
 
+        // Cancel any pending fallback timers (webhook delivered first)
+        cancelReceiptFallback(orderId);
+
         // Send SMS with receipt
         try {
           const normalizedPhone = normalizePhone(order.phone);
@@ -2057,15 +2051,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               // Don't fail the webhook - graceful degradation
             }
           } else {
-            // Receipt not ready yet - schedule fallback retries as insurance
-            // PRIMARY: Wait for RECEIPT webhook notification from Tinkoff (typically 2-10 minutes)
-            // FALLBACK: Poll GetState API in case webhook is missed (webhooks are best-effort)
+            // Receipt not ready yet - Tinkoff will send RECEIPT webhook (typically 2-10 minutes)
+            // Schedule fallback polling in case webhook is missed (starts after 3min delay)
             console.log("[Payment] Receipt not available immediately for order:", orderId);
-            console.log("[Payment] PRIMARY: Waiting for RECEIPT webhook notification from Tinkoff");
-            console.log("[Payment] FALLBACK: Scheduling GetState polling retries as insurance");
-            
-            // Schedule retry attempts: +3min, +7min, +12min from payment confirmation
-            scheduleReceiptRetry(orderId, notification.PaymentId, order.phone);
+            console.log("[Payment] PRIMARY: Waiting for RECEIPT webhook from Tinkoff");
+            console.log("[Payment] FALLBACK: Scheduled GetState checks at +3/7/12min (if webhook missed)");
+            scheduleReceiptFallback(orderId, notification.PaymentId, order.phone);
           }
 
           // Award XP to user if authenticated
