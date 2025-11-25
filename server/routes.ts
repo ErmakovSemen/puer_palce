@@ -1906,7 +1906,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let receiptUrl: string | null = null;
         
         // Try various possible receipt URL locations in notification
-        if (notification.Receipt?.ReceiptUrl) {
+        // Priority: direct Url field (most common in real Tinkoff payloads) > nested fields
+        if (notification.Url) {
+          // Tinkoff sends receipt URL directly in "Url" field for RECEIPT notifications
+          receiptUrl = notification.Url;
+        } else if (notification.Receipt?.ReceiptUrl) {
           receiptUrl = notification.Receipt.ReceiptUrl;
         } else if (notification.ReceiptUrl) {
           receiptUrl = notification.ReceiptUrl;
