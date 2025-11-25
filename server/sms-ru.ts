@@ -183,7 +183,7 @@ export async function sendSmsCode(phone: string, code: string): Promise<void> {
 }
 
 export async function sendReceiptSms(phone: string, receiptUrl: string, orderNumber: number): Promise<void> {
-  const message = `Спасибо за заказ #${orderNumber}! Ваш чек: ${receiptUrl}. Puer Pub`;
+  const message = `Спасибо за заказ #${orderNumber}! Ваш чек: ${receiptUrl}`;
   
   console.log(`[SMS.ru] Sending receipt SMS to ${phone} for order #${orderNumber}`);
   

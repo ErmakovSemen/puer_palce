@@ -122,7 +122,7 @@ async function checkAndSendReceipt(
         console.error(`[Receipt Retry #${attemptNumber}] ⚠️ MANUAL ACTION: Send receipt to ${customerPhone}: ${receiptUrl}`);
         
         // Send Telegram notification to admin about SMS delivery failure
-        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}. Puer Pub`;
+        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}`;
         await sendFailedReceiptSmsNotification(orderId, customerPhone, smsText);
         
         // Receipt found and saved, but SMS failed - still return true to stop retries
@@ -177,7 +177,7 @@ async function scheduleReceiptRetry(
         console.error(`[Receipt Retry] Order: ${orderId}, PaymentId: ${paymentId}, Phone: ${customerPhone}`);
         
         // Send Telegram notification to admin with SMS text
-        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: [ссылка из ЛК Tinkoff]. Puer Pub`;
+        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: [ссылка из ЛК Tinkoff]`;
         await sendFailedReceiptSmsNotification(orderId, customerPhone, smsText);
       } else {
         // Schedule next attempt
@@ -1974,7 +1974,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Try to send Telegram notification to admin (don't fail webhook if this fails)
           try {
-            const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}. Puer Pub`;
+            const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}`;
             await sendFailedReceiptSmsNotification(orderId, order.phone, smsText);
           } catch (telegramError) {
             console.error("[Payment] ⚠️ Failed to send Telegram notification:", telegramError);
