@@ -12,7 +12,7 @@ import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotificat
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
 import { users as usersTable, orders as ordersTable } from "@shared/schema";
-import { eq, sql, desc } from "drizzle-orm";
+import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
 
@@ -65,13 +65,13 @@ async function checkAndSendReceiptFallback(
   try {
     console.log(`[Receipt Fallback #${attemptNumber}] Checking receipt for order ${orderId}`);
     
-    // CRITICAL: Check if SMS already sent (receiptUrl saved means SMS was sent)
+    // CRITICAL: Check if SMS already sent using the flag
     const existingOrder = await db.query.orders.findFirst({
       where: eq(ordersTable.id, orderId),
-      columns: { receiptUrl: true }
+      columns: { receiptUrl: true, receiptSmsSent: true }
     });
     
-    if (existingOrder?.receiptUrl) {
+    if (existingOrder?.receiptSmsSent) {
       console.log(`[Receipt Fallback #${attemptNumber}] SMS already sent for order ${orderId}, stopping`);
       return true; // Already done, stop fallback
     }
@@ -102,23 +102,19 @@ async function checkAndSendReceiptFallback(
     if (receiptUrl) {
       console.log(`[Receipt Fallback #${attemptNumber}] Receipt URL found:`, receiptUrl);
       
-      // Double-check DB again before saving/sending (race condition protection)
-      const recheck = await db.query.orders.findFirst({
-        where: eq(ordersTable.id, orderId),
-        columns: { receiptUrl: true }
-      });
+      // ATOMIC: Try to claim SMS sending rights with conditional update
+      // Only updates if receiptSmsSent is still false (prevents race conditions)
+      const updateResult = await db.update(ordersTable)
+        .set({ receiptUrl: receiptUrl, receiptSmsSent: true })
+        .where(and(eq(ordersTable.id, orderId), eq(ordersTable.receiptSmsSent, false)));
       
-      if (recheck?.receiptUrl) {
-        console.log(`[Receipt Fallback #${attemptNumber}] SMS already sent (race), stopping`);
+      // Check if we won the race (row was updated)
+      if (updateResult.rowCount === 0) {
+        console.log(`[Receipt Fallback #${attemptNumber}] SMS already sent (lost race), stopping`);
         return true;
       }
       
-      // Save to database first
-      await db.update(ordersTable)
-        .set({ receiptUrl: receiptUrl })
-        .where(eq(ordersTable.id, orderId));
-      
-      console.log(`[Receipt Fallback #${attemptNumber}] Receipt URL saved`);
+      console.log(`[Receipt Fallback #${attemptNumber}] Won SMS race - sending SMS`);
       
       // Send SMS
       try {
@@ -128,9 +124,13 @@ async function checkAndSendReceiptFallback(
         return true;
       } catch (error) {
         console.error(`[Receipt Fallback #${attemptNumber}] SMS failed for order ${orderId}:`, error);
+        // Reset flag so next timer can retry
+        await db.update(ordersTable)
+          .set({ receiptSmsSent: false })
+          .where(eq(ordersTable.id, orderId));
         const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}`;
         await sendFailedReceiptSmsNotification(orderId, customerPhone, smsText);
-        return true; // Receipt saved, stop retries even if SMS failed
+        return false; // Return false so next timer can retry
       }
     } else {
       console.log(`[Receipt Fallback #${attemptNumber}] Receipt not ready for order ${orderId}`);
@@ -1117,31 +1117,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         orderStatus = "cancelled";
       }
       
-      // Update order in database
-      await db.update(ordersTable)
-        .set({
-          paymentId: paymentIdToUse,
-          paymentStatus: tinkoffStatus,
-          status: orderStatus,
-          receiptUrl: finalReceiptUrl,
-        })
-        .where(eq(ordersTable.id, orderId));
-      
-      console.log(`[Admin] Order ${orderId} updated in database`);
-      
       // Send SMS with receipt if available and payment is confirmed
+      // Use ATOMIC update to claim SMS rights
       let smsSent = false;
       if (finalReceiptUrl && tinkoffStatus === "CONFIRMED") {
-        try {
-          const normalizedPhone = normalizePhone(order.phone);
-          await sendReceiptSms(normalizedPhone, finalReceiptUrl, orderId);
-          smsSent = true;
-          console.log(`[Admin] Receipt SMS sent successfully to ${normalizedPhone}`);
-        } catch (error) {
-          console.error(`[Admin] Failed to send receipt SMS:`, error);
-          // Don't fail the whole operation if SMS fails
+        // ATOMIC: Try to claim SMS sending rights with conditional update
+        const updateResult = await db.update(ordersTable)
+          .set({
+            paymentId: paymentIdToUse,
+            paymentStatus: tinkoffStatus,
+            status: orderStatus,
+            receiptUrl: finalReceiptUrl,
+            receiptSmsSent: true,
+          })
+          .where(and(eq(ordersTable.id, orderId), eq(ordersTable.receiptSmsSent, false)));
+        
+        if (updateResult.rowCount === 0) {
+          // Lost race - SMS already sent, just update other fields
+          console.log(`[Admin] SMS already sent for order ${orderId}, skipping (lost race)`);
+          await db.update(ordersTable)
+            .set({
+              paymentId: paymentIdToUse,
+              paymentStatus: tinkoffStatus,
+              status: orderStatus,
+              receiptUrl: finalReceiptUrl,
+            })
+            .where(eq(ordersTable.id, orderId));
+        } else {
+          // Won race - send SMS
+          try {
+            const normalizedPhone = normalizePhone(order.phone);
+            await sendReceiptSms(normalizedPhone, finalReceiptUrl, orderId);
+            smsSent = true;
+            console.log(`[Admin] Receipt SMS sent successfully to ${normalizedPhone}`);
+          } catch (error) {
+            console.error(`[Admin] Failed to send receipt SMS:`, error);
+            // Reset flag so retry can work
+            await db.update(ordersTable)
+              .set({ receiptSmsSent: false })
+              .where(eq(ordersTable.id, orderId));
+          }
         }
+      } else {
+        // No receipt or not confirmed - just update order
+        await db.update(ordersTable)
+          .set({
+            paymentId: paymentIdToUse,
+            paymentStatus: tinkoffStatus,
+            status: orderStatus,
+            receiptUrl: finalReceiptUrl,
+          })
+          .where(eq(ordersTable.id, orderId));
       }
+      
+      console.log(`[Admin] Order ${orderId} updated in database`);
       
       // Award XP if payment is confirmed and user is authenticated
       let xpAwarded = false;
@@ -1934,25 +1963,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return;
         }
 
-        // Check if receipt already saved (duplicate notification)
-        if (order.receiptUrl === receiptUrl) {
-          console.log("[Payment] Receipt already saved for order:", orderId, "- skipping duplicate");
+        // Cancel any pending fallback timers FIRST
+        cancelReceiptFallback(orderId);
+
+        // ATOMIC: Try to claim SMS sending rights with conditional update
+        // Only updates if receiptSmsSent is still false (prevents race conditions)
+        const updateResult = await db.update(ordersTable)
+          .set({ 
+            paymentStatus: paymentStatus,
+            receiptUrl: receiptUrl,
+            receiptSmsSent: true,
+          })
+          .where(and(eq(ordersTable.id, orderId), eq(ordersTable.receiptSmsSent, false)));
+
+        // Check if we won the race (row was updated)
+        // If rowCount is 0, another process already set the flag
+        if (updateResult.rowCount === 0) {
+          console.log("[Payment] Receipt SMS already sent for order:", orderId, "- skipping (lost race)");
+          // Still update receiptUrl if needed (without changing flag)
+          await db.update(ordersTable)
+            .set({ receiptUrl: receiptUrl, paymentStatus: paymentStatus })
+            .where(eq(ordersTable.id, orderId));
           res.send(tinkoffClient.getNotificationSuccessResponse());
           return;
         }
 
-        // Update payment status and save receipt URL
-        await db.update(ordersTable)
-          .set({ 
-            paymentStatus: paymentStatus,
-            receiptUrl: receiptUrl,
-          })
-          .where(eq(ordersTable.id, orderId));
-
-        console.log("[Payment] Receipt URL saved to database for order:", orderId);
-
-        // Cancel any pending fallback timers (webhook delivered first)
-        cancelReceiptFallback(orderId);
+        console.log("[Payment] Won SMS race for order:", orderId, "- sending SMS");
 
         // Send SMS with receipt
         try {
@@ -1965,6 +2001,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("[Payment] Receipt URL:", receiptUrl);
           console.error("[Payment] Customer phone:", order.phone);
           console.error("[Payment] ⚠️ MANUAL ACTION: Send receipt to customer manually");
+          
+          // Reset flag so manual retry can work
+          await db.update(ordersTable)
+            .set({ receiptSmsSent: false })
+            .where(eq(ordersTable.id, orderId));
           
           // Try to send Telegram notification to admin (don't fail webhook if this fails)
           try {

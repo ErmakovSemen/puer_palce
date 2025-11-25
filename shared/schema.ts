@@ -195,6 +195,7 @@ export const orders = pgTable("orders", {
   paymentUrl: text("payment_url"), // URL for customer to pay
   receiptUrl: text("receipt_url"), // URL to view fiscal receipt from OFD
   receiptEmail: text("receipt_email"), // Email for sending receipt
+  receiptSmsSent: boolean("receipt_sms_sent").notNull().default(false), // Flag to prevent duplicate SMS
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
