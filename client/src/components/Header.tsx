@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { trackEvent } from "@/lib/metrics";
+import { submitGoalForm } from "@/components/GoalForms";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,7 +113,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                 size="icon"
                 className="relative h-16 w-16"
                 onClick={() => {
-                  trackEvent('cart_opened');
+                  submitGoalForm('cart');
                   onCartClick();
                 }}
                 data-testid="button-cart"

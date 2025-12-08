@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { trackEvent } from "@/lib/metrics";
+import { submitGoalForm } from "@/components/GoalForms";
 import { Link } from "wouter";
 import type { Product } from "@shared/schema";
 
@@ -323,8 +323,8 @@ export default function Home() {
         localStorage.removeItem('guestCart');
       }
       
-      // Track order completion in Yandex Metrika
-      trackEvent('order_completed');
+      // Submit goal form for Yandex Direct tracking
+      submitGoalForm('payment');
       
       setIsCheckoutOpen(false);
       

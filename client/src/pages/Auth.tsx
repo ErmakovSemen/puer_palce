@@ -10,7 +10,7 @@ import { Loader2, Home, ArrowLeft, Gift, ShoppingBag, Award } from "lucide-react
 import { SiTelegram, SiVk } from "react-icons/si";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { trackEvent } from "@/lib/metrics";
+import { submitGoalForm } from "@/components/GoalForms";
 import { useToast } from "@/hooks/use-toast";
 import { migrateGuestCart } from "@/lib/migrateCart";
 
@@ -82,8 +82,8 @@ export default function Auth() {
           description: "Добро пожаловать!",
         });
         
-        // Track successful registration in Yandex Metrika
-        trackEvent('registration_completed');
+        // Submit goal form for Yandex Direct tracking
+        submitGoalForm('registration');
         
         // Migrate guest cart to user's cart
         await migrateGuestCart();

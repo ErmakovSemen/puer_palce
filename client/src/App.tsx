@@ -11,6 +11,7 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentError from "@/pages/PaymentError";
 import { useDesignMode } from "@/hooks/use-design-mode";
 import { AuthProvider } from "@/hooks/use-auth";
+import { GoalForms } from "@/components/GoalForms";
 
 function Router() {
   return (
@@ -32,6 +33,7 @@ function AppContent() {
   return (
     <>
       <Toaster />
+      <GoalForms />
       <Router />
     </>
   );
