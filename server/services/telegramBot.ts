@@ -587,6 +587,7 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
 
 export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void> {
   console.log("[TelegramBot] Received update:", update.update_id);
+  console.log("[TelegramBot] Full update:", JSON.stringify(update, null, 2));
 
   if (update.callback_query) {
     await handleCallbackQuery(update.callback_query);
