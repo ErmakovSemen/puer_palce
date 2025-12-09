@@ -22,7 +22,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { submitGoalForm } from "@/components/GoalForms";
 import { Link } from "wouter";
 import type { Product } from "@shared/schema";
 
@@ -322,9 +321,6 @@ export default function Home() {
         setGuestCartItems([]);
         localStorage.removeItem('guestCart');
       }
-      
-      // Submit goal form for Yandex Direct tracking
-      submitGoalForm('payment');
       
       setIsCheckoutOpen(false);
       

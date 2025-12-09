@@ -1,15 +1,23 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { submitGoalForm } from "@/components/GoalForms";
 
 export default function PaymentSuccess() {
   const [, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const orderId = searchParams.get("orderId");
+  const goalSubmittedRef = useRef(false);
 
   useEffect(() => {
+    // Submit goal form for Yandex Direct tracking (only once)
+    if (!goalSubmittedRef.current) {
+      goalSubmittedRef.current = true;
+      submitGoalForm('payment');
+    }
+    
     // Optional: Check payment status when component mounts
     if (orderId) {
       fetch(`/api/payments/check/${orderId}`)

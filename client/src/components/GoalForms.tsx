@@ -1,5 +1,11 @@
 export type GoalType = 'cart' | 'payment' | 'registration';
 
+const GOAL_URLS: Record<GoalType, string> = {
+  cart: '/goal/cart',
+  payment: '/goal/payment',
+  registration: '/goal/registration',
+};
+
 export function submitGoalForm(goalType: GoalType) {
   const formId = `goal-${goalType}-form`;
   const form = document.getElementById(formId) as HTMLFormElement | null;
@@ -19,12 +25,12 @@ export function GoalForms() {
       <iframe
         name="goal-iframe"
         style={{
-          display: 'none',
-          width: 0,
-          height: 0,
-          border: 'none',
           position: 'absolute',
+          width: '1px',
+          height: '1px',
+          border: 'none',
           left: '-9999px',
+          top: '-9999px',
         }}
         tabIndex={-1}
         aria-hidden="true"
@@ -32,10 +38,17 @@ export function GoalForms() {
       
       <form
         id="goal-cart-form"
-        action="about:blank"
+        action={GOAL_URLS.cart}
         method="POST"
         target="goal-iframe"
-        style={{ display: 'none' }}
+        style={{ 
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          left: '-9999px',
+          top: '-9999px',
+          opacity: 0,
+        }}
         aria-hidden="true"
       >
         <input type="hidden" name="goal" value="cart" />
@@ -43,10 +56,17 @@ export function GoalForms() {
       
       <form
         id="goal-payment-form"
-        action="about:blank"
+        action={GOAL_URLS.payment}
         method="POST"
         target="goal-iframe"
-        style={{ display: 'none' }}
+        style={{ 
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          left: '-9999px',
+          top: '-9999px',
+          opacity: 0,
+        }}
         aria-hidden="true"
       >
         <input type="hidden" name="goal" value="payment" />
@@ -54,10 +74,17 @@ export function GoalForms() {
       
       <form
         id="goal-registration-form"
-        action="about:blank"
+        action={GOAL_URLS.registration}
         method="POST"
         target="goal-iframe"
-        style={{ display: 'none' }}
+        style={{ 
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          left: '-9999px',
+          top: '-9999px',
+          opacity: 0,
+        }}
         aria-hidden="true"
       >
         <input type="hidden" name="goal" value="registration" />
