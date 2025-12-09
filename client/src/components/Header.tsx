@@ -34,35 +34,13 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
     logoutMutation.mutate();
   };
 
-  const handleCartClick = () => {
-    // Submit goal form for Yandex tracking (use requestSubmit to trigger submit event)
-    if (cartFormRef.current) {
-      try {
-        cartFormRef.current.requestSubmit();
-      } catch (e) {
-        console.warn("Goal form submit error:", e);
-      }
-    }
-    onCartClick();
-  };
-
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
       <iframe
         name="goal-cart-iframe"
-        style={{ display: 'none' }}
+        style={{ display: 'none', width: 0, height: 0, border: 'none' }}
         aria-hidden="true"
       />
-      <form
-        ref={cartFormRef}
-        id="goal-cart-form"
-        action="/goal/cart"
-        method="POST"
-        target="goal-cart-iframe"
-        style={{ display: 'none' }}
-      >
-        <input type="hidden" name="goal" value="cart" />
-      </form>
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link href="/" onClick={handleLogoClick} data-testid="link-home">
@@ -135,24 +113,39 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
               </>
             )}
             
+            {/* Cart button wrapped in visible form for Yandex Metrica goal tracking */}
             {!isAdmin && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative h-16 w-16"
-                onClick={handleCartClick}
-                data-testid="button-cart"
+              <form
+                ref={cartFormRef}
+                id="goal-cart-form"
+                action="/goal/cart"
+                method="POST"
+                target="goal-cart-iframe"
+                onSubmit={(e) => {
+                  // Allow form to submit, then trigger cart action
+                  setTimeout(() => onCartClick(), 0);
+                }}
+                data-testid="form-cart-goal"
               >
-                <ShoppingCart className="w-12 h-12" />
-                {cartItemCount > 0 && (
-                  <Badge 
-                    className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-primary text-primary-foreground border border-primary-border z-20"
-                    data-testid="badge-cart-count"
-                  >
-                    {cartItemCount}
-                  </Badge>
-                )}
-              </Button>
+                <input type="hidden" name="goal" value="cart" />
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  size="icon"
+                  className="relative h-16 w-16"
+                  data-testid="button-cart"
+                >
+                  <ShoppingCart className="w-12 h-12" />
+                  {cartItemCount > 0 && (
+                    <Badge 
+                      className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 bg-primary text-primary-foreground border border-primary-border z-20"
+                      data-testid="badge-cart-count"
+                    >
+                      {cartItemCount}
+                    </Badge>
+                  )}
+                </Button>
+              </form>
             )}
           </div>
         </div>

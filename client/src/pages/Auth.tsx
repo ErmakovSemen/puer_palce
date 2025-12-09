@@ -82,14 +82,8 @@ export default function Auth() {
           description: "Добро пожаловать!",
         });
         
-        // Submit goal form for Yandex Direct tracking (use requestSubmit to trigger submit event)
-        if (registrationFormRef.current) {
-          try {
-            registrationFormRef.current.requestSubmit();
-          } catch (e) {
-            console.warn("Goal form submit error:", e);
-          }
-        }
+        // Goal form submission happens automatically via form action/target
+        // No need to manually submit - the form with action="/goal/registration" already submitted
         
         // Migrate guest cart to user's cart
         await migrateGuestCart();
@@ -209,7 +203,8 @@ export default function Auth() {
   };
 
   const handleVerifyPhone = (e: React.FormEvent) => {
-    e.preventDefault();
+    // Don't prevent default - let the form submit to /goal/registration for Yandex Metrica
+    // The form target is an iframe so it won't navigate away
     verifyPhoneMutation.mutate({
       phone: registerData.phone,
       code: verificationCode,
@@ -425,19 +420,9 @@ export default function Auth() {
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
       <iframe
         name="goal-registration-iframe"
-        style={{ display: 'none' }}
+        style={{ display: 'none', width: 0, height: 0, border: 'none' }}
         aria-hidden="true"
       />
-      <form
-        ref={registrationFormRef}
-        id="goal-registration-form"
-        action="/goal/registration"
-        method="POST"
-        target="goal-registration-iframe"
-        style={{ display: 'none' }}
-      >
-        <input type="hidden" name="goal" value="registration" />
-      </form>
       
       {/* Form Section */}
       <div className="flex items-center justify-center p-8">
@@ -650,12 +635,23 @@ export default function Auth() {
                       </Button>
                     </form>
                   ) : (
-                    <form onSubmit={handleVerifyPhone} className="space-y-4">
+                    <form 
+                      ref={registrationFormRef}
+                      id="goal-registration-form"
+                      action="/goal/registration"
+                      method="POST"
+                      target="goal-registration-iframe"
+                      onSubmit={handleVerifyPhone} 
+                      className="space-y-4"
+                      data-testid="form-registration-goal"
+                    >
+                      <input type="hidden" name="goal" value="registration" />
                       <div className="space-y-2">
                         <Label htmlFor="verification-code">Код из SMS</Label>
                         <Input
                           id="verification-code"
                           type="text"
+                          name="code"
                           placeholder="123456"
                           maxLength={6}
                           value={verificationCode}

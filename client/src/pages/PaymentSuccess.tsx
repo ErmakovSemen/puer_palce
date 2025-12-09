@@ -40,61 +40,66 @@ export default function PaymentSuccess() {
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
       <iframe
         name="goal-payment-iframe"
-        style={{ display: 'none' }}
+        style={{ display: 'none', width: 0, height: 0, border: 'none' }}
         aria-hidden="true"
       />
+      
+      {/* Visible form wrapping Card for Yandex Metrica goal tracking */}
       <form
         ref={formRef}
         id="goal-payment-form"
         action="/goal/payment"
         method="POST"
         target="goal-payment-iframe"
-        style={{ display: 'none' }}
+        className="max-w-md w-full"
+        data-testid="form-payment-goal"
       >
         <input type="hidden" name="goal" value="payment" />
         <input type="hidden" name="orderId" value={orderId || ""} />
-      </form>
-      
-      <Card className="max-w-md w-full">
-        <CardHeader className="text-center">
-          <div className="flex justify-center mb-4">
-            <div className="rounded-full bg-green-100 dark:bg-green-900 p-3">
-              <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-400" />
+        
+        <Card>
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="rounded-full bg-green-100 dark:bg-green-900 p-3">
+                <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-400" />
+              </div>
             </div>
-          </div>
-          <CardTitle className="text-2xl font-serif">Оплата прошла успешно!</CardTitle>
-          <CardDescription>
-            Спасибо за ваш заказ. Электронный чек отправлен на указанный email.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {orderId && (
+            <CardTitle className="text-2xl font-serif">Оплата прошла успешно!</CardTitle>
+            <CardDescription>
+              Спасибо за ваш заказ. Электронный чек отправлен на указанный email.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {orderId && (
+              <div className="text-center text-sm text-muted-foreground">
+                Номер заказа: <span className="font-medium">#{orderId}</span>
+              </div>
+            )}
             <div className="text-center text-sm text-muted-foreground">
-              Номер заказа: <span className="font-medium">#{orderId}</span>
+              Мы свяжемся с вами для подтверждения деталей доставки
             </div>
-          )}
-          <div className="text-center text-sm text-muted-foreground">
-            Мы свяжемся с вами для подтверждения деталей доставки
-          </div>
-          <div className="flex flex-col gap-2">
-            <Button
-              onClick={() => setLocation("/")}
-              className="w-full bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
-              data-testid="button-back-home"
-            >
-              Вернуться на главную
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setLocation("/profile")}
-              className="w-full"
-              data-testid="button-view-orders"
-            >
-              Посмотреть мои заказы
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex flex-col gap-2">
+              <Button
+                type="button"
+                onClick={() => setLocation("/")}
+                className="w-full bg-primary text-primary-foreground border border-primary-border hover-elevate active-elevate-2"
+                data-testid="button-back-home"
+              >
+                Вернуться на главную
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setLocation("/profile")}
+                className="w-full"
+                data-testid="button-view-orders"
+              >
+                Посмотреть мои заказы
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </form>
     </div>
   );
 }
