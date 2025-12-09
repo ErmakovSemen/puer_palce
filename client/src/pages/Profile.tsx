@@ -19,6 +19,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { updateUserSchema, type UpdateUser } from "@shared/schema";
 import { LoyaltyProgressBar } from "@/components/LoyaltyProgressBar";
 import { LoyaltyLevelsModal } from "@/components/LoyaltyLevelsModal";
+import { TelegramLink } from "@/components/TelegramLink";
 
 interface DbOrder {
   id: number;
@@ -255,6 +256,11 @@ export default function Profile() {
               </Card>
             </div>
           )}
+
+          {/* Telegram Integration */}
+          <div className="mt-8">
+            <TelegramLink />
+          </div>
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import { setupAuth } from "./auth";
 import { normalizePhone } from "./utils";
 import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification } from "./telegram";
 import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
+import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
 import { users as usersTable, orders as ordersTable } from "@shared/schema";
@@ -2236,6 +2237,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[Payment] Failed to check payment status:", error);
       res.status(500).json({ error: error.message || "Failed to check payment status" });
+    }
+  });
+
+  // Telegram Magic Link - Create link for account binding
+  app.post("/api/telegram/magic-link", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      
+      const existingProfile = await getUserTelegramProfile(userId);
+      if (existingProfile) {
+        res.status(400).json({ error: "Telegram уже привязан к вашему аккаунту" });
+        return;
+      }
+      
+      const result = await createMagicLink(userId, "telegram");
+      
+      if (!result.success || !result.token) {
+        res.status(500).json({ error: result.error || "Не удалось создать ссылку" });
+        return;
+      }
+      
+      const botUsername = "puerpub_bot";
+      const deepLink = `https://t.me/${botUsername}?start=link_${result.token}`;
+      
+      res.json({ 
+        success: true, 
+        deepLink,
+        expiresIn: 15
+      });
+    } catch (error) {
+      console.error("[Telegram] Magic link creation error:", error);
+      res.status(500).json({ error: "Ошибка при создании ссылки" });
+    }
+  });
+
+  // Telegram Profile - Get linked Telegram info
+  app.get("/api/telegram/profile", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const profile = await getUserTelegramProfile(userId);
+      
+      if (!profile) {
+        res.json({ linked: false });
+        return;
+      }
+      
+      res.json({
+        linked: true,
+        username: profile.username,
+        firstName: profile.firstName,
+        linkedAt: profile.createdAt,
+      });
+    } catch (error) {
+      console.error("[Telegram] Get profile error:", error);
+      res.status(500).json({ error: "Ошибка при получении профиля" });
+    }
+  });
+
+  // Telegram Unlink - Remove Telegram binding
+  app.delete("/api/telegram/profile", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const success = await unlinkTelegram(userId);
+      
+      if (!success) {
+        res.status(400).json({ error: "Telegram не привязан к вашему аккаунту" });
+        return;
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Telegram] Unlink error:", error);
+      res.status(500).json({ error: "Ошибка при отвязке Telegram" });
     }
   });
 

@@ -2,6 +2,7 @@ import { db } from "../db";
 import { telegramProfiles, users, siteSettings, type TelegramProfile } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { getLoyaltyProgress } from "@shared/loyalty";
+import { validateAndConsumeMagicLink } from "./magicLink";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -201,7 +202,13 @@ function getMainMenuKeyboard(isLinked: boolean): InlineKeyboardMarkup {
   return { inline_keyboard: keyboard };
 }
 
-async function handleStartCommand(chatId: string, username?: string, firstName?: string) {
+async function handleStartCommand(chatId: string, username?: string, firstName?: string, payload?: string) {
+  if (payload && payload.startsWith("link_")) {
+    const token = payload.substring(5);
+    await handleMagicLinkConfirmation(chatId, token, username, firstName);
+    return;
+  }
+
   const profile = await getOrCreateProfile(chatId, username, firstName);
   if (!profile) {
     await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
@@ -223,6 +230,48 @@ async function handleStartCommand(chatId: string, username?: string, firstName?:
   greeting += "\n\nВыберите действие:";
 
   await sendMessage(chatId, greeting, getMainMenuKeyboard(isLinked));
+}
+
+async function handleMagicLinkConfirmation(
+  chatId: string,
+  token: string,
+  username?: string,
+  firstName?: string
+) {
+  const result = await validateAndConsumeMagicLink(token, chatId);
+
+  if (!result.success) {
+    await sendMessage(
+      chatId,
+      `❌ <b>Ошибка привязки</b>\n\n${result.error}\n\nПопробуйте получить новую ссылку на сайте.`
+    );
+    return;
+  }
+
+  await getOrCreateProfile(chatId, username, firstName);
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, result.userId!));
+
+  let successMessage = `✅ <b>Аккаунт успешно привязан!</b>\n\n`;
+  
+  if (user) {
+    const progress = getLoyaltyProgress(user.xp);
+    successMessage += `👤 ${user.name || "Пользователь"}\n`;
+    successMessage += `📱 ${user.phone}\n\n`;
+    successMessage += `<b>Программа лояльности:</b>\n`;
+    successMessage += `🏆 Уровень: ${progress.currentLevel.name}\n`;
+    successMessage += `💎 XP: ${user.xp}\n`;
+    successMessage += `🎁 Скидка: ${progress.currentLevel.discount}%`;
+  }
+
+  const keyboard: InlineKeyboardMarkup = {
+    inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
+  };
+
+  await sendMessage(chatId, successMessage, keyboard);
 }
 
 async function handleHelpCommand(chatId: string) {
@@ -419,9 +468,11 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
 
   const command = text.split(" ")[0].toLowerCase();
 
+  const payload = command === "/start" ? text.substring(7).trim() : undefined;
+
   switch (command) {
     case "/start":
-      await handleStartCommand(chatId, username, firstName);
+      await handleStartCommand(chatId, username, firstName, payload || undefined);
       break;
     case "/help":
       await handleHelpCommand(chatId);
