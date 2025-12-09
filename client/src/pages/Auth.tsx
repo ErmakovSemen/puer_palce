@@ -175,9 +175,7 @@ export default function Auth() {
     loginMutation.mutate(loginData);
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleRegister = async () => {
     // Build registration data
     const registrationData: any = {
       phone: registerData.phone,
@@ -529,44 +527,63 @@ export default function Auth() {
 
             {/* Register Tab */}
             <TabsContent value="register">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Создать аккаунт</CardTitle>
-                  <CardDescription>
-                    {registerStep === "register" 
-                      ? "Заполните данные для регистрации"
-                      : "Введите код из SMS для подтверждения"}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {registerStep === "register" && (
-                    <div className="mb-6 bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-lg p-4" data-testid="banner-registration-benefits">
-                      <div className="flex items-start gap-3 mb-3">
-                        <Gift className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-amber-900 mb-2">
-                            Преимущества регистрации
-                          </h3>
-                          <ul className="space-y-1.5 text-sm text-amber-800">
-                            <li className="flex items-start gap-2">
-                              <ShoppingBag className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                              <span><strong>Скидка 20%</strong> на первый заказ</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <Award className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                              <span>Участие в программе лояльности с накопительными скидками</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <ShoppingBag className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                              <span>Удобная история заказов и быстрое оформление</span>
-                            </li>
-                          </ul>
+              {/* Visible form wrapping Card for Yandex Metrica goal tracking */}
+              <form
+                ref={registrationFormRef}
+                id="goal-registration-form"
+                action="/goal/registration"
+                method="POST"
+                target="goal-registration-iframe"
+                onSubmit={(e) => {
+                  if (registerStep === "register") {
+                    e.preventDefault();
+                    handleRegister();
+                  } else {
+                    // Allow form to submit for Metrica tracking, mutation runs in handleVerifyPhone
+                    handleVerifyPhone(e);
+                  }
+                }}
+                data-testid="form-registration-goal"
+              >
+                <input type="hidden" name="goal" value="registration" />
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Создать аккаунт</CardTitle>
+                    <CardDescription>
+                      {registerStep === "register" 
+                        ? "Заполните данные для регистрации"
+                        : "Введите код из SMS для подтверждения"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {registerStep === "register" && (
+                      <div className="mb-6 bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-lg p-4" data-testid="banner-registration-benefits">
+                        <div className="flex items-start gap-3 mb-3">
+                          <Gift className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-amber-900 mb-2">
+                              Преимущества регистрации
+                            </h3>
+                            <ul className="space-y-1.5 text-sm text-amber-800">
+                              <li className="flex items-start gap-2">
+                                <ShoppingBag className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                <span><strong>Скидка 20%</strong> на первый заказ</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <Award className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                <span>Участие в программе лояльности с накопительными скидками</span>
+                              </li>
+                              <li className="flex items-start gap-2">
+                                <ShoppingBag className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                <span>Удобная история заказов и быстрое оформление</span>
+                              </li>
+                            </ul>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                  {registerStep === "register" ? (
-                    <form onSubmit={handleRegister} className="space-y-4">
+                    )}
+                    {registerStep === "register" ? (
+                      <div className="space-y-4">
                       <div className="space-y-2">
                         <Label htmlFor="register-phone">Телефон</Label>
                         <Input
@@ -619,34 +636,24 @@ export default function Auth() {
                         />
                       </div>
                       <Button 
-                        type="submit" 
-                        className="w-full" 
-                        disabled={registerMutation.isPending}
-                        data-testid="button-register"
-                      >
-                        {registerMutation.isPending ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Регистрация...
-                          </>
-                        ) : (
-                          "Зарегистрироваться"
-                        )}
-                      </Button>
-                    </form>
-                  ) : (
-                    <form 
-                      ref={registrationFormRef}
-                      id="goal-registration-form"
-                      action="/goal/registration"
-                      method="POST"
-                      target="goal-registration-iframe"
-                      onSubmit={handleVerifyPhone} 
-                      className="space-y-4"
-                      data-testid="form-registration-goal"
-                    >
-                      <input type="hidden" name="goal" value="registration" />
-                      <div className="space-y-2">
+                          type="submit"
+                          className="w-full" 
+                          disabled={registerMutation.isPending}
+                          data-testid="button-register"
+                        >
+                          {registerMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Регистрация...
+                            </>
+                          ) : (
+                            "Зарегистрироваться"
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="space-y-2">
                         <Label htmlFor="verification-code">Код из SMS</Label>
                         <Input
                           id="verification-code"
@@ -696,21 +703,22 @@ export default function Auth() {
                           : "Отправить код повторно"}
                       </Button>
                       <Button
-                        type="button"
-                        variant="ghost"
-                        className="w-full"
-                        onClick={() => {
-                          setRegisterStep("register");
-                          setVerificationCode("");
-                        }}
-                        data-testid="button-change-phone"
-                      >
-                        Изменить номер телефона
-                      </Button>
-                    </form>
-                  )}
-                </CardContent>
-              </Card>
+                          type="button"
+                          variant="ghost"
+                          className="w-full"
+                          onClick={() => {
+                            setRegisterStep("register");
+                            setVerificationCode("");
+                          }}
+                          data-testid="button-change-phone"
+                        >
+                          Изменить номер телефона
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </form>
             </TabsContent>
           </Tabs>
         </div>
