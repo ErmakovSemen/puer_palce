@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,6 @@ import { Loader2, Home, ArrowLeft, Gift, ShoppingBag, Award } from "lucide-react
 import { SiTelegram, SiVk } from "react-icons/si";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { submitGoalForm } from "@/components/GoalForms";
 import { useToast } from "@/hooks/use-toast";
 import { migrateGuestCart } from "@/lib/migrateCart";
 
@@ -21,6 +20,7 @@ export default function Auth() {
   const { user, isLoading, loginMutation, registerMutation } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const registrationFormRef = useRef<HTMLFormElement>(null);
   
   // Login state
   const [loginData, setLoginData] = useState({ phone: "+7", password: "" });
@@ -82,8 +82,14 @@ export default function Auth() {
           description: "Добро пожаловать!",
         });
         
-        // Submit goal form for Yandex Direct tracking
-        submitGoalForm('registration');
+        // Submit goal form for Yandex Direct tracking (use requestSubmit to trigger submit event)
+        if (registrationFormRef.current) {
+          try {
+            registrationFormRef.current.requestSubmit();
+          } catch (e) {
+            console.warn("Goal form submit error:", e);
+          }
+        }
         
         // Migrate guest cart to user's cart
         await migrateGuestCart();
@@ -417,6 +423,22 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
+      <iframe
+        name="goal-registration-iframe"
+        style={{ display: 'none' }}
+        aria-hidden="true"
+      />
+      <form
+        ref={registrationFormRef}
+        id="goal-registration-form"
+        action="/goal/registration"
+        method="POST"
+        target="goal-registration-iframe"
+        style={{ display: 'none' }}
+      >
+        <input type="hidden" name="goal" value="registration" />
+      </form>
+      
       {/* Form Section */}
       <div className="flex items-center justify-center p-8">
         <div className="w-full max-w-md">

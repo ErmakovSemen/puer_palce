@@ -3,19 +3,24 @@ import { useLocation } from "wouter";
 import { CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { submitGoalForm } from "@/components/GoalForms";
 
 export default function PaymentSuccess() {
   const [, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const orderId = searchParams.get("orderId");
+  const formRef = useRef<HTMLFormElement>(null);
   const goalSubmittedRef = useRef(false);
 
   useEffect(() => {
     // Submit goal form for Yandex Direct tracking (only once)
-    if (!goalSubmittedRef.current) {
+    // Use requestSubmit to trigger native submit event for Yandex Metrica
+    if (!goalSubmittedRef.current && formRef.current) {
       goalSubmittedRef.current = true;
-      submitGoalForm('payment');
+      try {
+        formRef.current.requestSubmit();
+      } catch (e) {
+        console.warn("Goal form submit error:", e);
+      }
     }
     
     // Optional: Check payment status when component mounts
@@ -33,6 +38,23 @@ export default function PaymentSuccess() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <iframe
+        name="goal-payment-iframe"
+        style={{ display: 'none' }}
+        aria-hidden="true"
+      />
+      <form
+        ref={formRef}
+        id="goal-payment-form"
+        action="/goal/payment"
+        method="POST"
+        target="goal-payment-iframe"
+        style={{ display: 'none' }}
+      >
+        <input type="hidden" name="goal" value="payment" />
+        <input type="hidden" name="orderId" value={orderId || ""} />
+      </form>
+      
       <Card className="max-w-md w-full">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">

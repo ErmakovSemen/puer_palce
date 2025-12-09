@@ -192,6 +192,49 @@ function scheduleReceiptFallback(orderId: number, paymentId: string, customerPho
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup user authentication (email/password)
   setupAuth(app);
+  
+  // Goal tracking endpoints for Yandex Metrica (form submission type goals)
+  // These endpoints accept POST from forms and return minimal HTML response
+  app.post("/goal/cart", (_req, res) => {
+    res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
+  });
+  
+  app.post("/goal/payment", (_req, res) => {
+    res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
+  });
+  
+  app.post("/goal/registration", (_req, res) => {
+    res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
+  });
+  
+  // Also handle GET requests for goal pages (needed for Yandex Metrica visual editor)
+  app.get("/goal/cart", (_req, res) => {
+    res.status(200).send(`<!DOCTYPE html><html><head><title>Cart Goal</title></head><body>
+      <form id="goal-cart-form" action="/goal/cart" method="POST">
+        <input type="hidden" name="goal" value="cart" />
+        <button type="submit">Submit</button>
+      </form>
+    </body></html>`);
+  });
+  
+  app.get("/goal/payment", (_req, res) => {
+    res.status(200).send(`<!DOCTYPE html><html><head><title>Payment Goal</title></head><body>
+      <form id="goal-payment-form" action="/goal/payment" method="POST">
+        <input type="hidden" name="goal" value="payment" />
+        <button type="submit">Submit</button>
+      </form>
+    </body></html>`);
+  });
+  
+  app.get("/goal/registration", (_req, res) => {
+    res.status(200).send(`<!DOCTYPE html><html><head><title>Registration Goal</title></head><body>
+      <form id="goal-registration-form" action="/goal/registration" method="POST">
+        <input type="hidden" name="goal" value="registration" />
+        <button type="submit">Submit</button>
+      </form>
+    </body></html>`);
+  });
+  
   // Admin auth verification endpoint
   app.post("/api/auth/verify", requireAdminAuth, async (_req, res) => {
     // If middleware passes, password is correct

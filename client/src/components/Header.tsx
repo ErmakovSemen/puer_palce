@@ -1,9 +1,9 @@
+import { useRef } from "react";
 import { ShoppingCart, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { submitGoalForm } from "@/components/GoalForms";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +22,7 @@ interface HeaderProps {
 
 export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmin = false }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
+  const cartFormRef = useRef<HTMLFormElement>(null);
   
   const handleLogoClick = () => {
     if (onLogoClick) {
@@ -33,8 +34,35 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
     logoutMutation.mutate();
   };
 
+  const handleCartClick = () => {
+    // Submit goal form for Yandex tracking (use requestSubmit to trigger submit event)
+    if (cartFormRef.current) {
+      try {
+        cartFormRef.current.requestSubmit();
+      } catch (e) {
+        console.warn("Goal form submit error:", e);
+      }
+    }
+    onCartClick();
+  };
+
   return (
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
+      <iframe
+        name="goal-cart-iframe"
+        style={{ display: 'none' }}
+        aria-hidden="true"
+      />
+      <form
+        ref={cartFormRef}
+        id="goal-cart-form"
+        action="/goal/cart"
+        method="POST"
+        target="goal-cart-iframe"
+        style={{ display: 'none' }}
+      >
+        <input type="hidden" name="goal" value="cart" />
+      </form>
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           <Link href="/" onClick={handleLogoClick} data-testid="link-home">
@@ -112,10 +140,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                 variant="ghost"
                 size="icon"
                 className="relative h-16 w-16"
-                onClick={() => {
-                  submitGoalForm('cart');
-                  onCartClick();
-                }}
+                onClick={handleCartClick}
                 data-testid="button-cart"
               >
                 <ShoppingCart className="w-12 h-12" />
