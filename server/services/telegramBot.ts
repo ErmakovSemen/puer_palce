@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { telegramProfiles, users, siteSettings, products, magicLinks, type TelegramProfile } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { getLoyaltyProgress } from "@shared/loyalty";
+import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { validateAndConsumeMagicLink } from "./magicLink";
 import { createHash } from "crypto";
 
@@ -582,6 +582,21 @@ async function handleProfileCommand(chatId: string, username?: string, firstName
   } else {
     profileText += `\n🎉 <b>Максимальный уровень достигнут!</b>`;
   }
+
+  profileText += `\n\n<b>📊 Все уровни программы</b>\n`;
+  profileText += `━━━━━━━━━━━━━━━━━━━━\n`;
+  
+  const levelIcons = ["🥉", "🥈", "🥇", "👑"];
+  LOYALTY_LEVELS.forEach((level, index) => {
+    const isCurrentLevel = level.level === progress.currentLevel.level;
+    const marker = isCurrentLevel ? "➤ " : "   ";
+    const xpRange = level.maxXP 
+      ? `${level.minXP.toLocaleString("ru-RU")} - ${level.maxXP.toLocaleString("ru-RU")} XP`
+      : `от ${level.minXP.toLocaleString("ru-RU")} XP`;
+    
+    profileText += `${marker}${levelIcons[index]} <b>${level.name}</b>\n`;
+    profileText += `      ${xpRange} • Скидка ${level.discount}%\n`;
+  });
 
   const keyboard: InlineKeyboardMarkup = {
     inline_keyboard: [
