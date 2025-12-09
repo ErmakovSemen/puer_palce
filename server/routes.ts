@@ -13,7 +13,7 @@ import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/tele
 import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
-import { users as usersTable, orders as ordersTable } from "@shared/schema";
+import { users as usersTable, orders as ordersTable, walletTransactions } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
@@ -1959,8 +1959,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const orderId = parseInt(notification.OrderId);
+      const orderIdRaw = notification.OrderId;
       const paymentStatus = notification.Status;
+
+      // Check if this is a wallet top-up (OrderId starts with "W_")
+      if (typeof orderIdRaw === 'string' && orderIdRaw.startsWith("W_")) {
+        console.log("[Wallet] Received wallet payment notification:", orderIdRaw, "Status:", paymentStatus);
+        
+        // Only process confirmed payments
+        if (paymentStatus === "CONFIRMED") {
+          // Parse wallet order ID: W_timestamp_userId_amount
+          const parts = orderIdRaw.split("_");
+          if (parts.length >= 4) {
+            const userIdPrefix = parts[2];
+            const amountRub = parseInt(parts[3]);
+            const amountKopecks = amountRub * 100;
+            
+            // Find user by ID prefix
+            const allUsers = await db.select().from(usersTable);
+            const user = allUsers.find(u => u.id.startsWith(userIdPrefix));
+            
+            if (user) {
+              // Check if this payment was already processed (prevent duplicates)
+              const existingTransaction = await db.query.walletTransactions.findFirst({
+                where: eq(walletTransactions.paymentId, notification.PaymentId),
+              });
+              
+              if (!existingTransaction) {
+                // Credit the wallet
+                await db.update(usersTable)
+                  .set({ 
+                    walletBalance: sql`${usersTable.walletBalance} + ${amountKopecks}` 
+                  })
+                  .where(eq(usersTable.id, user.id));
+                
+                // Record transaction
+                await db.insert(walletTransactions).values({
+                  userId: user.id,
+                  type: "topup",
+                  amount: amountKopecks,
+                  description: `Пополнение через СБП на ${amountRub}₽`,
+                  paymentId: notification.PaymentId,
+                });
+                
+                console.log("[Wallet] ✅ Credited", amountRub, "RUB to user:", user.id);
+              } else {
+                console.log("[Wallet] Payment already processed:", notification.PaymentId);
+              }
+            } else {
+              console.error("[Wallet] User not found for prefix:", userIdPrefix);
+            }
+          }
+        }
+        
+        res.send(tinkoffClient.getNotificationSuccessResponse());
+        return;
+      }
+
+      const orderId = parseInt(orderIdRaw);
 
       // Handle fiscalization notification (Status = "RECEIPT")
       if (paymentStatus === "RECEIPT") {
@@ -2239,6 +2295,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: error.message || "Failed to check payment status" });
     }
   });
+
+  // ========== WALLET ROUTES ==========
+
+  // Create wallet top-up payment
+  app.post("/api/wallet/topup", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+      const { amount } = req.body;
+
+      // Validate amount (in rubles)
+      const amountRub = parseInt(amount);
+      if (!amountRub || amountRub < 100 || amountRub > 50000) {
+        res.status(400).json({ error: "Сумма должна быть от 100 до 50000 рублей" });
+        return;
+      }
+
+      const amountKopecks = amountRub * 100;
+
+      // Get user for phone
+      const user = await db.query.users.findFirst({
+        where: eq(usersTable.id, userId),
+      });
+
+      if (!user) {
+        res.status(404).json({ error: "Пользователь не найден" });
+        return;
+      }
+
+      // Generate unique wallet order ID: W_timestamp_userId_amount
+      const walletOrderId = `W_${Date.now()}_${userId.substring(0, 8)}_${amountRub}`;
+
+      const tinkoffClient = getTinkoffClient();
+      
+      // Normalize phone for receipt
+      const normalizedPhone = normalizePhone(user.phone);
+      const phoneForReceipt = normalizedPhone.startsWith('+') 
+        ? normalizedPhone.substring(1) 
+        : normalizedPhone;
+
+      const baseUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://puerpub.replit.app' 
+        : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+
+      const paymentRequest = {
+        Amount: amountKopecks,
+        OrderId: walletOrderId,
+        Description: `Пополнение кошелька на ${amountRub}₽`,
+        DATA: {
+          Phone: phoneForReceipt,
+        },
+        Receipt: {
+          Phone: phoneForReceipt,
+          Taxation: "usn_income",
+          Items: [{
+            Name: `Пополнение кошелька на ${amountRub}₽`,
+            Price: amountKopecks,
+            Quantity: 1,
+            Amount: amountKopecks,
+            Tax: "none",
+            PaymentMethod: "full_prepayment",
+            PaymentObject: "service",
+          }],
+        },
+        NotificationURL: `${baseUrl}/api/payments/notification`,
+        SuccessURL: `${baseUrl}/wallet/success?amount=${amountRub}`,
+        FailURL: `${baseUrl}/wallet/error`,
+      };
+
+      console.log("[Wallet] Creating top-up payment:", walletOrderId, "Amount:", amountRub);
+
+      const paymentResponse = await tinkoffClient.init(paymentRequest);
+
+      console.log("[Wallet] Payment created, PaymentId:", paymentResponse.PaymentId);
+
+      res.json({
+        success: true,
+        paymentUrl: paymentResponse.PaymentURL,
+        paymentId: paymentResponse.PaymentId,
+        walletOrderId,
+      });
+    } catch (error: any) {
+      console.error("[Wallet] Top-up creation failed:", error);
+      res.status(500).json({ error: error.message || "Ошибка при создании платежа" });
+    }
+  });
+
+  // Get wallet balance and transactions
+  app.get("/api/wallet", requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.id;
+
+      const user = await db.query.users.findFirst({
+        where: eq(usersTable.id, userId),
+      });
+
+      if (!user) {
+        res.status(404).json({ error: "Пользователь не найден" });
+        return;
+      }
+
+      // Get recent transactions
+      const transactions = await db
+        .select()
+        .from(walletTransactions)
+        .where(eq(walletTransactions.userId, userId))
+        .orderBy(desc(walletTransactions.createdAt))
+        .limit(20);
+
+      res.json({
+        balance: user.walletBalance || 0,
+        transactions,
+      });
+    } catch (error: any) {
+      console.error("[Wallet] Get balance failed:", error);
+      res.status(500).json({ error: "Ошибка при получении баланса" });
+    }
+  });
+
+  // ========== TELEGRAM ROUTES ==========
 
   // Telegram Magic Link - Create link for account binding
   app.post("/api/telegram/magic-link", requireAuth, async (req: any, res) => {

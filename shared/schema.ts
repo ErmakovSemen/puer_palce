@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   xp: integer("xp").notNull().default(0),
   firstOrderDiscountUsed: boolean("first_order_discount_used").notNull().default(false),
   customDiscount: integer("custom_discount"), // Индивидуальная скидка в процентах (nullable)
+  walletBalance: integer("wallet_balance").notNull().default(0), // Баланс кошелька в копейках
 });
 
 export const insertUserSchema = createInsertSchema(users, {
@@ -36,6 +37,30 @@ export const updateUserSchema = z.object({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type User = typeof users.$inferSelect;
+
+// Wallet Transactions table
+export const walletTransactions = pgTable("wallet_transactions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  type: text("type").notNull(), // "topup" | "purchase" | "refund"
+  amount: integer("amount").notNull(), // Сумма в копейках (положительная для пополнения, отрицательная для списания)
+  description: text("description").notNull(),
+  paymentId: text("payment_id"), // ID платежа в Tinkoff (для пополнений)
+  orderId: integer("order_id"), // ID заказа (для списаний)
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertWalletTransactionSchema = createInsertSchema(walletTransactions, {
+  userId: z.string(),
+  type: z.enum(["topup", "purchase", "refund"]),
+  amount: z.number().int(),
+  description: z.string().min(1),
+  paymentId: z.string().optional(),
+  orderId: z.number().int().optional(),
+}).omit({ id: true, createdAt: true });
+
+export type InsertWalletTransaction = z.infer<typeof insertWalletTransactionSchema>;
+export type WalletTransaction = typeof walletTransactions.$inferSelect;
 
 // SMS Verifications table
 export const smsVerifications = pgTable("sms_verifications", {
