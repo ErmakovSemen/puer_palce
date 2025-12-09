@@ -651,9 +651,10 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
   
   console.log(`[TelegramBot] Parsed command: "${command}", payload: "${payload}"`);
 
-  // Check for LINK command (case insensitive)
-  if (text.toUpperCase().startsWith("LINK ")) {
-    const code = text.substring(5).trim();
+  // Check for LINK command (case insensitive) - works with or without /
+  if (text.toUpperCase().startsWith("LINK ") || text.toUpperCase().startsWith("/LINK ")) {
+    const startIndex = text.toUpperCase().startsWith("/LINK ") ? 6 : 5;
+    const code = text.substring(startIndex).trim();
     await handleLinkCodeMessage(chatId, code, username, firstName);
     return;
   }
@@ -673,6 +674,14 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
       break;
     case "/profile":
       await handleProfileCommand(chatId, username, firstName);
+      break;
+    case "/link":
+      // Just /link without token - show instructions
+      if (!payload) {
+        await handleLinkAccountCallback(chatId);
+      } else {
+        await handleLinkCodeMessage(chatId, payload, username, firstName);
+      }
       break;
     default:
       if (text.startsWith("/")) {

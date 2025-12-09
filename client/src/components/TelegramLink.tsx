@@ -97,7 +97,7 @@ export function TelegramLink() {
 
   const handleCopyCode = async () => {
     if (!linkData?.token) return;
-    const copyText = `LINK ${linkData.token}`;
+    const copyText = `/link ${linkData.token}`;
     try {
       await navigator.clipboard.writeText(copyText);
       setCodeCopied(true);
@@ -187,14 +187,11 @@ export function TelegramLink() {
         {linkData ? (
           <div className="space-y-4">
             <div className="p-4 bg-muted rounded-lg space-y-3">
-              <div className="text-sm text-muted-foreground">
-                1. Откройте бота в Telegram
-              </div>
-              <div className="text-sm text-muted-foreground">
-                2. Отправьте боту этот код:
+              <div className="text-sm">
+                Отправьте боту @PuerPabbot команду:
               </div>
               <div className="flex items-center gap-2 p-3 bg-background rounded border">
-                <span className="text-sm font-mono flex-1 break-all">LINK {linkData.token}</span>
+                <span className="text-sm font-mono flex-1 break-all">/link {linkData.token}</span>
               </div>
             </div>
             <div className="flex gap-2">
@@ -213,7 +210,7 @@ export function TelegramLink() {
                 ) : (
                   <>
                     <Copy className="w-4 h-4 mr-2" />
-                    Копировать код
+                    Копировать
                   </>
                 )}
               </Button>
