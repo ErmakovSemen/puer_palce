@@ -7,6 +7,30 @@ import { createHash } from "crypto";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
+// User state tracking for multi-step interactions
+type UserState = {
+  action: "awaiting_topup_amount";
+  expiresAt: number;
+};
+const userStates = new Map<string, UserState>();
+
+function setUserState(chatId: string, state: UserState) {
+  userStates.set(chatId, state);
+}
+
+function getUserState(chatId: string): UserState | undefined {
+  const state = userStates.get(chatId);
+  if (state && Date.now() > state.expiresAt) {
+    userStates.delete(chatId);
+    return undefined;
+  }
+  return state;
+}
+
+function clearUserState(chatId: string) {
+  userStates.delete(chatId);
+}
+
 function getTeaTypeHash(teaType: string): string {
   return createHash('sha256').update(teaType).digest('base64url').slice(0, 8);
 }
@@ -728,6 +752,7 @@ async function handleWalletCommand(chatId: string, username?: string, firstName?
         { text: "2000 ₽", callback_data: "topup_2000" },
         { text: "5000 ₽", callback_data: "topup_5000" },
       ],
+      [{ text: "✏️ Своя сумма", callback_data: "custom_topup" }],
       [{ text: "📜 История операций", callback_data: "wallet_history" }],
       [{ text: "↩️ Главное меню", callback_data: "main_menu" }],
     ],
@@ -869,6 +894,66 @@ async function handleWalletHistory(chatId: string, username?: string, firstName?
   await sendMessage(chatId, historyText, keyboard);
 }
 
+async function handleCustomTopupRequest(chatId: string, username?: string, firstName?: string) {
+  const profile = await getOrCreateProfile(chatId, username, firstName);
+  if (!profile) {
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+    return;
+  }
+
+  const user = await getLinkedUser(profile);
+
+  if (!user) {
+    await sendMessage(chatId, "❌ Для пополнения кошелька привяжите аккаунт с сайта.");
+    return;
+  }
+
+  // Set user state to awaiting amount input (expires in 5 minutes)
+  setUserState(chatId, {
+    action: "awaiting_topup_amount",
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  });
+
+  const promptText = `<b>✏️ Введите сумму пополнения</b>
+
+Отправьте сообщение с суммой в рублях (от 10 до 100000).
+
+Например: <code>750</code>`;
+
+  const keyboard: InlineKeyboardMarkup = {
+    inline_keyboard: [
+      [{ text: "❌ Отмена", callback_data: "wallet" }],
+    ],
+  };
+
+  await sendMessage(chatId, promptText, keyboard);
+}
+
+async function handleCustomTopupAmount(chatId: string, amountText: string, username?: string, firstName?: string) {
+  // Clear the state
+  clearUserState(chatId);
+
+  // Parse and validate amount
+  const amount = parseInt(amountText.replace(/\s/g, ""), 10);
+
+  if (isNaN(amount) || amount < 10) {
+    await sendMessage(chatId, "❌ Минимальная сумма пополнения — 10 ₽. Попробуйте снова через меню кошелька.", {
+      inline_keyboard: [[{ text: "↩️ Назад к кошельку", callback_data: "wallet" }]],
+    });
+    return;
+  }
+
+  if (amount > 100000) {
+    await sendMessage(chatId, "❌ Максимальная сумма пополнения — 100 000 ₽. Попробуйте снова через меню кошелька.", {
+      inline_keyboard: [[{ text: "↩️ Назад к кошельку", callback_data: "wallet" }]],
+    });
+    return;
+  }
+
+  // Process the top-up with validated amount
+  await handleWalletTopup(chatId, amount, username, firstName);
+}
+
 async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
   const chatId = callbackQuery.message?.chat.id.toString();
   const data = callbackQuery.data;
@@ -938,6 +1023,9 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
     case "topup_5000":
       await handleWalletTopup(chatId, 5000, username, firstName);
       break;
+    case "custom_topup":
+      await handleCustomTopupRequest(chatId, username, firstName);
+      break;
     default:
       console.log("[TelegramBot] Unknown callback:", data);
   }
@@ -973,6 +1061,16 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
     const code = text.substring(startIndex).trim();
     await handleLinkCodeMessage(chatId, code, username, firstName);
     return;
+  }
+
+  // Check if user is in a state expecting input (e.g., custom top-up amount)
+  const userState = getUserState(chatId);
+  if (userState) {
+    if (userState.action === "awaiting_topup_amount") {
+      // User is expected to enter a number for top-up
+      await handleCustomTopupAmount(chatId, text, username, firstName);
+      return;
+    }
   }
 
   switch (command) {
