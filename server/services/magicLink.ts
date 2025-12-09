@@ -56,6 +56,7 @@ export async function validateAndConsumeMagicLink(
 ): Promise<ValidateMagicLinkResult> {
   try {
     const tokenHash = hashToken(token);
+    console.log(`[MagicLink] Validating token hash: ${tokenHash.substring(0, 16)}...`);
 
     const [link] = await db
       .select()
@@ -66,6 +67,8 @@ export async function validateAndConsumeMagicLink(
           isNull(magicLinks.consumedAt)
         )
       );
+
+    console.log(`[MagicLink] Found link: ${!!link}, userId: ${link?.userId}`);
 
     if (!link) {
       return { success: false, error: "Ссылка недействительна или уже использована" };

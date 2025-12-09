@@ -203,8 +203,11 @@ function getMainMenuKeyboard(isLinked: boolean): InlineKeyboardMarkup {
 }
 
 async function handleStartCommand(chatId: string, username?: string, firstName?: string, payload?: string) {
+  console.log(`[TelegramBot] handleStartCommand chatId=${chatId} payload=${payload}`);
+  
   if (payload && payload.startsWith("link_")) {
     const token = payload.substring(5);
+    console.log(`[TelegramBot] Magic link detected, token length: ${token.length}`);
     await handleMagicLinkConfirmation(chatId, token, username, firstName);
     return;
   }
