@@ -600,9 +600,13 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
   const username = update.message.from?.username;
   const firstName = update.message.from?.first_name;
 
-  const command = text.split(" ")[0].toLowerCase();
-
-  const payload = command === "/start" ? text.substring(7).trim() : undefined;
+  console.log(`[TelegramBot] Message text: "${text}"`);
+  
+  const parts = text.split(" ");
+  const command = parts[0].toLowerCase();
+  const payload = parts.length > 1 ? parts.slice(1).join(" ") : undefined;
+  
+  console.log(`[TelegramBot] Parsed command: "${command}", payload: "${payload}"`);
 
   switch (command) {
     case "/start":
