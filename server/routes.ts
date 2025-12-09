@@ -13,7 +13,7 @@ import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/tele
 import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
-import { users as usersTable, orders as ordersTable, walletTransactions } from "@shared/schema";
+import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
@@ -2009,6 +2009,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else {
               console.error("[Wallet] User not found for prefix:", userIdPrefix);
             }
+          }
+        }
+        
+        res.send(tinkoffClient.getNotificationSuccessResponse());
+        return;
+      }
+
+      // Check if this is a Telegram order (OrderId starts with "T_")
+      if (typeof orderIdRaw === 'string' && orderIdRaw.startsWith("T_")) {
+        console.log("[Telegram Order] Received payment notification:", orderIdRaw, "Status:", paymentStatus);
+        
+        // Only process confirmed payments
+        if (paymentStatus === "CONFIRMED") {
+          // Find pending telegram order
+          const pendingOrder = await db.query.pendingTelegramOrders.findFirst({
+            where: eq(pendingTelegramOrdersTable.orderId, orderIdRaw),
+          });
+          
+          if (pendingOrder) {
+            // Check if already processed
+            if (pendingOrder.status === "paid") {
+              console.log("[Telegram Order] Order already processed:", orderIdRaw);
+            } else {
+              // Parse items
+              const items = JSON.parse(pendingOrder.items as string);
+              
+              // Get user's email (or use placeholder for Telegram orders)
+              const user = await db.query.users.findFirst({
+                where: eq(usersTable.id, pendingOrder.userId),
+              });
+              const userEmail = user?.email || `telegram-${pendingOrder.chatId}@bot.puerpub.ru`;
+              
+              // Create real order (total is in kopecks, convert to rubles for orders table)
+              const totalRubles = pendingOrder.total / 100;
+              const usedFirstOrderDiscount = pendingOrder.discountType === "first_order";
+              
+              const [newOrder] = await db.insert(ordersTable).values({
+                userId: pendingOrder.userId,
+                name: pendingOrder.name,
+                email: userEmail,
+                phone: pendingOrder.phone,
+                address: pendingOrder.address,
+                items: JSON.stringify(items.map((i: any) => ({
+                  id: i.id,
+                  name: i.name,
+                  pricePerGram: i.pricePerGram,
+                  quantity: i.quantity,
+                }))),
+                total: totalRubles,
+                status: "paid",
+                usedFirstOrderDiscount,
+                paymentStatus: "CONFIRMED",
+                paymentId: String(notification.PaymentId),
+              }).returning();
+              
+              console.log("[Telegram Order] Created order:", newOrder.id, "for Telegram order:", orderIdRaw);
+              
+              // Update pending order status
+              await db.update(pendingTelegramOrdersTable)
+                .set({ status: "paid" })
+                .where(eq(pendingTelegramOrdersTable.id, pendingOrder.id));
+              
+              // Clear cart
+              await db.delete(telegramCartTable)
+                .where(eq(telegramCartTable.userId, pendingOrder.userId));
+              
+              // Award XP if user exists (user was already queried above for email)
+              if (user) {
+                const xpToAdd = Math.floor(pendingOrder.total / 100); // 1 XP per ruble
+                
+                if (!user.firstOrderDiscountUsed && pendingOrder.discountType === "first_order") {
+                  await db.update(usersTable)
+                    .set({ 
+                      xp: sql`${usersTable.xp} + ${xpToAdd}`,
+                      firstOrderDiscountUsed: true,
+                    })
+                    .where(eq(usersTable.id, user.id));
+                } else {
+                  await db.update(usersTable)
+                    .set({ xp: sql`${usersTable.xp} + ${xpToAdd}` })
+                    .where(eq(usersTable.id, user.id));
+                }
+                
+                console.log("[Telegram Order] Awarded", xpToAdd, "XP to user:", user.id);
+              }
+              
+              // Send confirmation to Telegram chat
+              try {
+                const { sendMessage } = await import("./services/telegramBot");
+                await sendMessage(pendingOrder.chatId, `✅ <b>Заказ #${newOrder.id} оплачен!</b>
+
+Спасибо за покупку! Мы свяжемся с вами для уточнения деталей доставки.
+
+💰 Сумма: ${(pendingOrder.total / 100).toLocaleString("ru-RU")} ₽`, {
+                  inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
+                });
+              } catch (telegramError) {
+                console.error("[Telegram Order] Failed to send confirmation:", telegramError);
+              }
+              
+              console.log("[Telegram Order] ✅ Order completed:", orderIdRaw);
+            }
+          } else {
+            console.error("[Telegram Order] Pending order not found:", orderIdRaw);
           }
         }
         

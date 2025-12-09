@@ -1,6 +1,6 @@
 import { db } from "../db";
-import { telegramProfiles, users, siteSettings, products, magicLinks, walletTransactions, type TelegramProfile } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { telegramProfiles, users, siteSettings, products, magicLinks, walletTransactions, telegramCart, pendingTelegramOrders, orders, savedAddresses, type TelegramProfile, type Product } from "@shared/schema";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { validateAndConsumeMagicLink } from "./magicLink";
 import { createHash } from "crypto";
@@ -9,8 +9,9 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 // User state tracking for multi-step interactions
 type UserState = {
-  action: "awaiting_topup_amount";
+  action: "awaiting_topup_amount" | "awaiting_address" | "awaiting_cart_quantity";
   expiresAt: number;
+  productId?: number; // For cart quantity input
 };
 const userStates = new Map<string, UserState>();
 
@@ -85,7 +86,7 @@ interface InlineKeyboardMarkup {
   inline_keyboard: InlineKeyboardButton[][];
 }
 
-async function sendMessage(
+export async function sendMessage(
   chatId: string | number,
   text: string,
   replyMarkup?: InlineKeyboardMarkup
@@ -225,6 +226,7 @@ function getMainMenuKeyboard(isLinked: boolean): InlineKeyboardMarkup {
   if (isLinked) {
     keyboard.push([{ text: "⭐ Мой профиль", callback_data: "profile" }]);
     keyboard.push([{ text: "💳 Кошелёк", callback_data: "wallet" }]);
+    keyboard.push([{ text: "🛒 Корзина", callback_data: "cart" }]);
   } else {
     keyboard.push([{ text: "🔗 Привязать аккаунт", callback_data: "link_account" }]);
   }
@@ -503,7 +505,514 @@ async function handleTeaTypeProductsByHash(chatId: string, hash: string) {
   }
 }
 
-async function handleProductDetail(chatId: string, productId: number) {
+// ============ CART FUNCTIONS ============
+
+async function getCartItems(userId: string) {
+  const items = await db
+    .select({
+      cartId: telegramCart.id,
+      productId: telegramCart.productId,
+      quantity: telegramCart.quantity,
+      product: products,
+    })
+    .from(telegramCart)
+    .innerJoin(products, eq(telegramCart.productId, products.id))
+    .where(eq(telegramCart.userId, userId))
+    .orderBy(desc(telegramCart.createdAt));
+  
+  return items;
+}
+
+async function addToCart(userId: string, productId: number, quantity: number) {
+  // Check if item already in cart
+  const existing = await db
+    .select()
+    .from(telegramCart)
+    .where(and(
+      eq(telegramCart.userId, userId),
+      eq(telegramCart.productId, productId)
+    ));
+
+  if (existing.length > 0) {
+    // Update quantity
+    await db
+      .update(telegramCart)
+      .set({ 
+        quantity: existing[0].quantity + quantity,
+        updatedAt: new Date().toISOString()
+      })
+      .where(eq(telegramCart.id, existing[0].id));
+  } else {
+    // Insert new item
+    await db.insert(telegramCart).values({
+      userId,
+      productId,
+      quantity,
+    });
+  }
+}
+
+async function removeFromCart(cartId: number) {
+  await db.delete(telegramCart).where(eq(telegramCart.id, cartId));
+}
+
+async function clearCart(userId: string) {
+  await db.delete(telegramCart).where(eq(telegramCart.userId, userId));
+}
+
+async function getCartTotal(userId: string): Promise<{ subtotal: number; itemCount: number }> {
+  const items = await getCartItems(userId);
+  let subtotal = 0;
+  let itemCount = 0;
+  
+  for (const item of items) {
+    const price = item.product.pricePerGram * item.quantity;
+    subtotal += price;
+    itemCount += item.product.category === "tea" ? 1 : item.quantity;
+  }
+  
+  return { subtotal: subtotal * 100, itemCount }; // Return in kopecks
+}
+
+async function handleAddToCart(chatId: string, productId: number, quantity: number, username?: string, firstName?: string) {
+  const profile = await getOrCreateProfile(chatId, username, firstName);
+  if (!profile) {
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+    return;
+  }
+
+  const user = await getLinkedUser(profile);
+  if (!user) {
+    await sendMessage(chatId, "❌ Для использования корзины привяжите аккаунт с сайта.");
+    return;
+  }
+
+  // Get product info
+  const [product] = await db.select().from(products).where(eq(products.id, productId));
+  if (!product) {
+    await sendMessage(chatId, "Товар не найден.");
+    return;
+  }
+
+  if (product.outOfStock) {
+    await sendMessage(chatId, "❌ Этот товар сейчас не в наличии.");
+    return;
+  }
+
+  await addToCart(user.id, productId, quantity);
+
+  const { itemCount } = await getCartTotal(user.id);
+  const unitText = product.category === "tea" ? "г" : "шт.";
+
+  await sendMessage(chatId, `✅ <b>${product.name}</b> (${quantity} ${unitText}) добавлен в корзину!\n\nВ корзине товаров: ${itemCount}`, {
+    inline_keyboard: [
+      [{ text: "🛒 Перейти в корзину", callback_data: "cart" }],
+      [{ text: "📦 Продолжить покупки", callback_data: "menu" }],
+    ],
+  });
+}
+
+async function handleRemoveFromCart(chatId: string, cartId: number, username?: string, firstName?: string) {
+  const profile = await getOrCreateProfile(chatId, username, firstName);
+  if (!profile) {
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+    return;
+  }
+
+  const user = await getLinkedUser(profile);
+  if (!user) {
+    await sendMessage(chatId, "❌ Для использования корзины привяжите аккаунт с сайта.");
+    return;
+  }
+
+  await removeFromCart(cartId);
+  
+  // Show updated cart
+  await handleCartCommand(chatId, username, firstName);
+}
+
+async function handleCartCommand(chatId: string, username?: string, firstName?: string) {
+  const profile = await getOrCreateProfile(chatId, username, firstName);
+  if (!profile) {
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+    return;
+  }
+
+  const user = await getLinkedUser(profile);
+  if (!user) {
+    await sendMessage(chatId, `<b>🛒 Корзина</b>
+
+Для использования корзины привяжите ваш аккаунт с сайта.`, {
+      inline_keyboard: [
+        [{ text: "🌐 Перейти на сайт", url: "https://puerpub.replit.app" }],
+        [{ text: "↩️ Главное меню", callback_data: "main_menu" }],
+      ],
+    });
+    return;
+  }
+
+  const items = await getCartItems(user.id);
+
+  if (items.length === 0) {
+    await sendMessage(chatId, `<b>🛒 Корзина пуста</b>
+
+Добавьте товары из каталога.`, {
+      inline_keyboard: [
+        [{ text: "🍵 Меню чая", callback_data: "menu" }],
+        [{ text: "↩️ Главное меню", callback_data: "main_menu" }],
+      ],
+    });
+    return;
+  }
+
+  let cartText = `<b>🛒 Ваша корзина</b>\n\n`;
+  let total = 0;
+
+  const buttons: InlineKeyboardButton[][] = [];
+
+  for (const item of items) {
+    const isTea = item.product.category === "tea";
+    const unitText = isTea ? "г" : "шт.";
+    const price = item.product.pricePerGram * item.quantity;
+    total += price;
+
+    cartText += `• <b>${item.product.name}</b>\n`;
+    cartText += `  ${item.quantity} ${unitText} × ${item.product.pricePerGram} ₽ = ${price.toLocaleString("ru-RU")} ₽\n\n`;
+
+    // Add remove button for each item
+    buttons.push([
+      { text: `❌ Удалить ${item.product.name.substring(0, 20)}`, callback_data: `removecart_${item.cartId}` },
+    ]);
+  }
+
+  cartText += `━━━━━━━━━━━━━━━━━━━━\n`;
+  cartText += `💰 <b>Итого: ${total.toLocaleString("ru-RU")} ₽</b>`;
+
+  // Check for discounts
+  const hasFirstOrderDiscount = !user.firstOrderDiscountUsed;
+  const loyaltyProgress = getLoyaltyProgress(user.xp);
+  const loyaltyDiscount = loyaltyProgress.currentLevel.discount;
+  
+  if (hasFirstOrderDiscount) {
+    const discountAmount = Math.round(total * 0.2);
+    cartText += `\n🎁 <i>Скидка первого заказа -20%: -${discountAmount.toLocaleString("ru-RU")} ₽</i>`;
+    cartText += `\n<b>К оплате: ${(total - discountAmount).toLocaleString("ru-RU")} ₽</b>`;
+  } else if (loyaltyDiscount > 0) {
+    const discountAmount = Math.round(total * loyaltyDiscount / 100);
+    cartText += `\n⭐ <i>Скидка лояльности ${loyaltyDiscount}%: -${discountAmount.toLocaleString("ru-RU")} ₽</i>`;
+    cartText += `\n<b>К оплате: ${(total - discountAmount).toLocaleString("ru-RU")} ₽</b>`;
+  }
+
+  buttons.push([{ text: "🗑 Очистить корзину", callback_data: "clear_cart" }]);
+  buttons.push([{ text: "✅ Оформить заказ", callback_data: "checkout" }]);
+  buttons.push([{ text: "📦 Продолжить покупки", callback_data: "menu" }]);
+  buttons.push([{ text: "↩️ Главное меню", callback_data: "main_menu" }]);
+
+  await sendMessage(chatId, cartText, { inline_keyboard: buttons });
+}
+
+async function handleClearCart(chatId: string, username?: string, firstName?: string) {
+  const profile = await getOrCreateProfile(chatId, username, firstName);
+  if (!profile) {
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+    return;
+  }
+
+  const user = await getLinkedUser(profile);
+  if (!user) {
+    await sendMessage(chatId, "❌ Для использования корзины привяжите аккаунт с сайта.");
+    return;
+  }
+
+  await clearCart(user.id);
+  
+  await sendMessage(chatId, "🗑 Корзина очищена.", {
+    inline_keyboard: [
+      [{ text: "🍵 Меню чая", callback_data: "menu" }],
+      [{ text: "↩️ Главное меню", callback_data: "main_menu" }],
+    ],
+  });
+}
+
+async function handleCheckoutStart(chatId: string, username?: string, firstName?: string) {
+  const profile = await getOrCreateProfile(chatId, username, firstName);
+  if (!profile) {
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+    return;
+  }
+
+  const user = await getLinkedUser(profile);
+  if (!user) {
+    await sendMessage(chatId, "❌ Для оформления заказа привяжите аккаунт с сайта.");
+    return;
+  }
+
+  const items = await getCartItems(user.id);
+  if (items.length === 0) {
+    await sendMessage(chatId, "❌ Корзина пуста. Добавьте товары для оформления заказа.", {
+      inline_keyboard: [
+        [{ text: "🍵 Меню чая", callback_data: "menu" }],
+      ],
+    });
+    return;
+  }
+
+  // Check if user has a saved address
+  const userAddresses = await db
+    .select()
+    .from(savedAddresses)
+    .where(eq(savedAddresses.userId, user.id))
+    .limit(1);
+
+  if (userAddresses.length > 0) {
+    // Offer to use saved address
+    const addr = userAddresses[0];
+    await sendMessage(chatId, `<b>📦 Оформление заказа</b>
+
+Использовать сохранённый адрес?
+
+<i>${addr.address}</i>`, {
+      inline_keyboard: [
+        [{ text: "✅ Да, использовать этот адрес", callback_data: `use_address_${addr.id}` }],
+        [{ text: "✏️ Ввести другой адрес", callback_data: "enter_address" }],
+        [{ text: "↩️ Назад к корзине", callback_data: "cart" }],
+      ],
+    });
+  } else {
+    // Ask for address
+    setUserState(chatId, {
+      action: "awaiting_address",
+      expiresAt: Date.now() + 15 * 60 * 1000, // 15 minutes
+    });
+
+    await sendMessage(chatId, `<b>📦 Оформление заказа</b>
+
+Введите адрес доставки:
+
+<i>Укажите город, улицу, дом, квартиру</i>`, {
+      inline_keyboard: [
+        [{ text: "❌ Отмена", callback_data: "cart" }],
+      ],
+    });
+  }
+}
+
+async function handleAddressInput(chatId: string, address: string, username?: string, firstName?: string) {
+  clearUserState(chatId);
+
+  if (address.length < 10) {
+    await sendMessage(chatId, "❌ Адрес слишком короткий. Введите полный адрес доставки:", {
+      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "cart" }]],
+    });
+    setUserState(chatId, {
+      action: "awaiting_address",
+      expiresAt: Date.now() + 15 * 60 * 1000,
+    });
+    return;
+  }
+
+  await processCheckout(chatId, address, username, firstName);
+}
+
+async function handleUseAddress(chatId: string, addressId: number, username?: string, firstName?: string) {
+  const profile = await getOrCreateProfile(chatId, username, firstName);
+  if (!profile) {
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+    return;
+  }
+
+  const user = await getLinkedUser(profile);
+  if (!user) {
+    await sendMessage(chatId, "❌ Для оформления заказа привяжите аккаунт с сайта.");
+    return;
+  }
+
+  const [addr] = await db
+    .select()
+    .from(savedAddresses)
+    .where(and(eq(savedAddresses.id, addressId), eq(savedAddresses.userId, user.id)));
+
+  if (!addr) {
+    await sendMessage(chatId, "❌ Адрес не найден. Введите адрес вручную:", {
+      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "cart" }]],
+    });
+    setUserState(chatId, {
+      action: "awaiting_address",
+      expiresAt: Date.now() + 15 * 60 * 1000,
+    });
+    return;
+  }
+
+  await processCheckout(chatId, addr.address, username, firstName);
+}
+
+async function processCheckout(chatId: string, address: string, username?: string, firstName?: string) {
+  const profile = await getOrCreateProfile(chatId, username, firstName);
+  if (!profile) {
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+    return;
+  }
+
+  const user = await getLinkedUser(profile);
+  if (!user) {
+    await sendMessage(chatId, "❌ Для оформления заказа привяжите аккаунт с сайта.");
+    return;
+  }
+
+  const items = await getCartItems(user.id);
+  if (items.length === 0) {
+    await sendMessage(chatId, "❌ Корзина пуста.");
+    return;
+  }
+
+  // Calculate totals
+  let subtotal = 0;
+  const orderItems: Array<{ id: number; name: string; pricePerGram: number; quantity: number }> = [];
+
+  for (const item of items) {
+    const price = item.product.pricePerGram * item.quantity;
+    subtotal += price;
+    orderItems.push({
+      id: item.product.id,
+      name: item.product.name,
+      pricePerGram: item.product.pricePerGram,
+      quantity: item.quantity,
+    });
+  }
+
+  // Calculate discount
+  const hasFirstOrderDiscount = !user.firstOrderDiscountUsed;
+  const loyaltyProgress = getLoyaltyProgress(user.xp);
+  const loyaltyDiscount = loyaltyProgress.currentLevel.discount;
+
+  let discountPercent = 0;
+  let discountType: string | null = null;
+
+  if (hasFirstOrderDiscount) {
+    discountPercent = 20;
+    discountType = "first_order";
+  } else if (loyaltyDiscount > 0) {
+    discountPercent = loyaltyDiscount;
+    discountType = "loyalty";
+  }
+
+  const discountAmount = Math.round(subtotal * discountPercent / 100);
+  const total = Math.max(subtotal - discountAmount, 0); // Prevent negative total
+  const totalKopecks = total * 100;
+
+  // Validate minimum order amount (at least 100 rubles)
+  if (total < 100) {
+    await sendMessage(chatId, "❌ Минимальная сумма заказа — 100 ₽. Добавьте больше товаров.", {
+      inline_keyboard: [
+        [{ text: "🍵 Меню чая", callback_data: "menu" }],
+        [{ text: "↩️ Корзина", callback_data: "cart" }],
+      ],
+    });
+    return;
+  }
+
+  // Create pending order
+  const orderId = `T_${user.id.substring(0, 8)}_${Date.now()}`;
+
+  await db.insert(pendingTelegramOrders).values({
+    orderId,
+    userId: user.id,
+    chatId,
+    name: user.name || "Покупатель",
+    phone: user.phone,
+    address,
+    items: JSON.stringify(orderItems),
+    subtotal: subtotal * 100,
+    discount: discountAmount * 100,
+    total: totalKopecks,
+    discountType,
+  });
+
+  // Create Tinkoff payment
+  try {
+    const { getTinkoffClient } = await import("../tinkoff");
+    const tinkoffClient = getTinkoffClient();
+
+    let phoneForReceipt = user.phone.replace(/[^0-9+]/g, '');
+    if (phoneForReceipt.startsWith('+')) {
+      phoneForReceipt = phoneForReceipt.substring(1);
+    }
+    if (phoneForReceipt.startsWith('8') && phoneForReceipt.length === 11) {
+      phoneForReceipt = '7' + phoneForReceipt.substring(1);
+    }
+
+    const baseUrl = 'https://puerpub.replit.app';
+
+    // Build receipt items
+    const receiptItems = orderItems.map(item => ({
+      Name: item.name.substring(0, 64),
+      Price: Math.round(item.pricePerGram * item.quantity * 100 * (100 - discountPercent) / 100),
+      Quantity: 1,
+      Amount: Math.round(item.pricePerGram * item.quantity * 100 * (100 - discountPercent) / 100),
+      Tax: "none",
+      PaymentMethod: "full_prepayment",
+      PaymentObject: "commodity",
+    }));
+
+    const paymentRequest = {
+      Amount: totalKopecks,
+      OrderId: orderId,
+      Description: `Заказ чая через Telegram`,
+      DATA: {
+        Phone: phoneForReceipt,
+      },
+      Receipt: {
+        Phone: phoneForReceipt,
+        Taxation: "usn_income",
+        Items: receiptItems,
+      },
+      NotificationURL: `${baseUrl}/api/payments/notification`,
+      SuccessURL: `${baseUrl}/order/success`,
+      FailURL: `${baseUrl}/order/error`,
+    };
+
+    console.log("[Telegram Checkout] Creating payment:", orderId, "Total:", total);
+
+    const paymentResponse = await tinkoffClient.init(paymentRequest);
+
+    console.log("[Telegram Checkout] Payment created, URL:", paymentResponse.PaymentURL);
+
+    let summaryText = `<b>📦 Подтверждение заказа</b>\n\n`;
+    summaryText += `📍 Адрес: ${address}\n\n`;
+    
+    for (const item of orderItems) {
+      const isTea = items.find(i => i.product.id === item.id)?.product.category === "tea";
+      const unitText = isTea ? "г" : "шт.";
+      const price = item.pricePerGram * item.quantity;
+      summaryText += `• ${item.name}: ${item.quantity} ${unitText} — ${price.toLocaleString("ru-RU")} ₽\n`;
+    }
+
+    summaryText += `\n━━━━━━━━━━━━━━━━━━━━\n`;
+    summaryText += `Сумма: ${subtotal.toLocaleString("ru-RU")} ₽\n`;
+    
+    if (discountAmount > 0) {
+      const discountLabel = discountType === "first_order" ? "Скидка первого заказа" : "Скидка лояльности";
+      summaryText += `${discountLabel} (${discountPercent}%): -${discountAmount.toLocaleString("ru-RU")} ₽\n`;
+    }
+    
+    summaryText += `\n<b>💰 Итого к оплате: ${total.toLocaleString("ru-RU")} ₽</b>\n\n`;
+    summaryText += `Нажмите кнопку ниже для оплаты через СБП.`;
+
+    await sendMessage(chatId, summaryText, {
+      inline_keyboard: [
+        [{ text: "💳 Оплатить через СБП", url: paymentResponse.PaymentURL }],
+        [{ text: "↩️ Отмена", callback_data: "cart" }],
+      ],
+    });
+  } catch (error) {
+    console.error("[Telegram Checkout] Payment error:", error);
+    await sendMessage(chatId, "❌ Ошибка при создании платежа. Попробуйте позже.", {
+      inline_keyboard: [[{ text: "↩️ Назад к корзине", callback_data: "cart" }]],
+    });
+  }
+}
+
+async function handleProductDetail(chatId: string, productId: number, username?: string, firstName?: string) {
   try {
     const [product] = await db
       .select()
@@ -514,6 +1023,10 @@ async function handleProductDetail(chatId: string, productId: number) {
       await sendMessage(chatId, "Товар не найден.");
       return;
     }
+
+    // Check if user is linked for cart functionality
+    const profile = await getOrCreateProfile(chatId, username, firstName);
+    const linkedUser = profile ? await getLinkedUser(profile) : null;
 
     const isTea = product.category === "tea";
     const priceText = isTea 
@@ -542,13 +1055,30 @@ async function handleProductDetail(chatId: string, productId: number) {
 
     const categoryCallback = isTea ? "menu_tea" : "menu_teaware";
     
-    const keyboard: InlineKeyboardMarkup = {
-      inline_keyboard: [
-        [{ text: "🛒 Заказать на сайте", url: `https://puerpub.replit.app/product/${product.id}` }],
-        [{ text: "↩️ Назад к списку", callback_data: categoryCallback }],
-        [{ text: "🏠 Главное меню", callback_data: "main_menu" }],
-      ],
-    };
+    const buttons: InlineKeyboardButton[][] = [];
+
+    // Show cart button for linked users if item is in stock
+    if (linkedUser && !product.outOfStock) {
+      if (isTea) {
+        // Tea: show preset gram amounts
+        buttons.push([
+          { text: "🛒 +50г", callback_data: `addcart_${product.id}_50` },
+          { text: "+100г", callback_data: `addcart_${product.id}_100` },
+          { text: "+200г", callback_data: `addcart_${product.id}_200` },
+        ]);
+      } else {
+        // Teaware: add 1 piece
+        buttons.push([
+          { text: "🛒 Добавить в корзину", callback_data: `addcart_${product.id}_1` },
+        ]);
+      }
+    }
+
+    buttons.push([{ text: "🛒 Заказать на сайте", url: `https://puerpub.replit.app/product/${product.id}` }]);
+    buttons.push([{ text: "↩️ Назад к списку", callback_data: categoryCallback }]);
+    buttons.push([{ text: "🏠 Главное меню", callback_data: "main_menu" }]);
+
+    const keyboard: InlineKeyboardMarkup = { inline_keyboard: buttons };
 
     await sendMessage(chatId, text, keyboard);
   } catch (error) {
@@ -991,7 +1521,29 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
   if (data.startsWith("product_")) {
     const productId = parseInt(data.substring(8), 10);
     if (!isNaN(productId)) {
-      await handleProductDetail(chatId, productId);
+      await handleProductDetail(chatId, productId, username, firstName);
+      return;
+    }
+  }
+
+  // Handle add to cart callbacks (addcart_productId_quantity)
+  if (data.startsWith("addcart_")) {
+    const parts = data.split("_");
+    if (parts.length >= 3) {
+      const productId = parseInt(parts[1], 10);
+      const quantity = parseInt(parts[2], 10);
+      if (!isNaN(productId) && !isNaN(quantity)) {
+        await handleAddToCart(chatId, productId, quantity, username, firstName);
+        return;
+      }
+    }
+  }
+
+  // Handle remove from cart callbacks (removecart_cartId)
+  if (data.startsWith("removecart_")) {
+    const cartId = parseInt(data.substring(11), 10);
+    if (!isNaN(cartId)) {
+      await handleRemoveFromCart(chatId, cartId, username, firstName);
       return;
     }
   }
@@ -1047,7 +1599,35 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
     case "custom_topup":
       await handleCustomTopupRequest(chatId, username, firstName);
       break;
+    case "cart":
+      await handleCartCommand(chatId, username, firstName);
+      break;
+    case "clear_cart":
+      await handleClearCart(chatId, username, firstName);
+      break;
+    case "checkout":
+      await handleCheckoutStart(chatId, username, firstName);
+      break;
+    case "enter_address":
+      setUserState(chatId, {
+        action: "awaiting_address",
+        expiresAt: Date.now() + 15 * 60 * 1000,
+      });
+      await sendMessage(chatId, `<b>📦 Введите адрес доставки:</b>
+
+<i>Укажите город, улицу, дом, квартиру</i>`, {
+        inline_keyboard: [[{ text: "❌ Отмена", callback_data: "cart" }]],
+      });
+      break;
     default:
+      // Handle use_address_ID callbacks
+      if (data.startsWith("use_address_")) {
+        const addressId = parseInt(data.substring(12), 10);
+        if (!isNaN(addressId)) {
+          await handleUseAddress(chatId, addressId, username, firstName);
+          return;
+        }
+      }
       console.log("[TelegramBot] Unknown callback:", data);
   }
 }
@@ -1084,12 +1664,17 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
     return;
   }
 
-  // Check if user is in a state expecting input (e.g., custom top-up amount)
+  // Check if user is in a state expecting input (e.g., custom top-up amount, address)
   const userState = getUserState(chatId);
   if (userState) {
     if (userState.action === "awaiting_topup_amount") {
       // User is expected to enter a number for top-up
       await handleCustomTopupAmount(chatId, text, username, firstName);
+      return;
+    }
+    if (userState.action === "awaiting_address") {
+      // User is expected to enter delivery address
+      await handleAddressInput(chatId, text, username, firstName);
       return;
     }
   }
@@ -1112,6 +1697,9 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
       break;
     case "/wallet":
       await handleWalletCommand(chatId, username, firstName);
+      break;
+    case "/cart":
+      await handleCartCommand(chatId, username, firstName);
       break;
     case "/link":
       // Just /link without token - show instructions

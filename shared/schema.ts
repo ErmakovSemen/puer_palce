@@ -384,3 +384,42 @@ export const insertMagicLinkSchema = createInsertSchema(magicLinks, {
 
 export type InsertMagicLink = z.infer<typeof insertMagicLinkSchema>;
 export type MagicLink = typeof magicLinks.$inferSelect;
+
+// Telegram Cart table - stores cart items for Telegram bot users
+export const telegramCart = pgTable("telegram_cart", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  quantity: integer("quantity").notNull().default(1), // For tea: grams, for teaware: pieces
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertTelegramCartSchema = createInsertSchema(telegramCart, {
+  userId: z.string().min(1),
+  productId: z.number().int().positive(),
+  quantity: z.number().int().positive(),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export type InsertTelegramCart = z.infer<typeof insertTelegramCartSchema>;
+export type TelegramCartItem = typeof telegramCart.$inferSelect;
+
+// Pending Telegram Orders - stores order info before payment confirmation
+export const pendingTelegramOrders = pgTable("pending_telegram_orders", {
+  id: serial("id").primaryKey(),
+  orderId: text("order_id").notNull().unique(), // Tinkoff OrderId (T_userId_timestamp)
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  chatId: text("chat_id").notNull(), // For sending confirmation
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  address: text("address").notNull(),
+  items: text("items").notNull(), // JSON string of cart items
+  subtotal: integer("subtotal").notNull(), // In kopecks before discount
+  discount: integer("discount").notNull().default(0), // Discount in kopecks
+  total: integer("total").notNull(), // Final amount in kopecks
+  discountType: text("discount_type"), // "first_order" | "loyalty" | null
+  status: text("status").notNull().default("pending"), // "pending" | "paid" | "cancelled"
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export type PendingTelegramOrder = typeof pendingTelegramOrders.$inferSelect;
