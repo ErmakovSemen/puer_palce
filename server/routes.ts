@@ -2258,12 +2258,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
+      // Generate short code from token (first 8 chars uppercase)
+      const shortCode = result.token.substring(0, 8).toUpperCase();
       const botUsername = "PuerPabbot";
-      const deepLink = `https://t.me/${botUsername}?start=link_${result.token}`;
+      const deepLink = `https://t.me/${botUsername}`;
       
       res.json({ 
         success: true, 
         deepLink,
+        shortCode,
+        token: result.token,
         expiresIn: 15
       });
     } catch (error) {

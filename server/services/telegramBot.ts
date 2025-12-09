@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { telegramProfiles, users, siteSettings, products, type TelegramProfile } from "@shared/schema";
+import { telegramProfiles, users, siteSettings, products, magicLinks, type TelegramProfile } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { getLoyaltyProgress } from "@shared/loyalty";
 import { validateAndConsumeMagicLink } from "./magicLink";
@@ -519,7 +519,9 @@ async function handleLinkAccountCallback(chatId: string) {
 1. Войдите на сайт puerpub.replit.app
 2. Перейдите в "Мой профиль"
 3. Нажмите "Привязать Telegram"
-4. Следуйте инструкциям
+4. Скопируйте код и отправьте его сюда
+
+<i>Пример: LINK A1B2C3D4</i>
 
 После привязки вы сможете:
 • Отслеживать баланс лояльности
@@ -534,6 +536,46 @@ async function handleLinkAccountCallback(chatId: string) {
   };
 
   await sendMessage(chatId, linkText, keyboard);
+}
+
+async function handleLinkCodeMessage(chatId: string, code: string, username?: string, firstName?: string) {
+  console.log(`[TelegramBot] Processing link code: ${code}`);
+  
+  // User sends full token: LINK <full_token>
+  const result = await validateAndConsumeMagicLink(code, chatId);
+
+  if (!result.success) {
+    await sendMessage(
+      chatId,
+      `❌ <b>Ошибка привязки</b>\n\n${result.error}\n\nПопробуйте получить новый код на сайте.`
+    );
+    return;
+  }
+
+  await getOrCreateProfile(chatId, username, firstName);
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, result.userId!));
+
+  let successMessage = `✅ <b>Аккаунт успешно привязан!</b>\n\n`;
+  
+  if (user) {
+    const progress = getLoyaltyProgress(user.xp);
+    successMessage += `👤 ${user.name || "Пользователь"}\n`;
+    successMessage += `📱 ${user.phone}\n\n`;
+    successMessage += `<b>Программа лояльности:</b>\n`;
+    successMessage += `🏆 Уровень: ${progress.currentLevel.name}\n`;
+    successMessage += `💎 XP: ${user.xp}\n`;
+    successMessage += `🎁 Скидка: ${progress.currentLevel.discount}%`;
+  }
+
+  const keyboard: InlineKeyboardMarkup = {
+    inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
+  };
+
+  await sendMessage(chatId, successMessage, keyboard);
 }
 
 async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
@@ -608,6 +650,13 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
   const payload = parts.length > 1 ? parts.slice(1).join(" ") : undefined;
   
   console.log(`[TelegramBot] Parsed command: "${command}", payload: "${payload}"`);
+
+  // Check for LINK command (case insensitive)
+  if (text.toUpperCase().startsWith("LINK ")) {
+    const code = text.substring(5).trim();
+    await handleLinkCodeMessage(chatId, code, username, firstName);
+    return;
+  }
 
   switch (command) {
     case "/start":

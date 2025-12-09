@@ -17,6 +17,8 @@ interface TelegramProfile {
 interface MagicLinkResponse {
   success: boolean;
   deepLink: string;
+  shortCode: string;
+  token: string;
   expiresIn: number;
 }
 
@@ -24,8 +26,8 @@ const TOKEN_REFRESH_INTERVAL = 14 * 60 * 1000; // 14 minutes
 
 export function TelegramLink() {
   const { toast } = useToast();
-  const [deepLink, setDeepLink] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [linkData, setLinkData] = useState<MagicLinkResponse | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: telegramProfile, isLoading } = useQuery<TelegramProfile>({
@@ -38,7 +40,7 @@ export function TelegramLink() {
       return res.json() as Promise<MagicLinkResponse>;
     },
     onSuccess: (data) => {
-      setDeepLink(data.deepLink);
+      setLinkData(data);
     },
     onError: (error: Error) => {
       toast({
@@ -58,7 +60,7 @@ export function TelegramLink() {
     }
     
     // Only set up refresh if link exists and account not linked
-    if (deepLink && !telegramProfile?.linked) {
+    if (linkData && !telegramProfile?.linked) {
       refreshIntervalRef.current = setInterval(() => {
         createLinkMutation.mutate();
       }, TOKEN_REFRESH_INTERVAL);
@@ -70,7 +72,7 @@ export function TelegramLink() {
         refreshIntervalRef.current = null;
       }
     };
-  }, [deepLink, telegramProfile?.linked]);
+  }, [linkData, telegramProfile?.linked]);
 
   const unlinkMutation = useMutation({
     mutationFn: async () => {
@@ -78,7 +80,7 @@ export function TelegramLink() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/telegram/profile"] });
-      setDeepLink(null);
+      setLinkData(null);
       toast({
         title: "Telegram отвязан",
         description: "Вы можете привязать другой аккаунт",
@@ -93,20 +95,21 @@ export function TelegramLink() {
     },
   });
 
-  const handleCopyLink = async () => {
-    if (!deepLink) return;
+  const handleCopyCode = async () => {
+    if (!linkData?.token) return;
+    const copyText = `LINK ${linkData.token}`;
     try {
-      await navigator.clipboard.writeText(deepLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(copyText);
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
       toast({
         title: "Скопировано",
-        description: "Ссылка скопирована в буфер обмена",
+        description: "Код скопирован в буфер обмена",
       });
     } catch {
       toast({
         title: "Ошибка",
-        description: "Не удалось скопировать ссылку",
+        description: "Не удалось скопировать код",
         variant: "destructive",
       });
     }
@@ -181,21 +184,28 @@ export function TelegramLink() {
           </div>
         </div>
 
-        {deepLink ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
-              <Link2 className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-sm font-mono truncate flex-1">{deepLink}</span>
+        {linkData ? (
+          <div className="space-y-4">
+            <div className="p-4 bg-muted rounded-lg space-y-3">
+              <div className="text-sm text-muted-foreground">
+                1. Откройте бота в Telegram
+              </div>
+              <div className="text-sm text-muted-foreground">
+                2. Отправьте боту этот код:
+              </div>
+              <div className="flex items-center gap-2 p-3 bg-background rounded border">
+                <span className="text-sm font-mono flex-1 break-all">LINK {linkData.token}</span>
+              </div>
             </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleCopyLink}
+                onClick={handleCopyCode}
                 className="flex-1"
-                data-testid="button-copy-link"
+                data-testid="button-copy-code"
               >
-                {copied ? (
+                {codeCopied ? (
                   <>
                     <Check className="w-4 h-4 mr-2" />
                     Скопировано
@@ -203,18 +213,18 @@ export function TelegramLink() {
                 ) : (
                   <>
                     <Copy className="w-4 h-4 mr-2" />
-                    Копировать
+                    Копировать код
                   </>
                 )}
               </Button>
               <Button
                 size="sm"
-                onClick={() => window.open(deepLink, "_blank")}
+                onClick={() => window.open(linkData.deepLink, "_blank")}
                 className="flex-1"
                 data-testid="button-open-telegram"
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
-                Открыть Telegram
+                Открыть бота
               </Button>
             </div>
           </div>
