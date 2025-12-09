@@ -2258,7 +2258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      const botUsername = "puerpub_bot";
+      const botUsername = "PuerPabbot";
       const deepLink = `https://t.me/${botUsername}?start=link_${result.token}`;
       
       res.json({ 

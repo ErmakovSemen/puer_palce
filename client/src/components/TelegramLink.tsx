@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,10 +20,13 @@ interface MagicLinkResponse {
   expiresIn: number;
 }
 
+const TOKEN_REFRESH_INTERVAL = 14 * 60 * 1000; // 14 minutes
+
 export function TelegramLink() {
   const { toast } = useToast();
   const [deepLink, setDeepLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: telegramProfile, isLoading } = useQuery<TelegramProfile>({
     queryKey: ["/api/telegram/profile"],
@@ -36,10 +39,6 @@ export function TelegramLink() {
     },
     onSuccess: (data) => {
       setDeepLink(data.deepLink);
-      toast({
-        title: "Ссылка создана",
-        description: `Действует ${data.expiresIn} минут`,
-      });
     },
     onError: (error: Error) => {
       toast({
@@ -49,6 +48,29 @@ export function TelegramLink() {
       });
     },
   });
+
+  // Auto-refresh token every 14 minutes
+  useEffect(() => {
+    // Clear any existing interval first
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+      refreshIntervalRef.current = null;
+    }
+    
+    // Only set up refresh if link exists and account not linked
+    if (deepLink && !telegramProfile?.linked) {
+      refreshIntervalRef.current = setInterval(() => {
+        createLinkMutation.mutate();
+      }, TOKEN_REFRESH_INTERVAL);
+    }
+    
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    };
+  }, [deepLink, telegramProfile?.linked]);
 
   const unlinkMutation = useMutation({
     mutationFn: async () => {
@@ -195,9 +217,6 @@ export function TelegramLink() {
                 Открыть Telegram
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Ссылка действует 15 минут
-            </p>
           </div>
         ) : (
           <Button
