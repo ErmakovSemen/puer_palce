@@ -575,6 +575,8 @@ async function getCartTotal(userId: string): Promise<{ subtotal: number; itemCou
 }
 
 async function handleAddToCart(chatId: string, productId: number, quantity: number, username?: string, firstName?: string) {
+  console.log("[TelegramBot] handleAddToCart called:", { chatId, productId, quantity });
+  
   const profile = await getOrCreateProfile(chatId, username, firstName);
   if (!profile) {
     await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
@@ -582,6 +584,8 @@ async function handleAddToCart(chatId: string, productId: number, quantity: numb
   }
 
   const user = await getLinkedUser(profile);
+  console.log("[TelegramBot] AddToCart - linked user:", user?.id);
+  
   if (!user) {
     await sendMessage(chatId, "❌ Для использования корзины привяжите аккаунт с сайта.");
     return;
@@ -589,6 +593,7 @@ async function handleAddToCart(chatId: string, productId: number, quantity: numb
 
   // Get product info
   const [product] = await db.select().from(products).where(eq(products.id, productId));
+  console.log("[TelegramBot] AddToCart - product found:", product?.name);
   if (!product) {
     await sendMessage(chatId, "Товар не найден.");
     return;
@@ -632,13 +637,19 @@ async function handleRemoveFromCart(chatId: string, cartId: number, username?: s
 }
 
 async function handleCartCommand(chatId: string, username?: string, firstName?: string) {
+  console.log("[TelegramBot] handleCartCommand called for chatId:", chatId);
+  
   const profile = await getOrCreateProfile(chatId, username, firstName);
+  console.log("[TelegramBot] Got profile:", profile?.id);
+  
   if (!profile) {
     await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
     return;
   }
 
   const user = await getLinkedUser(profile);
+  console.log("[TelegramBot] Linked user:", user?.id);
+  
   if (!user) {
     await sendMessage(chatId, `<b>🛒 Корзина</b>
 
@@ -1510,6 +1521,8 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
   const username = callbackQuery.from.username;
   const firstName = callbackQuery.from.first_name;
 
+  console.log("[TelegramBot] Callback received:", data, "chatId:", chatId);
+
   if (!chatId || !data) {
     await answerCallbackQuery(callbackQuery.id);
     return;
@@ -1517,6 +1530,7 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
 
   await answerCallbackQuery(callbackQuery.id);
 
+  try {
   // Handle product detail callbacks
   if (data.startsWith("product_")) {
     const productId = parseInt(data.substring(8), 10);
@@ -1629,6 +1643,16 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
         }
       }
       console.log("[TelegramBot] Unknown callback:", data);
+  }
+  } catch (error) {
+    console.error("[TelegramBot] Callback error for", data, ":", error);
+    try {
+      await sendMessage(chatId, "❌ Произошла ошибка. Попробуйте позже.", {
+        inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
+      });
+    } catch (e) {
+      console.error("[TelegramBot] Failed to send error message:", e);
+    }
   }
 }
 
