@@ -2120,6 +2120,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
+      // Handle fiscalization notification (Status = "RECEIPT") for Telegram orders
+      if (paymentStatus === "RECEIPT" && typeof orderIdRaw === 'string' && orderIdRaw.startsWith("T_")) {
+        console.log("[Telegram Order] Received RECEIPT notification:", orderIdRaw);
+        console.log("[Telegram Order] Full RECEIPT notification:", JSON.stringify(notification, null, 2));
+        
+        // Extract receipt URL
+        let receiptUrl: string | null = null;
+        if (notification.Url) {
+          receiptUrl = notification.Url;
+        } else if (notification.Receipt?.ReceiptUrl) {
+          receiptUrl = notification.Receipt.ReceiptUrl;
+        } else if (notification.ReceiptUrl) {
+          receiptUrl = notification.ReceiptUrl;
+        }
+        
+        if (receiptUrl) {
+          // Find pending order to get chatId
+          const pendingOrder = await db.query.pendingTelegramOrders.findFirst({
+            where: eq(pendingTelegramOrdersTable.orderId, orderIdRaw),
+          });
+          
+          if (pendingOrder) {
+            // Find the real order ID created from this Telegram order
+            const realOrder = await db.query.orders.findFirst({
+              where: eq(ordersTable.paymentId, String(notification.PaymentId)),
+            });
+            
+            // Update order with receipt URL
+            if (realOrder) {
+              await db.update(ordersTable)
+                .set({ receiptUrl: receiptUrl })
+                .where(eq(ordersTable.id, realOrder.id));
+            }
+            
+            // Send receipt to Telegram user
+            try {
+              const { sendMessage } = await import("./services/telegramBot");
+              const orderNumber = realOrder?.id || orderIdRaw;
+              await sendMessage(pendingOrder.chatId, `🧾 <b>Электронный чек по заказу #${orderNumber}</b>
+
+<a href="${receiptUrl}">Открыть чек</a>
+
+Чек сформирован и доступен по ссылке выше.`, {
+                inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
+              });
+              console.log("[Telegram Order] ✅ Receipt sent to Telegram:", pendingOrder.chatId);
+            } catch (telegramError) {
+              console.error("[Telegram Order] Failed to send receipt:", telegramError);
+            }
+          }
+        } else {
+          console.warn("[Telegram Order] No receipt URL in notification");
+        }
+        
+        res.send(tinkoffClient.getNotificationSuccessResponse());
+        return;
+      }
+
       const orderId = parseInt(orderIdRaw);
 
       // Handle fiscalization notification (Status = "RECEIPT")

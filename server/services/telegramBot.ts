@@ -7,11 +7,25 @@ import { createHash } from "crypto";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
+// Admin check - uses TELEGRAM_ADMIN_IDS (comma-separated) or falls back to TELEGRAM_CHAT_ID
+function isAdmin(chatId: string): boolean {
+  const adminIds = process.env.TELEGRAM_ADMIN_IDS;
+  if (adminIds) {
+    const adminList = adminIds.split(',').map(id => id.trim());
+    return adminList.includes(chatId);
+  }
+  // Fallback to notification chat ID
+  const fallbackId = process.env.TELEGRAM_CHAT_ID;
+  return fallbackId ? chatId === fallbackId : false;
+}
+
 // User state tracking for multi-step interactions
 type UserState = {
-  action: "awaiting_topup_amount" | "awaiting_address" | "awaiting_cart_quantity";
+  action: "awaiting_topup_amount" | "awaiting_address" | "awaiting_cart_quantity" | "awaiting_broadcast_message" | "awaiting_broadcast_confirm";
   expiresAt: number;
   productId?: number; // For cart quantity input
+  broadcastAudience?: "all" | "linked" | "unlinked"; // For broadcast targeting
+  broadcastMessage?: string; // Message to broadcast
 };
 const userStates = new Map<string, UserState>();
 
@@ -328,6 +342,189 @@ async function handleHelpCommand(chatId: string) {
 Для использования кошелька и программы лояльности привяжите аккаунт с сайта.`;
 
   await sendMessage(chatId, helpText);
+}
+
+// ============ ADMIN PANEL ============
+
+async function handleAdminCommand(chatId: string) {
+  if (!isAdmin(chatId)) {
+    await sendMessage(chatId, "⛔ Доступ запрещён");
+    return;
+  }
+  
+  // Get stats
+  const totalUsers = await db.select({ count: sql<number>`count(*)` }).from(telegramProfiles);
+  const linkedUsers = await db.select({ count: sql<number>`count(*)` }).from(telegramProfiles).where(sql`${telegramProfiles.userId} IS NOT NULL`);
+  
+  const adminText = `<b>🔧 Админ-панель</b>
+
+📊 <b>Статистика бота:</b>
+👥 Всего пользователей: ${totalUsers[0]?.count || 0}
+🔗 Привязанных аккаунтов: ${linkedUsers[0]?.count || 0}
+
+<b>Доступные действия:</b>`;
+
+  const keyboard: InlineKeyboardMarkup = {
+    inline_keyboard: [
+      [{ text: "📢 Рассылка всем", callback_data: "admin_broadcast_all" }],
+      [{ text: "📢 Только привязанным", callback_data: "admin_broadcast_linked" }],
+      [{ text: "📢 Только без привязки", callback_data: "admin_broadcast_unlinked" }],
+      [{ text: "🏠 Главное меню", callback_data: "main_menu" }],
+    ],
+  };
+
+  await sendMessage(chatId, adminText, keyboard);
+}
+
+async function handleBroadcastSetup(chatId: string, audience: "all" | "linked" | "unlinked") {
+  if (!isAdmin(chatId)) {
+    await sendMessage(chatId, "⛔ Доступ запрещён");
+    return;
+  }
+  
+  const audienceNames = {
+    all: "всем пользователям",
+    linked: "пользователям с привязанными аккаунтами",
+    unlinked: "пользователям без привязки",
+  };
+  
+  setUserState(chatId, {
+    action: "awaiting_broadcast_message",
+    expiresAt: Date.now() + 30 * 60 * 1000, // 30 minutes
+    broadcastAudience: audience,
+  });
+  
+  await sendMessage(chatId, `<b>📢 Рассылка ${audienceNames[audience]}</b>
+
+Введите текст сообщения для рассылки:
+
+<i>Поддерживается HTML-разметка: &lt;b&gt;жирный&lt;/b&gt;, &lt;i&gt;курсив&lt;/i&gt;</i>`, {
+    inline_keyboard: [[{ text: "❌ Отмена", callback_data: "admin_panel" }]],
+  });
+}
+
+async function handleBroadcastMessage(chatId: string, message: string) {
+  // Defense in depth - verify admin status
+  if (!isAdmin(chatId)) {
+    clearUserState(chatId);
+    return;
+  }
+  
+  const state = getUserState(chatId);
+  if (!state || state.action !== "awaiting_broadcast_message" || !state.broadcastAudience) {
+    return;
+  }
+  
+  // Get audience count
+  let countQuery;
+  if (state.broadcastAudience === "all") {
+    countQuery = await db.select({ count: sql<number>`count(*)` }).from(telegramProfiles);
+  } else if (state.broadcastAudience === "linked") {
+    countQuery = await db.select({ count: sql<number>`count(*)` }).from(telegramProfiles).where(sql`${telegramProfiles.userId} IS NOT NULL`);
+  } else {
+    countQuery = await db.select({ count: sql<number>`count(*)` }).from(telegramProfiles).where(sql`${telegramProfiles.userId} IS NULL`);
+  }
+  
+  const recipientCount = countQuery[0]?.count || 0;
+  
+  // Update state with message, waiting for confirmation
+  setUserState(chatId, {
+    action: "awaiting_broadcast_confirm",
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    broadcastAudience: state.broadcastAudience,
+    broadcastMessage: message,
+  });
+  
+  const audienceNames = {
+    all: "всем",
+    linked: "привязанным",
+    unlinked: "без привязки",
+  };
+  
+  await sendMessage(chatId, `<b>📢 Подтверждение рассылки</b>
+
+<b>Аудитория:</b> ${audienceNames[state.broadcastAudience]} (${recipientCount} чел.)
+
+<b>Сообщение:</b>
+${message}
+
+Подтвердите отправку:`, {
+    inline_keyboard: [
+      [
+        { text: "✅ Отправить", callback_data: "admin_broadcast_confirm" },
+        { text: "❌ Отмена", callback_data: "admin_panel" },
+      ],
+    ],
+  });
+}
+
+async function executeBroadcast(chatId: string) {
+  // Defense in depth - verify admin status
+  if (!isAdmin(chatId)) {
+    clearUserState(chatId);
+    await sendMessage(chatId, "⛔ Доступ запрещён");
+    return;
+  }
+  
+  const state = getUserState(chatId);
+  if (!state || state.action !== "awaiting_broadcast_confirm" || !state.broadcastMessage || !state.broadcastAudience) {
+    await sendMessage(chatId, "❌ Ошибка: сессия рассылки истекла");
+    return;
+  }
+  
+  clearUserState(chatId);
+  
+  // Get recipients
+  let recipients;
+  if (state.broadcastAudience === "all") {
+    recipients = await db.select().from(telegramProfiles);
+  } else if (state.broadcastAudience === "linked") {
+    recipients = await db.select().from(telegramProfiles).where(sql`${telegramProfiles.userId} IS NOT NULL`);
+  } else {
+    recipients = await db.select().from(telegramProfiles).where(sql`${telegramProfiles.userId} IS NULL`);
+  }
+  
+  await sendMessage(chatId, `⏳ Начинаю рассылку ${recipients.length} пользователям...`);
+  
+  let sent = 0;
+  let failed = 0;
+  let blocked = 0;
+  
+  // Telegram rate limits: ~30 msgs/sec for bots, but safer at ~20/sec
+  // Using 50ms delay between messages
+  for (const recipient of recipients) {
+    try {
+      const success = await sendMessage(recipient.chatId, state.broadcastMessage);
+      if (success) {
+        sent++;
+      } else {
+        blocked++; // User may have blocked the bot
+      }
+      // Rate limit delay - 50ms between messages
+      await new Promise(resolve => setTimeout(resolve, 50));
+    } catch (error: any) {
+      // Check if user blocked the bot (403 error)
+      if (error?.message?.includes("403") || error?.message?.includes("blocked")) {
+        blocked++;
+      } else {
+        failed++;
+        console.error("[Broadcast] Failed to send to", recipient.chatId, error);
+      }
+      // Continue with next recipient
+    }
+  }
+  
+  let resultText = `✅ <b>Рассылка завершена!</b>\n\n📨 Отправлено: ${sent}`;
+  if (blocked > 0) {
+    resultText += `\n🚫 Заблокировали бота: ${blocked}`;
+  }
+  if (failed > 0) {
+    resultText += `\n❌ Ошибок: ${failed}`;
+  }
+  
+  await sendMessage(chatId, resultText, {
+    inline_keyboard: [[{ text: "🔧 Админ-панель", callback_data: "admin_panel" }]],
+  });
 }
 
 async function handleContactsCommand(chatId: string) {
@@ -1633,6 +1830,43 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
         inline_keyboard: [[{ text: "❌ Отмена", callback_data: "cart" }]],
       });
       break;
+    // Admin panel callbacks - all require admin check
+    case "admin_panel":
+      if (!isAdmin(chatId)) {
+        await sendMessage(chatId, "⛔ Доступ запрещён");
+        break;
+      }
+      clearUserState(chatId);
+      await handleAdminCommand(chatId);
+      break;
+    case "admin_broadcast_all":
+      if (!isAdmin(chatId)) {
+        await sendMessage(chatId, "⛔ Доступ запрещён");
+        break;
+      }
+      await handleBroadcastSetup(chatId, "all");
+      break;
+    case "admin_broadcast_linked":
+      if (!isAdmin(chatId)) {
+        await sendMessage(chatId, "⛔ Доступ запрещён");
+        break;
+      }
+      await handleBroadcastSetup(chatId, "linked");
+      break;
+    case "admin_broadcast_unlinked":
+      if (!isAdmin(chatId)) {
+        await sendMessage(chatId, "⛔ Доступ запрещён");
+        break;
+      }
+      await handleBroadcastSetup(chatId, "unlinked");
+      break;
+    case "admin_broadcast_confirm":
+      if (!isAdmin(chatId)) {
+        await sendMessage(chatId, "⛔ Доступ запрещён");
+        break;
+      }
+      await executeBroadcast(chatId);
+      break;
     default:
       // Handle use_address_ID callbacks
       if (data.startsWith("use_address_")) {
@@ -1701,6 +1935,11 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
       await handleAddressInput(chatId, text, username, firstName);
       return;
     }
+    if (userState.action === "awaiting_broadcast_message") {
+      // Admin entering broadcast message
+      await handleBroadcastMessage(chatId, text);
+      return;
+    }
   }
 
   switch (command) {
@@ -1732,6 +1971,9 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
       } else {
         await handleLinkCodeMessage(chatId, payload, username, firstName);
       }
+      break;
+    case "/admin":
+      await handleAdminCommand(chatId);
       break;
     default:
       if (text.startsWith("/")) {
