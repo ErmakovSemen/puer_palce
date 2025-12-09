@@ -761,18 +761,18 @@ async function handleWalletCommand(chatId: string, username?: string, firstName?
   await sendMessage(chatId, walletText, keyboard);
 }
 
-async function handleWalletTopup(chatId: string, amount: number, username?: string, firstName?: string) {
+async function handleWalletTopup(chatId: string, amount: number, username?: string, firstName?: string): Promise<boolean> {
   const profile = await getOrCreateProfile(chatId, username, firstName);
   if (!profile) {
     await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
-    return;
+    return false;
   }
 
   const user = await getLinkedUser(profile);
 
   if (!user) {
     await sendMessage(chatId, "❌ Для пополнения кошелька привяжите аккаунт с сайта.");
-    return;
+    return false;
   }
 
   // Create top-up payment via internal API
@@ -840,9 +840,16 @@ async function handleWalletTopup(chatId: string, amount: number, username?: stri
     };
 
     await sendMessage(chatId, topupText, keyboard);
+    return true;
   } catch (error) {
     console.error("[Wallet Bot] Top-up error:", error);
-    await sendMessage(chatId, "❌ Ошибка при создании платежа. Попробуйте позже.");
+    // Re-send prompt so user can retry without navigating
+    await sendMessage(chatId, `❌ Ошибка при создании платежа.
+
+<b>Введите другую сумму (от 10 до 100000 ₽):</b>`, {
+      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "wallet" }]],
+    });
+    return false;
   }
 }
 
@@ -930,28 +937,41 @@ async function handleCustomTopupRequest(chatId: string, username?: string, first
 }
 
 async function handleCustomTopupAmount(chatId: string, amountText: string, username?: string, firstName?: string) {
-  // Clear the state
-  clearUserState(chatId);
-
-  // Parse and validate amount
-  const amount = parseInt(amountText.replace(/\s/g, ""), 10);
-
-  if (isNaN(amount) || amount < 10) {
-    await sendMessage(chatId, "❌ Минимальная сумма пополнения — 10 ₽. Попробуйте снова через меню кошелька.", {
-      inline_keyboard: [[{ text: "↩️ Назад к кошельку", callback_data: "wallet" }]],
+  // Remove spaces and parse - only allow digits
+  const cleanedText = amountText.replace(/\s/g, "");
+  
+  // Reject if contains non-digit characters
+  if (!/^\d+$/.test(cleanedText)) {
+    await sendMessage(chatId, "❌ Введите только число (сумму в рублях).\n\nНапример: <code>750</code>", {
+      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "wallet" }]],
     });
-    return;
+    return; // Keep state active for retry
+  }
+
+  const amount = parseInt(cleanedText, 10);
+
+  if (amount < 10) {
+    await sendMessage(chatId, "❌ Минимальная сумма — 10 ₽. Введите другое число:", {
+      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "wallet" }]],
+    });
+    return; // Keep state active for retry
   }
 
   if (amount > 100000) {
-    await sendMessage(chatId, "❌ Максимальная сумма пополнения — 100 000 ₽. Попробуйте снова через меню кошелька.", {
-      inline_keyboard: [[{ text: "↩️ Назад к кошельку", callback_data: "wallet" }]],
+    await sendMessage(chatId, "❌ Максимальная сумма — 100 000 ₽. Введите другое число:", {
+      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "wallet" }]],
     });
-    return;
+    return; // Keep state active for retry
   }
 
   // Process the top-up with validated amount
-  await handleWalletTopup(chatId, amount, username, firstName);
+  const success = await handleWalletTopup(chatId, amount, username, firstName);
+  
+  // Only clear state after successful payment creation
+  if (success) {
+    clearUserState(chatId);
+  }
+  // On failure, state remains active so user can try another amount or cancel via button
 }
 
 async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
@@ -1006,6 +1026,7 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
       await handleLinkAccountCallback(chatId);
       break;
     case "wallet":
+      clearUserState(chatId); // Clear any pending state (e.g., awaiting amount input)
       await handleWalletCommand(chatId, username, firstName);
       break;
     case "wallet_history":
