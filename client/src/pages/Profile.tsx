@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText, CheckCircle, AlertCircle, Gift, ShoppingBag, Sparkles, MapPin } from "lucide-react";
+import { User, Package, Mail, Phone, Home, Edit, Save, X, FileText, CheckCircle, AlertCircle, Gift, ShoppingBag, Sparkles, MapPin, Trophy, Lock, Check } from "lucide-react";
 import type { Product } from "@shared/schema";
 import { useState } from "react";
 import { SavedAddresses } from "@/components/SavedAddresses";
@@ -20,6 +20,7 @@ import { updateUserSchema, type UpdateUser } from "@shared/schema";
 import { LoyaltyProgressBar } from "@/components/LoyaltyProgressBar";
 import { LoyaltyLevelsModal } from "@/components/LoyaltyLevelsModal";
 import { TelegramLink } from "@/components/TelegramLink";
+import { LOYALTY_LEVELS } from "@shared/loyalty";
 
 interface DbOrder {
   id: number;
@@ -260,6 +261,70 @@ export default function Profile() {
           {/* Telegram Integration */}
           <div className="mt-8">
             <TelegramLink />
+          </div>
+
+          {/* Loyalty Program Section */}
+          <div className="mt-8">
+            <Card data-testid="card-loyalty-program">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Trophy className="w-6 h-6 text-amber-500" />
+                  <h3 className="font-serif text-xl font-semibold">
+                    Программа лояльности
+                  </h3>
+                </div>
+                <p className="text-muted-foreground mb-6">
+                  За каждый рубль покупки вы получаете 1 XP. Накапливайте опыт и получайте скидки!
+                </p>
+                
+                <div className="space-y-4">
+                  {LOYALTY_LEVELS.map((level) => {
+                    const isUnlocked = user ? user.xp >= level.minXP : false;
+                    const isCurrent = user ? (user.xp >= level.minXP && (level.maxXP === null || user.xp <= level.maxXP)) : false;
+                    
+                    return (
+                      <div 
+                        key={level.level}
+                        className={`p-4 border rounded-md ${isCurrent ? 'border-primary bg-primary/5' : 'border-border'}`}
+                        data-testid={`loyalty-level-${level.level}`}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {isUnlocked ? (
+                              <Trophy className="w-4 h-4 text-amber-500" />
+                            ) : (
+                              <Lock className="w-4 h-4 text-muted-foreground" />
+                            )}
+                            <span className="font-semibold">{level.name}</span>
+                            {isCurrent && (
+                              <Badge variant="default" className="text-xs">Текущий</Badge>
+                            )}
+                          </div>
+                          {level.discount > 0 && (
+                            <Badge variant="outline" className="text-xs">Скидка {level.discount}%</Badge>
+                          )}
+                        </div>
+                        
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {level.minXP.toLocaleString()} XP
+                          {level.maxXP !== null && ` - ${level.maxXP.toLocaleString()} XP`}
+                          {level.maxXP === null && '+'}
+                        </p>
+                        
+                        <ul className="space-y-1">
+                          {level.benefits.map((benefit, idx) => (
+                            <li key={idx} className="flex items-start gap-2 text-sm">
+                              <Check className="w-3 h-3 mt-1 flex-shrink-0 text-green-600" />
+                              <span>{benefit}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

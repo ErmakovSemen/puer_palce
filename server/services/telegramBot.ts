@@ -3,8 +3,13 @@ import { telegramProfiles, users, siteSettings, products, magicLinks, type Teleg
 import { eq } from "drizzle-orm";
 import { getLoyaltyProgress } from "@shared/loyalty";
 import { validateAndConsumeMagicLink } from "./magicLink";
+import { createHash } from "crypto";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+function getTeaTypeHash(teaType: string): string {
+  return createHash('sha256').update(teaType).digest('base64url').slice(0, 8);
+}
 
 interface TelegramUser {
   id: number;
@@ -347,8 +352,7 @@ async function handleMenuCategory(chatId: string, category: "tea" | "teaware") {
     const productList = await db
       .select()
       .from(products)
-      .where(eq(products.category, category))
-      .limit(10);
+      .where(eq(products.category, category));
 
     if (productList.length === 0) {
       const emptyText = category === "tea" 
@@ -365,17 +369,95 @@ async function handleMenuCategory(chatId: string, category: "tea" | "teaware") {
       return;
     }
 
-    const categoryTitle = category === "tea" ? "🍵 Чай" : "🫖 Посуда";
-    let text = `<b>${categoryTitle}</b>\n\n`;
+    if (category === "tea") {
+      const teaTypes = Array.from(new Set(productList.map(p => p.teaType || "Другое")));
+      
+      const teaTypeLabels: Record<string, string> = {
+        "Шу Пуэр": "🟤 Шу Пуэр",
+        "Шэн Пуэр": "🟢 Шэн Пуэр", 
+        "Улун": "🔵 Улун",
+        "Габа": "🟡 Габа",
+        "Красный чай": "🔴 Красный чай",
+        "красный": "🔴 Красный чай",
+        "Белый чай": "⚪ Белый чай",
+        "Зеленый чай": "🟢 Зелёный чай",
+        "Другое": "🍃 Другие сорта"
+      };
+
+      const buttons: InlineKeyboardButton[][] = teaTypes.map(teaType => [{
+        text: teaTypeLabels[teaType] || `🍃 ${teaType}`,
+        callback_data: `tth_${getTeaTypeHash(teaType)}`
+      }]);
+
+      buttons.push([{ text: "↩️ Назад к категориям", callback_data: "menu" }]);
+
+      const keyboard: InlineKeyboardMarkup = { inline_keyboard: buttons };
+      
+      await sendMessage(chatId, "<b>🍵 Чай</b>\n\nВыберите тип чая:", keyboard);
+    } else {
+      const categoryTitle = "🫖 Посуда";
+      let text = `<b>${categoryTitle}</b>\n\n`;
+
+      const buttons: InlineKeyboardButton[][] = [];
+
+      for (const product of productList) {
+        const priceText = `${product.pricePerGram} ₽`;
+        const stockStatus = product.outOfStock ? " (нет в наличии)" : "";
+        
+        buttons.push([{
+          text: `${product.name} - ${priceText}${stockStatus}`,
+          callback_data: `product_${product.id}`
+        }]);
+      }
+
+      buttons.push([{ text: "↩️ Назад к категориям", callback_data: "menu" }]);
+
+      const keyboard: InlineKeyboardMarkup = { inline_keyboard: buttons };
+      
+      await sendMessage(chatId, text + "Выберите товар для подробной информации:", keyboard);
+    }
+  } catch (error) {
+    console.error("[TelegramBot] Menu category error:", error);
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+  }
+}
+
+async function handleTeaTypeProductsByHash(chatId: string, hash: string) {
+  try {
+    const productList = await db
+      .select()
+      .from(products)
+      .where(eq(products.category, "tea"));
+
+    const teaTypesWithHashes = Array.from(new Set(productList.map(p => p.teaType || "Другое")))
+      .map(teaType => ({ teaType, hash: getTeaTypeHash(teaType) }));
+    
+    const match = teaTypesWithHashes.find(t => t.hash === hash);
+    
+    if (!match) {
+      await sendMessage(chatId, "Категория не найдена.");
+      return;
+    }
+    
+    const teaType = match.teaType;
+    const filteredProducts = productList.filter(p => (p.teaType || "Другое") === teaType);
+
+    if (filteredProducts.length === 0) {
+      const keyboard: InlineKeyboardMarkup = {
+        inline_keyboard: [
+          [{ text: "↩️ Назад к типам чая", callback_data: "menu_tea" }],
+        ],
+      };
+      
+      await sendMessage(chatId, "В этой категории пока нет товаров.", keyboard);
+      return;
+    }
 
     const buttons: InlineKeyboardButton[][] = [];
 
-    for (const product of productList) {
-      const priceText = category === "tea" 
-        ? `${product.pricePerGram} ₽/г`
-        : `${product.pricePerGram} ₽`;
-      
-      const stockStatus = product.outOfStock ? " (нет в наличии)" : "";
+    for (const product of filteredProducts) {
+      const priceText = `${product.pricePerGram} ₽/г`;
+      const stockStatus = product.outOfStock ? " (нет)" : "";
       
       buttons.push([{
         text: `${product.name} - ${priceText}${stockStatus}`,
@@ -383,13 +465,13 @@ async function handleMenuCategory(chatId: string, category: "tea" | "teaware") {
       }]);
     }
 
-    buttons.push([{ text: "↩️ Назад к категориям", callback_data: "menu" }]);
+    buttons.push([{ text: "↩️ Назад к типам чая", callback_data: "menu_tea" }]);
 
     const keyboard: InlineKeyboardMarkup = { inline_keyboard: buttons };
     
-    await sendMessage(chatId, text + "Выберите товар для подробной информации:", keyboard);
+    await sendMessage(chatId, `<b>🍵 ${teaType}</b>\n\nВыберите чай:`, keyboard);
   } catch (error) {
-    console.error("[TelegramBot] Menu category error:", error);
+    console.error("[TelegramBot] Tea type products error:", error);
     await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
   }
 }
@@ -598,6 +680,13 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
       await handleProductDetail(chatId, productId);
       return;
     }
+  }
+
+  // Handle tea type callbacks (format: tth_hash - uses SHA256 hash of tea type)
+  if (data.startsWith("tth_")) {
+    const hash = data.substring(4);
+    await handleTeaTypeProductsByHash(chatId, hash);
+    return;
   }
 
   switch (data) {
