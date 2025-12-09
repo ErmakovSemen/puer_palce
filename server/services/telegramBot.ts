@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { telegramProfiles, users, siteSettings, products, magicLinks, walletTransactions, telegramCart, pendingTelegramOrders, orders, savedAddresses, type TelegramProfile, type Product } from "@shared/schema";
+import { telegramProfiles, users, siteSettings, products, magicLinks, telegramCart, pendingTelegramOrders, orders, savedAddresses, type TelegramProfile, type Product } from "@shared/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { validateAndConsumeMagicLink } from "./magicLink";
@@ -21,7 +21,7 @@ function isAdmin(chatId: string): boolean {
 
 // User state tracking for multi-step interactions
 type UserState = {
-  action: "awaiting_topup_amount" | "awaiting_address" | "awaiting_cart_quantity" | "awaiting_broadcast_message" | "awaiting_broadcast_confirm";
+  action: "awaiting_address" | "awaiting_cart_quantity" | "awaiting_broadcast_message" | "awaiting_broadcast_confirm";
   expiresAt: number;
   productId?: number; // For cart quantity input
   broadcastAudience?: "all" | "linked" | "unlinked"; // For broadcast targeting
@@ -239,7 +239,6 @@ function getMainMenuKeyboard(isLinked: boolean): InlineKeyboardMarkup {
 
   if (isLinked) {
     keyboard.push([{ text: "⭐ Мой профиль", callback_data: "profile" }]);
-    keyboard.push([{ text: "💳 Кошелёк", callback_data: "wallet" }]);
     keyboard.push([{ text: "🛒 Корзина", callback_data: "cart" }]);
   } else {
     keyboard.push([{ text: "🔗 Привязать аккаунт", callback_data: "link_account" }]);
@@ -331,15 +330,15 @@ async function handleHelpCommand(chatId: string) {
 /contacts - Контактная информация
 /menu - Каталог чая
 /profile - Ваш профиль и лояльность
-/wallet - Кошелёк и пополнение
+/cart - Корзина
 
 <b>Возможности:</b>
 • Просмотр каталога чая
-• Контактная информация
+• Контактная информация  
 • Программа лояльности
-• Кошелёк с пополнением через СБП
+• Заказ с доставкой
 
-Для использования кошелька и программы лояльности привяжите аккаунт с сайта.`;
+Для использования корзины и программы лояльности привяжите аккаунт с сайта.`;
 
   await sendMessage(chatId, helpText);
 }
@@ -1440,278 +1439,6 @@ async function handleLinkCodeMessage(chatId: string, code: string, username?: st
   await sendMessage(chatId, successMessage, keyboard);
 }
 
-async function handleWalletCommand(chatId: string, username?: string, firstName?: string) {
-  const profile = await getOrCreateProfile(chatId, username, firstName);
-  if (!profile) {
-    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
-    return;
-  }
-
-  const user = await getLinkedUser(profile);
-
-  if (!user) {
-    const linkText = `<b>💳 Кошелёк</b>
-
-Для использования кошелька привяжите ваш аккаунт с сайта.
-
-Зарегистрируйтесь или войдите на сайте, затем перейдите в настройки профиля для привязки Telegram.`;
-
-    const keyboard: InlineKeyboardMarkup = {
-      inline_keyboard: [
-        [{ text: "🌐 Перейти на сайт", url: "https://puerpub.replit.app" }],
-        [{ text: "↩️ Главное меню", callback_data: "main_menu" }],
-      ],
-    };
-
-    await sendMessage(chatId, linkText, keyboard);
-    return;
-  }
-
-  // Get wallet balance (convert from kopecks to rubles)
-  const balanceRub = Math.floor((user.walletBalance || 0) / 100);
-  const balanceKop = (user.walletBalance || 0) % 100;
-  const balanceFormatted = balanceKop > 0 
-    ? `${balanceRub.toLocaleString("ru-RU")},${balanceKop.toString().padStart(2, '0')}` 
-    : balanceRub.toLocaleString("ru-RU");
-
-  let walletText = `<b>💳 Ваш кошелёк</b>\n\n`;
-  walletText += `💰 <b>Баланс: ${balanceFormatted} ₽</b>\n`;
-  walletText += `━━━━━━━━━━━━━━━━━━━━\n\n`;
-  walletText += `Пополните кошелёк для оплаты заказов.\n`;
-  walletText += `Оплата через СБП (Система быстрых платежей).`;
-
-  const keyboard: InlineKeyboardMarkup = {
-    inline_keyboard: [
-      [
-        { text: "500 ₽", callback_data: "topup_500" },
-        { text: "1000 ₽", callback_data: "topup_1000" },
-      ],
-      [
-        { text: "2000 ₽", callback_data: "topup_2000" },
-        { text: "5000 ₽", callback_data: "topup_5000" },
-      ],
-      [{ text: "✏️ Своя сумма", callback_data: "custom_topup" }],
-      [{ text: "📜 История операций", callback_data: "wallet_history" }],
-      [{ text: "↩️ Главное меню", callback_data: "main_menu" }],
-    ],
-  };
-
-  await sendMessage(chatId, walletText, keyboard);
-}
-
-async function handleWalletTopup(chatId: string, amount: number, username?: string, firstName?: string): Promise<boolean> {
-  const profile = await getOrCreateProfile(chatId, username, firstName);
-  if (!profile) {
-    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
-    return false;
-  }
-
-  const user = await getLinkedUser(profile);
-
-  if (!user) {
-    await sendMessage(chatId, "❌ Для пополнения кошелька привяжите аккаунт с сайта.");
-    return false;
-  }
-
-  // Create top-up payment via internal API
-  const walletOrderId = `W_${Date.now()}_${user.id.substring(0, 8)}_${amount}`;
-  const amountKopecks = amount * 100;
-
-  try {
-    const { getTinkoffClient } = await import("../tinkoff");
-    const tinkoffClient = getTinkoffClient();
-    
-    // Normalize phone for receipt
-    let phoneForReceipt = user.phone.replace(/[^0-9+]/g, '');
-    if (phoneForReceipt.startsWith('+')) {
-      phoneForReceipt = phoneForReceipt.substring(1);
-    }
-    if (phoneForReceipt.startsWith('8') && phoneForReceipt.length === 11) {
-      phoneForReceipt = '7' + phoneForReceipt.substring(1);
-    }
-
-    const baseUrl = 'https://puerpub.replit.app';
-
-    const paymentRequest = {
-      Amount: amountKopecks,
-      OrderId: walletOrderId,
-      Description: `Пополнение кошелька на ${amount}₽`,
-      DATA: {
-        Phone: phoneForReceipt,
-      },
-      Receipt: {
-        Phone: phoneForReceipt,
-        Taxation: "usn_income",
-        Items: [{
-          Name: `Пополнение кошелька на ${amount}₽`,
-          Price: amountKopecks,
-          Quantity: 1,
-          Amount: amountKopecks,
-          Tax: "none",
-          PaymentMethod: "full_prepayment",
-          PaymentObject: "service",
-        }],
-      },
-      NotificationURL: `${baseUrl}/api/payments/notification`,
-      SuccessURL: `${baseUrl}/wallet/success?amount=${amount}`,
-      FailURL: `${baseUrl}/wallet/error`,
-    };
-
-    console.log("[Wallet Bot] Creating top-up payment:", walletOrderId, "Amount:", amount);
-
-    const paymentResponse = await tinkoffClient.init(paymentRequest);
-
-    console.log("[Wallet Bot] Payment created, URL:", paymentResponse.PaymentURL);
-
-    const topupText = `<b>💳 Пополнение кошелька</b>
-
-Сумма: <b>${amount} ₽</b>
-
-Нажмите кнопку ниже для оплаты через СБП.
-После успешной оплаты средства будут зачислены автоматически.`;
-
-    const keyboard: InlineKeyboardMarkup = {
-      inline_keyboard: [
-        [{ text: "💳 Оплатить через СБП", url: paymentResponse.PaymentURL }],
-        [{ text: "↩️ Назад к кошельку", callback_data: "wallet" }],
-      ],
-    };
-
-    await sendMessage(chatId, topupText, keyboard);
-    return true;
-  } catch (error) {
-    console.error("[Wallet Bot] Top-up error:", error);
-    // Re-send prompt so user can retry without navigating
-    await sendMessage(chatId, `❌ Ошибка при создании платежа.
-
-<b>Введите другую сумму (от 10 до 100000 ₽):</b>`, {
-      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "wallet" }]],
-    });
-    return false;
-  }
-}
-
-async function handleWalletHistory(chatId: string, username?: string, firstName?: string) {
-  const profile = await getOrCreateProfile(chatId, username, firstName);
-  if (!profile) {
-    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
-    return;
-  }
-
-  const user = await getLinkedUser(profile);
-
-  if (!user) {
-    await sendMessage(chatId, "❌ Для просмотра истории привяжите аккаунт с сайта.");
-    return;
-  }
-
-  // Get recent transactions
-  const transactions = await db
-    .select()
-    .from(walletTransactions)
-    .where(eq(walletTransactions.userId, user.id))
-    .orderBy(desc(walletTransactions.createdAt))
-    .limit(10);
-
-  let historyText = `<b>📜 История операций</b>\n\n`;
-
-  if (transactions.length === 0) {
-    historyText += `<i>Операций пока нет</i>`;
-  } else {
-    transactions.forEach((tx) => {
-      const amountRub = Math.abs(tx.amount) / 100;
-      const sign = tx.amount > 0 ? "+" : "-";
-      const icon = tx.type === "topup" ? "💰" : tx.type === "purchase" ? "🛒" : "↩️";
-      const date = new Date(tx.createdAt).toLocaleDateString("ru-RU");
-      
-      historyText += `${icon} ${sign}${amountRub.toLocaleString("ru-RU")} ₽\n`;
-      historyText += `   <i>${tx.description}</i>\n`;
-      historyText += `   ${date}\n\n`;
-    });
-  }
-
-  const keyboard: InlineKeyboardMarkup = {
-    inline_keyboard: [
-      [{ text: "↩️ Назад к кошельку", callback_data: "wallet" }],
-    ],
-  };
-
-  await sendMessage(chatId, historyText, keyboard);
-}
-
-async function handleCustomTopupRequest(chatId: string, username?: string, firstName?: string) {
-  const profile = await getOrCreateProfile(chatId, username, firstName);
-  if (!profile) {
-    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
-    return;
-  }
-
-  const user = await getLinkedUser(profile);
-
-  if (!user) {
-    await sendMessage(chatId, "❌ Для пополнения кошелька привяжите аккаунт с сайта.");
-    return;
-  }
-
-  // Set user state to awaiting amount input (expires in 5 minutes)
-  setUserState(chatId, {
-    action: "awaiting_topup_amount",
-    expiresAt: Date.now() + 5 * 60 * 1000,
-  });
-
-  const promptText = `<b>✏️ Введите сумму пополнения</b>
-
-Отправьте сообщение с суммой в рублях (от 10 до 100000).
-
-Например: <code>750</code>`;
-
-  const keyboard: InlineKeyboardMarkup = {
-    inline_keyboard: [
-      [{ text: "❌ Отмена", callback_data: "wallet" }],
-    ],
-  };
-
-  await sendMessage(chatId, promptText, keyboard);
-}
-
-async function handleCustomTopupAmount(chatId: string, amountText: string, username?: string, firstName?: string) {
-  // Remove spaces and parse - only allow digits
-  const cleanedText = amountText.replace(/\s/g, "");
-  
-  // Reject if contains non-digit characters
-  if (!/^\d+$/.test(cleanedText)) {
-    await sendMessage(chatId, "❌ Введите только число (сумму в рублях).\n\nНапример: <code>750</code>", {
-      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "wallet" }]],
-    });
-    return; // Keep state active for retry
-  }
-
-  const amount = parseInt(cleanedText, 10);
-
-  if (amount < 10) {
-    await sendMessage(chatId, "❌ Минимальная сумма — 10 ₽. Введите другое число:", {
-      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "wallet" }]],
-    });
-    return; // Keep state active for retry
-  }
-
-  if (amount > 100000) {
-    await sendMessage(chatId, "❌ Максимальная сумма — 100 000 ₽. Введите другое число:", {
-      inline_keyboard: [[{ text: "❌ Отмена", callback_data: "wallet" }]],
-    });
-    return; // Keep state active for retry
-  }
-
-  // Process the top-up with validated amount
-  const success = await handleWalletTopup(chatId, amount, username, firstName);
-  
-  // Only clear state after successful payment creation
-  if (success) {
-    clearUserState(chatId);
-  }
-  // On failure, state remains active so user can try another amount or cancel via button
-}
-
 async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
   const chatId = callbackQuery.message?.chat.id.toString();
   const data = callbackQuery.data;
@@ -1787,28 +1514,6 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
       break;
     case "link_account":
       await handleLinkAccountCallback(chatId);
-      break;
-    case "wallet":
-      clearUserState(chatId); // Clear any pending state (e.g., awaiting amount input)
-      await handleWalletCommand(chatId, username, firstName);
-      break;
-    case "wallet_history":
-      await handleWalletHistory(chatId, username, firstName);
-      break;
-    case "topup_500":
-      await handleWalletTopup(chatId, 500, username, firstName);
-      break;
-    case "topup_1000":
-      await handleWalletTopup(chatId, 1000, username, firstName);
-      break;
-    case "topup_2000":
-      await handleWalletTopup(chatId, 2000, username, firstName);
-      break;
-    case "topup_5000":
-      await handleWalletTopup(chatId, 5000, username, firstName);
-      break;
-    case "custom_topup":
-      await handleCustomTopupRequest(chatId, username, firstName);
       break;
     case "cart":
       await handleCartCommand(chatId, username, firstName);
@@ -1922,14 +1627,9 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
     return;
   }
 
-  // Check if user is in a state expecting input (e.g., custom top-up amount, address)
+  // Check if user is in a state expecting input (e.g., address, broadcast message)
   const userState = getUserState(chatId);
   if (userState) {
-    if (userState.action === "awaiting_topup_amount") {
-      // User is expected to enter a number for top-up
-      await handleCustomTopupAmount(chatId, text, username, firstName);
-      return;
-    }
     if (userState.action === "awaiting_address") {
       // User is expected to enter delivery address
       await handleAddressInput(chatId, text, username, firstName);
@@ -1957,9 +1657,6 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
       break;
     case "/profile":
       await handleProfileCommand(chatId, username, firstName);
-      break;
-    case "/wallet":
-      await handleWalletCommand(chatId, username, firstName);
       break;
     case "/cart":
       await handleCartCommand(chatId, username, firstName);

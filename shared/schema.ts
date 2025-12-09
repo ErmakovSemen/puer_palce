@@ -221,6 +221,7 @@ export const orders = pgTable("orders", {
   receiptUrl: text("receipt_url"), // URL to view fiscal receipt from OFD
   receiptEmail: text("receipt_email"), // Email for sending receipt
   receiptSmsSent: boolean("receipt_sms_sent").notNull().default(false), // Flag to prevent duplicate SMS
+  telegramChatId: text("telegram_chat_id"), // Telegram chat ID for orders placed via bot
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 

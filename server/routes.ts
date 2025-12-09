@@ -2062,6 +2062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 usedFirstOrderDiscount,
                 paymentStatus: "CONFIRMED",
                 paymentId: String(notification.PaymentId),
+                telegramChatId: pendingOrder.chatId, // Save chat ID for receipt delivery
               }).returning();
               
               console.log("[Telegram Order] Created order:", newOrder.id, "for Telegram order:", orderIdRaw);
@@ -2095,7 +2096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 console.log("[Telegram Order] Awarded", xpToAdd, "XP to user:", user.id);
               }
               
-              // Send confirmation to Telegram chat
+              // Send confirmation to customer's Telegram chat
               try {
                 const { sendMessage } = await import("./services/telegramBot");
                 await sendMessage(pendingOrder.chatId, `✅ <b>Заказ #${newOrder.id} оплачен!</b>
@@ -2107,6 +2108,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 });
               } catch (telegramError) {
                 console.error("[Telegram Order] Failed to send confirmation:", telegramError);
+              }
+              
+              // Send order notification to admin group chat
+              try {
+                await sendTelegramOrderNotification(newOrder);
+              } catch (adminNotifyError) {
+                console.error("[Telegram Order] Failed to send admin notification:", adminNotifyError);
               }
               
               console.log("[Telegram Order] ✅ Order completed:", orderIdRaw);
@@ -2136,39 +2144,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         if (receiptUrl) {
-          // Find pending order to get chatId
-          const pendingOrder = await db.query.pendingTelegramOrders.findFirst({
-            where: eq(pendingTelegramOrdersTable.orderId, orderIdRaw),
+          // Find the real order by paymentId - this has telegramChatId saved
+          const realOrder = await db.query.orders.findFirst({
+            where: eq(ordersTable.paymentId, String(notification.PaymentId)),
           });
           
-          if (pendingOrder) {
-            // Find the real order ID created from this Telegram order
-            const realOrder = await db.query.orders.findFirst({
-              where: eq(ordersTable.paymentId, String(notification.PaymentId)),
-            });
+          // Update order with receipt URL
+          if (realOrder) {
+            await db.update(ordersTable)
+              .set({ receiptUrl: receiptUrl })
+              .where(eq(ordersTable.id, realOrder.id));
             
-            // Update order with receipt URL
-            if (realOrder) {
-              await db.update(ordersTable)
-                .set({ receiptUrl: receiptUrl })
-                .where(eq(ordersTable.id, realOrder.id));
-            }
+            // Get chat ID from order (saved during CONFIRMED)
+            const chatId = realOrder.telegramChatId;
             
-            // Send receipt to Telegram user
-            try {
-              const { sendMessage } = await import("./services/telegramBot");
-              const orderNumber = realOrder?.id || orderIdRaw;
-              await sendMessage(pendingOrder.chatId, `🧾 <b>Электронный чек по заказу #${orderNumber}</b>
+            if (chatId) {
+              // Send receipt to Telegram user
+              try {
+                const { sendMessage } = await import("./services/telegramBot");
+                await sendMessage(chatId, `🧾 <b>Электронный чек по заказу #${realOrder.id}</b>
 
 <a href="${receiptUrl}">Открыть чек</a>
 
 Чек сформирован и доступен по ссылке выше.`, {
-                inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
-              });
-              console.log("[Telegram Order] ✅ Receipt sent to Telegram:", pendingOrder.chatId);
-            } catch (telegramError) {
-              console.error("[Telegram Order] Failed to send receipt:", telegramError);
+                  inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
+                });
+                console.log("[Telegram Order] ✅ Receipt sent to Telegram:", chatId);
+              } catch (telegramError) {
+                console.error("[Telegram Order] Failed to send receipt:", telegramError);
+              }
+            } else {
+              console.warn("[Telegram Order] No telegramChatId on order", realOrder.id);
             }
+          } else {
+            console.warn("[Telegram Order] Real order not found for paymentId:", notification.PaymentId);
           }
         } else {
           console.warn("[Telegram Order] No receipt URL in notification");
