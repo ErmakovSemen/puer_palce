@@ -36,6 +36,7 @@ Powered by Express.js and TypeScript, providing a RESTful API. Drizzle ORM inter
 -   **Chinese-Inspired Decorative Elements**: Uniform double-border badges, specific coloring for tea types/effects, and decorative dividers.
 -   **Progressive Web App (PWA)**: Installable, offline-first experience with manifest, custom icons, and intelligent service worker caching.
 -   **Native Mobile App (Capacitor)**: Android application built from the same codebase, utilizing Capacitor to wrap the web app, with automated APK build via GitHub Actions.
+-   **Telegram Bot (Phase 1)**: Customer-facing bot with commands `/start`, `/help`, `/contacts`, `/menu`, `/profile`. Features inline keyboard navigation, contact info from site_settings, and loyalty status display for linked accounts. Webhook endpoint at `/api/telegram/webhook`. Database tables: `telegram_profiles` (links Telegram chat_id to user accounts), `magic_links` (one-time authentication tokens for Phase 2).
 
 ## External Dependencies
 

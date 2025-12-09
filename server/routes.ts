@@ -9,6 +9,7 @@ import { sendOrderNotification } from "./resend";
 import { setupAuth } from "./auth";
 import { normalizePhone } from "./utils";
 import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification } from "./telegram";
+import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
 import { users as usersTable, orders as ordersTable } from "@shared/schema";
@@ -2235,6 +2236,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("[Payment] Failed to check payment status:", error);
       res.status(500).json({ error: error.message || "Failed to check payment status" });
+    }
+  });
+
+  // Telegram Bot Webhook
+  app.post("/api/telegram/webhook", async (req, res) => {
+    try {
+      const update = req.body;
+      console.log("[Telegram Bot] Webhook received update:", update?.update_id);
+      
+      await handleWebhookUpdate(update);
+      
+      res.status(200).json({ ok: true });
+    } catch (error) {
+      console.error("[Telegram Bot] Webhook error:", error);
+      res.status(200).json({ ok: true });
+    }
+  });
+
+  // Admin: Set/Get webhook info
+  app.post("/api/admin/telegram/webhook", requireAdminAuth, async (req, res) => {
+    try {
+      const { webhookUrl } = req.body;
+      
+      if (webhookUrl) {
+        const success = await setWebhook(webhookUrl);
+        res.json({ success, message: success ? "Webhook установлен" : "Ошибка установки webhook" });
+      } else {
+        const info = await getWebhookInfo();
+        res.json(info);
+      }
+    } catch (error) {
+      console.error("[Telegram Bot] Webhook setup error:", error);
+      res.status(500).json({ error: "Failed to configure webhook" });
     }
   });
 
