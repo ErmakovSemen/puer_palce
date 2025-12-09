@@ -317,3 +317,45 @@ export const updateSavedAddressSchema = z.object({
 export type InsertSavedAddress = z.infer<typeof insertSavedAddressSchema>;
 export type UpdateSavedAddress = z.infer<typeof updateSavedAddressSchema>;
 export type SavedAddress = typeof savedAddresses.$inferSelect;
+
+// Telegram Profiles table - links Telegram users to website accounts
+export const telegramProfiles = pgTable("telegram_profiles", {
+  id: serial("id").primaryKey(),
+  chatId: text("chat_id").notNull().unique(), // Telegram chat ID
+  username: text("username"), // Telegram username (optional)
+  firstName: text("first_name"), // Telegram first name
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }), // nullable - linked website account
+  lastSeen: text("last_seen").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertTelegramProfileSchema = createInsertSchema(telegramProfiles, {
+  chatId: z.string().min(1),
+  username: z.string().optional().nullable(),
+  firstName: z.string().optional().nullable(),
+  userId: z.string().optional().nullable(),
+}).omit({ id: true, lastSeen: true, createdAt: true });
+
+export type InsertTelegramProfile = z.infer<typeof insertTelegramProfileSchema>;
+export type TelegramProfile = typeof telegramProfiles.$inferSelect;
+
+// Magic Links table - for one-time login links
+export const magicLinks = pgTable("magic_links", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: text("token_hash").notNull().unique(), // SHA-256 hash of the token
+  channel: text("channel").notNull().default("telegram"), // "telegram" or "web"
+  expiresAt: text("expires_at").notNull(),
+  consumedAt: text("consumed_at"), // null if not yet used
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertMagicLinkSchema = createInsertSchema(magicLinks, {
+  userId: z.string().min(1),
+  tokenHash: z.string().min(1),
+  channel: z.enum(["telegram", "web"]),
+  expiresAt: z.string(),
+}).omit({ id: true, consumedAt: true, createdAt: true });
+
+export type InsertMagicLink = z.infer<typeof insertMagicLinkSchema>;
+export type MagicLink = typeof magicLinks.$inferSelect;
