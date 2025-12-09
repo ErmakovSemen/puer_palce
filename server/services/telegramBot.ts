@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { telegramProfiles, users, siteSettings, type TelegramProfile } from "@shared/schema";
+import { telegramProfiles, users, siteSettings, products, type TelegramProfile } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { getLoyaltyProgress } from "@shared/loyalty";
 import { validateAndConsumeMagicLink } from "./magicLink";
@@ -324,24 +324,125 @@ async function handleContactsCommand(chatId: string) {
 async function handleMenuCommand(chatId: string) {
   const menuText = `<b>🍵 Наш ассортимент</b>
 
-Мы специализируемся на премиальном китайском Пуэре.
+Мы специализируемся на премиальном китайском Пуэре и чайной посуде.
 
-<b>Виды чая:</b>
-• Шу Пуэр - выдержанный, мягкий вкус
-• Шен Пуэр - свежий, цветочный аромат  
-• Белый Пуэр - нежный и легкий
-• И многое другое...
-
-Посетите наш сайт для просмотра полного каталога и оформления заказа.`;
+Выберите категорию:`;
 
   const keyboard: InlineKeyboardMarkup = {
     inline_keyboard: [
-      [{ text: "🌐 Перейти на сайт", url: "https://puerpub.replit.app" }],
+      [{ text: "🍵 Чай", callback_data: "menu_tea" }],
+      [{ text: "🫖 Посуда", callback_data: "menu_teaware" }],
       [{ text: "↩️ Главное меню", callback_data: "main_menu" }],
     ],
   };
 
   await sendMessage(chatId, menuText, keyboard);
+}
+
+async function handleMenuCategory(chatId: string, category: "tea" | "teaware") {
+  try {
+    const productList = await db
+      .select()
+      .from(products)
+      .where(eq(products.category, category))
+      .limit(10);
+
+    if (productList.length === 0) {
+      const emptyText = category === "tea" 
+        ? "🍵 В данный момент чай отсутствует в наличии."
+        : "🫖 В данный момент посуда отсутствует в наличии.";
+      
+      const keyboard: InlineKeyboardMarkup = {
+        inline_keyboard: [
+          [{ text: "↩️ Назад к категориям", callback_data: "menu" }],
+        ],
+      };
+      
+      await sendMessage(chatId, emptyText, keyboard);
+      return;
+    }
+
+    const categoryTitle = category === "tea" ? "🍵 Чай" : "🫖 Посуда";
+    let text = `<b>${categoryTitle}</b>\n\n`;
+
+    const buttons: InlineKeyboardButton[][] = [];
+
+    for (const product of productList) {
+      const priceText = category === "tea" 
+        ? `${product.pricePerGram} ₽/г`
+        : `${product.pricePerGram} ₽`;
+      
+      const stockStatus = product.outOfStock ? " (нет в наличии)" : "";
+      
+      buttons.push([{
+        text: `${product.name} - ${priceText}${stockStatus}`,
+        callback_data: `product_${product.id}`
+      }]);
+    }
+
+    buttons.push([{ text: "↩️ Назад к категориям", callback_data: "menu" }]);
+
+    const keyboard: InlineKeyboardMarkup = { inline_keyboard: buttons };
+    
+    await sendMessage(chatId, text + "Выберите товар для подробной информации:", keyboard);
+  } catch (error) {
+    console.error("[TelegramBot] Menu category error:", error);
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+  }
+}
+
+async function handleProductDetail(chatId: string, productId: number) {
+  try {
+    const [product] = await db
+      .select()
+      .from(products)
+      .where(eq(products.id, productId));
+
+    if (!product) {
+      await sendMessage(chatId, "Товар не найден.");
+      return;
+    }
+
+    const isTea = product.category === "tea";
+    const priceText = isTea 
+      ? `${product.pricePerGram} ₽/г`
+      : `${product.pricePerGram} ₽`;
+
+    let text = `<b>${product.name}</b>\n\n`;
+    
+    if (product.description) {
+      text += `${product.description}\n\n`;
+    }
+
+    text += `💰 Цена: ${priceText}\n`;
+
+    if (isTea && product.teaType) {
+      text += `🍃 Тип: ${product.teaType}\n`;
+    }
+
+    if (product.effects && product.effects.length > 0) {
+      text += `✨ Эффекты: ${product.effects.join(", ")}\n`;
+    }
+
+    if (product.outOfStock) {
+      text += `\n⚠️ <b>Нет в наличии</b>`;
+    }
+
+    const categoryCallback = isTea ? "menu_tea" : "menu_teaware";
+    
+    const keyboard: InlineKeyboardMarkup = {
+      inline_keyboard: [
+        [{ text: "🛒 Заказать на сайте", url: `https://puerpub.replit.app/product/${product.id}` }],
+        [{ text: "↩️ Назад к списку", callback_data: categoryCallback }],
+        [{ text: "🏠 Главное меню", callback_data: "main_menu" }],
+      ],
+    };
+
+    await sendMessage(chatId, text, keyboard);
+  } catch (error) {
+    console.error("[TelegramBot] Product detail error:", error);
+    await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
+  }
 }
 
 async function handleProfileCommand(chatId: string, username?: string, firstName?: string) {
@@ -376,17 +477,32 @@ async function handleProfileCommand(chatId: string, username?: string, firstName
   let profileText = `<b>⭐ Ваш профиль</b>\n\n`;
   profileText += `👤 ${user.name || "Пользователь"}\n`;
   profileText += `📱 ${user.phone}\n\n`;
-  profileText += `<b>Программа лояльности:</b>\n`;
-  profileText += `🏆 Уровень: ${progress.currentLevel.name}\n`;
-  profileText += `💎 XP: ${user.xp}\n`;
-  profileText += `🎁 Скидка: ${progress.currentLevel.discount}%\n`;
+  
+  profileText += `<b>🏆 Программа лояльности</b>\n`;
+  profileText += `━━━━━━━━━━━━━━━━━━━━\n`;
+  profileText += `Уровень: <b>${progress.currentLevel.name}</b>\n`;
+  profileText += `💎 XP: ${user.xp.toLocaleString("ru-RU")}\n`;
+  profileText += `🎁 Ваша скидка: <b>${progress.currentLevel.discount}%</b>\n`;
 
   if (progress.nextLevel) {
-    profileText += `\n📈 До уровня "${progress.nextLevel.name}": ${progress.xpToNextLevel} XP`;
+    const progressPercent = Math.min(100, Math.round((1 - progress.xpToNextLevel / (progress.nextLevel.minXP - progress.currentLevel.minXP)) * 100));
+    const filledBars = Math.round(progressPercent / 10);
+    const emptyBars = 10 - filledBars;
+    const progressBar = "▓".repeat(filledBars) + "░".repeat(emptyBars);
+    
+    profileText += `\n📈 <b>Прогресс до "${progress.nextLevel.name}"</b>\n`;
+    profileText += `${progressBar} ${progressPercent}%\n`;
+    profileText += `Осталось: ${progress.xpToNextLevel.toLocaleString("ru-RU")} XP\n`;
+    profileText += `Скидка на следующем уровне: ${progress.nextLevel.discount}%`;
+  } else {
+    profileText += `\n🎉 <b>Максимальный уровень достигнут!</b>`;
   }
 
   const keyboard: InlineKeyboardMarkup = {
-    inline_keyboard: [[{ text: "↩️ Главное меню", callback_data: "main_menu" }]],
+    inline_keyboard: [
+      [{ text: "🛒 Мои заказы", url: "https://puerpub.replit.app/profile" }],
+      [{ text: "↩️ Главное меню", callback_data: "main_menu" }],
+    ],
   };
 
   await sendMessage(chatId, profileText, keyboard);
@@ -430,6 +546,15 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
 
   await answerCallbackQuery(callbackQuery.id);
 
+  // Handle product detail callbacks
+  if (data.startsWith("product_")) {
+    const productId = parseInt(data.substring(8), 10);
+    if (!isNaN(productId)) {
+      await handleProductDetail(chatId, productId);
+      return;
+    }
+  }
+
   switch (data) {
     case "main_menu":
       await handleStartCommand(chatId, username, firstName);
@@ -439,6 +564,12 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
       break;
     case "menu":
       await handleMenuCommand(chatId);
+      break;
+    case "menu_tea":
+      await handleMenuCategory(chatId, "tea");
+      break;
+    case "menu_teaware":
+      await handleMenuCategory(chatId, "teaware");
       break;
     case "profile":
       await handleProfileCommand(chatId, username, firstName);
