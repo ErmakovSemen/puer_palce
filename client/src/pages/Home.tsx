@@ -8,6 +8,8 @@ import CartDrawer from "@/components/CartDrawer";
 import CheckoutForm from "@/components/CheckoutForm";
 import TeaQuiz from "@/components/TeaQuiz";
 import RecommendedProducts from "@/components/RecommendedProducts";
+import { BannerSlot } from "@/components/InfoBanner";
+import type { InfoBanner } from "@shared/schema";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import {
   Dialog,
@@ -97,6 +99,10 @@ export default function Home() {
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ['/api/products'],
+  });
+
+  const { data: banners = [] } = useQuery<InfoBanner[]>({
+    queryKey: ['/api/banners'],
   });
 
   const filteredProducts = useMemo(() => {
@@ -412,6 +418,9 @@ export default function Home() {
           />
         </div>
 
+        {/* Banner slot: after filters */}
+        <BannerSlot slotId="after_filters" banners={banners} className="mb-6" />
+
         {/* Category Navigation */}
         {hasTeaware && (
           <CategoryNavigation
@@ -420,6 +429,9 @@ export default function Home() {
             hasTeaware={hasTeaware}
           />
         )}
+
+        {/* Banner slot: after categories */}
+        <BannerSlot slotId="after_categories" banners={banners} className="mb-6" />
 
         {/* Decorative divider with Chinese meander elements */}
         <div className="flex items-center gap-2 mb-6">
@@ -475,6 +487,9 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* Banner slot: after tea products */}
+            <BannerSlot slotId="after_products" banners={banners} className="mb-8" />
 
             {/* Teaware Products */}
             {teawareProducts.length > 0 && (
