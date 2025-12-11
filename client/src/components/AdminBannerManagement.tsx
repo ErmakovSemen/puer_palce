@@ -215,25 +215,37 @@ export default function AdminBannerManagement({ adminFetch }: AdminBannerManagem
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const submitData: InsertInfoBanner = {
-      title: formData.title,
-      description: formData.description,
-      icon: formData.icon || null,
-      theme: formData.theme,
-      buttons: formData.buttons.length > 0 ? JSON.stringify(formData.buttons) : null,
-      desktopSlot: formData.desktopSlot,
-      mobileSlot: formData.mobileSlot,
-      desktopOrder: editingBanner?.desktopOrder ?? 0,
-      mobileOrder: editingBanner?.mobileOrder ?? 0,
-      hideOnDesktop: formData.hideOnDesktop,
-      hideOnMobile: formData.hideOnMobile,
-      isActive: formData.isActive,
-    };
-
+    
     if (editingBanner) {
-      updateMutation.mutate({ id: editingBanner.id, data: submitData });
+      const updateData: Partial<InsertInfoBanner> = {
+        title: formData.title,
+        description: formData.description,
+        icon: formData.icon || null,
+        theme: formData.theme,
+        buttons: formData.buttons.length > 0 ? JSON.stringify(formData.buttons) : null,
+        desktopSlot: formData.desktopSlot,
+        mobileSlot: formData.mobileSlot,
+        hideOnDesktop: formData.hideOnDesktop,
+        hideOnMobile: formData.hideOnMobile,
+        isActive: formData.isActive,
+      };
+      updateMutation.mutate({ id: editingBanner.id, data: updateData });
     } else {
-      createMutation.mutate(submitData);
+      const createData: InsertInfoBanner = {
+        title: formData.title,
+        description: formData.description,
+        icon: formData.icon || null,
+        theme: formData.theme,
+        buttons: formData.buttons.length > 0 ? JSON.stringify(formData.buttons) : null,
+        desktopSlot: formData.desktopSlot,
+        mobileSlot: formData.mobileSlot,
+        desktopOrder: 999,
+        mobileOrder: 999,
+        hideOnDesktop: formData.hideOnDesktop,
+        hideOnMobile: formData.hideOnMobile,
+        isActive: formData.isActive,
+      };
+      createMutation.mutate(createData);
     }
   };
 

@@ -1,20 +1,6 @@
-import { useState, useEffect } from "react";
 import { type InfoBanner as InfoBannerType, type BannerButton } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import * as LucideIcons from "lucide-react";
-
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 768);
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
-  }, []);
-  
-  return isMobile;
-}
 
 interface InfoBannerProps {
   banner: InfoBannerType;
@@ -106,35 +92,48 @@ interface BannerSlotProps {
 }
 
 export function BannerSlot({ slotId, banners, className = "", onButtonClick }: BannerSlotProps) {
-  const isMobile = useIsMobile();
-  
-  const slotBanners = banners.filter(b => {
-    const slot = isMobile ? b.mobileSlot : b.desktopSlot;
-    const hidden = isMobile ? b.hideOnMobile : b.hideOnDesktop;
-    return slot === slotId && !hidden && b.isActive;
-  });
+  const desktopBanners = banners
+    .filter(b => b.desktopSlot === slotId && !b.hideOnDesktop && b.isActive)
+    .sort((a, b) => a.desktopOrder - b.desktopOrder);
 
-  const sortedBanners = slotBanners.sort((a, b) => {
-    if (isMobile) return a.mobileOrder - b.mobileOrder;
-    return a.desktopOrder - b.desktopOrder;
-  });
+  const mobileBanners = banners
+    .filter(b => b.mobileSlot === slotId && !b.hideOnMobile && b.isActive)
+    .sort((a, b) => a.mobileOrder - b.mobileOrder);
 
-  if (sortedBanners.length === 0) return null;
+  if (desktopBanners.length === 0 && mobileBanners.length === 0) return null;
 
   return (
-    <div 
-      className={`grid gap-4 ${
-        sortedBanners.length > 1 ? "md:grid-cols-2" : ""
-      } ${className}`}
-      data-testid={`banner-slot-${slotId}`}
-    >
-      {sortedBanners.map(banner => (
-        <InfoBanner 
-          key={banner.id} 
-          banner={banner} 
-          onButtonClick={onButtonClick}
-        />
-      ))}
-    </div>
+    <>
+      {desktopBanners.length > 0 && (
+        <div 
+          className={`hidden md:grid gap-4 ${
+            desktopBanners.length > 1 ? "md:grid-cols-2" : ""
+          } ${className}`}
+          data-testid={`banner-slot-${slotId}-desktop`}
+        >
+          {desktopBanners.map(banner => (
+            <InfoBanner 
+              key={banner.id} 
+              banner={banner} 
+              onButtonClick={onButtonClick}
+            />
+          ))}
+        </div>
+      )}
+      {mobileBanners.length > 0 && (
+        <div 
+          className={`grid md:hidden gap-4 ${className}`}
+          data-testid={`banner-slot-${slotId}-mobile`}
+        >
+          {mobileBanners.map(banner => (
+            <InfoBanner 
+              key={banner.id} 
+              banner={banner} 
+              onButtonClick={onButtonClick}
+            />
+          ))}
+        </div>
+      )}
+    </>
   );
 }
