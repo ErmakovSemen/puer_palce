@@ -1720,6 +1720,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ Info Banners Routes ============
+  
+  // Public: Get active banners for display on site
+  app.get("/api/banners", async (_req, res) => {
+    try {
+      const banners = await storage.getInfoBanners(true); // Active only
+      res.json(banners);
+    } catch (error) {
+      console.error("[Banners] Error fetching banners:", error);
+      res.status(500).json({ error: "Failed to fetch banners" });
+    }
+  });
+
+  // Admin: Get all banners (including inactive)
+  app.get("/api/admin/banners", requireAdminAuth, async (_req, res) => {
+    try {
+      const banners = await storage.getInfoBanners(false);
+      res.json(banners);
+    } catch (error) {
+      console.error("[Admin Banners] Error fetching banners:", error);
+      res.status(500).json({ error: "Failed to fetch banners" });
+    }
+  });
+
+  // Admin: Get single banner
+  app.get("/api/admin/banners/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const banner = await storage.getInfoBanner(id);
+      if (!banner) {
+        res.status(404).json({ error: "Banner not found" });
+        return;
+      }
+      res.json(banner);
+    } catch (error) {
+      console.error("[Admin Banners] Error fetching banner:", error);
+      res.status(500).json({ error: "Failed to fetch banner" });
+    }
+  });
+
+  // Admin: Create banner
+  app.post("/api/admin/banners", requireAdminAuth, async (req, res) => {
+    try {
+      const { insertInfoBannerSchema } = await import("@shared/schema");
+      const parsed = insertInfoBannerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Invalid banner data", details: parsed.error.issues });
+        return;
+      }
+      const banner = await storage.createInfoBanner(parsed.data);
+      res.status(201).json(banner);
+    } catch (error) {
+      console.error("[Admin Banners] Error creating banner:", error);
+      res.status(500).json({ error: "Failed to create banner" });
+    }
+  });
+
+  // Admin: Update banner
+  app.patch("/api/admin/banners/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { updateInfoBannerSchema } = await import("@shared/schema");
+      const parsed = updateInfoBannerSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: "Invalid banner data", details: parsed.error.issues });
+        return;
+      }
+      const banner = await storage.updateInfoBanner(id, parsed.data);
+      if (!banner) {
+        res.status(404).json({ error: "Banner not found" });
+        return;
+      }
+      res.json(banner);
+    } catch (error) {
+      console.error("[Admin Banners] Error updating banner:", error);
+      res.status(500).json({ error: "Failed to update banner" });
+    }
+  });
+
+  // Admin: Delete banner
+  app.delete("/api/admin/banners/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteInfoBanner(id);
+      if (!deleted) {
+        res.status(404).json({ error: "Banner not found" });
+        return;
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Admin Banners] Error deleting banner:", error);
+      res.status(500).json({ error: "Failed to delete banner" });
+    }
+  });
+
+  // Admin: Reorder banners (bulk update positions and slots)
+  app.post("/api/admin/banners/reorder", requireAdminAuth, async (req, res) => {
+    try {
+      const { orders } = req.body;
+      if (!Array.isArray(orders)) {
+        res.status(400).json({ error: "Orders must be an array" });
+        return;
+      }
+      await storage.reorderBanners(orders);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Admin Banners] Error reordering banners:", error);
+      res.status(500).json({ error: "Failed to reorder banners" });
+    }
+  });
+
   // Payment routes
   // Initialize payment for an order
   app.post("/api/payments/init", async (req, res) => {
