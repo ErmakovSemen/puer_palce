@@ -424,3 +424,73 @@ export const pendingTelegramOrders = pgTable("pending_telegram_orders", {
 });
 
 export type PendingTelegramOrder = typeof pendingTelegramOrders.$inferSelect;
+
+// Info Banners table - customizable information blocks for the site
+export const infoBanners = pgTable("info_banners", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  icon: text("icon"), // Lucide icon name (e.g., "Truck", "Coffee", "Gift")
+  theme: text("theme").notNull().default("dark"), // "dark" or "light"
+  buttons: text("buttons"), // JSON array of {text: string, action?: string}
+  desktopSlot: text("desktop_slot").notNull().default("after_filters"), // Placement slot on desktop
+  mobileSlot: text("mobile_slot").notNull().default("after_filters"), // Placement slot on mobile
+  desktopOrder: integer("desktop_order").notNull().default(0), // Sort order within desktop slot
+  mobileOrder: integer("mobile_order").notNull().default(0), // Sort order within mobile slot
+  hideOnDesktop: boolean("hide_on_desktop").notNull().default(false),
+  hideOnMobile: boolean("hide_on_mobile").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+// Available slots for banner placement
+export const BANNER_SLOTS = [
+  { id: "after_header", name: "После шапки" },
+  { id: "after_filters", name: "После фильтров" },
+  { id: "before_products", name: "Перед товарами" },
+  { id: "between_categories", name: "Между категориями" },
+  { id: "after_products", name: "После товаров" },
+  { id: "before_footer", name: "Перед подвалом" },
+] as const;
+
+export type BannerSlotId = typeof BANNER_SLOTS[number]["id"];
+
+export const bannerButtonSchema = z.object({
+  text: z.string().min(1, "Укажите текст кнопки"),
+  action: z.string().optional(), // URL or action identifier
+});
+
+export const insertInfoBannerSchema = createInsertSchema(infoBanners, {
+  title: z.string().min(2, "Заголовок должен содержать минимум 2 символа"),
+  description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
+  icon: z.string().optional().nullable(),
+  theme: z.enum(["dark", "light"]),
+  buttons: z.string().optional().nullable(), // JSON string of buttons array
+  desktopSlot: z.string(),
+  mobileSlot: z.string(),
+  desktopOrder: z.number().int().default(0),
+  mobileOrder: z.number().int().default(0),
+  hideOnDesktop: z.boolean().default(false),
+  hideOnMobile: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+}).omit({ id: true, createdAt: true });
+
+export const updateInfoBannerSchema = z.object({
+  title: z.string().min(2).optional(),
+  description: z.string().min(10).optional(),
+  icon: z.string().optional().nullable(),
+  theme: z.enum(["dark", "light"]).optional(),
+  buttons: z.string().optional().nullable(),
+  desktopSlot: z.string().optional(),
+  mobileSlot: z.string().optional(),
+  desktopOrder: z.number().int().optional(),
+  mobileOrder: z.number().int().optional(),
+  hideOnDesktop: z.boolean().optional(),
+  hideOnMobile: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export type InsertInfoBanner = z.infer<typeof insertInfoBannerSchema>;
+export type UpdateInfoBanner = z.infer<typeof updateInfoBannerSchema>;
+export type InfoBanner = typeof infoBanners.$inferSelect;
+export type BannerButton = z.infer<typeof bannerButtonSchema>;

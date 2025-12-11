@@ -83,6 +83,14 @@ export interface IStorage {
   deleteSavedAddress(id: number, userId: string): Promise<boolean>;
   setDefaultAddress(id: number, userId: string): Promise<SavedAddress | undefined>;
   
+  // Info Banners
+  getInfoBanners(activeOnly?: boolean): Promise<import("@shared/schema").InfoBanner[]>;
+  getInfoBanner(id: number): Promise<import("@shared/schema").InfoBanner | undefined>;
+  createInfoBanner(banner: import("@shared/schema").InsertInfoBanner): Promise<import("@shared/schema").InfoBanner>;
+  updateInfoBanner(id: number, banner: import("@shared/schema").UpdateInfoBanner): Promise<import("@shared/schema").InfoBanner | undefined>;
+  deleteInfoBanner(id: number): Promise<boolean>;
+  reorderBanners(orders: { id: number; desktopOrder?: number; mobileOrder?: number; desktopSlot?: string; mobileSlot?: string }[]): Promise<void>;
+  
   // Session store for auth
   sessionStore: any;
 }
@@ -1096,6 +1104,67 @@ export class DbStorage implements IStorage {
       .returning();
     
     return updatedAddress;
+  }
+
+  // Info Banners
+  async getInfoBanners(activeOnly: boolean = false): Promise<import("@shared/schema").InfoBanner[]> {
+    const { infoBanners } = await import("@shared/schema");
+    const { asc } = await import("drizzle-orm");
+    
+    let banners;
+    if (activeOnly) {
+      banners = await db.select().from(infoBanners)
+        .where(eq(infoBanners.isActive, true))
+        .orderBy(asc(infoBanners.desktopOrder));
+    } else {
+      banners = await db.select().from(infoBanners)
+        .orderBy(asc(infoBanners.desktopOrder));
+    }
+    return banners;
+  }
+
+  async getInfoBanner(id: number): Promise<import("@shared/schema").InfoBanner | undefined> {
+    const { infoBanners } = await import("@shared/schema");
+    const [banner] = await db.select().from(infoBanners).where(eq(infoBanners.id, id));
+    return banner;
+  }
+
+  async createInfoBanner(banner: import("@shared/schema").InsertInfoBanner): Promise<import("@shared/schema").InfoBanner> {
+    const { infoBanners } = await import("@shared/schema");
+    const [newBanner] = await db.insert(infoBanners).values(banner).returning();
+    return newBanner;
+  }
+
+  async updateInfoBanner(id: number, banner: import("@shared/schema").UpdateInfoBanner): Promise<import("@shared/schema").InfoBanner | undefined> {
+    const { infoBanners } = await import("@shared/schema");
+    const [updated] = await db.update(infoBanners)
+      .set(banner)
+      .where(eq(infoBanners.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteInfoBanner(id: number): Promise<boolean> {
+    const { infoBanners } = await import("@shared/schema");
+    const result = await db.delete(infoBanners).where(eq(infoBanners.id, id));
+    return result.rowCount ? result.rowCount > 0 : false;
+  }
+
+  async reorderBanners(orders: { id: number; desktopOrder?: number; mobileOrder?: number; desktopSlot?: string; mobileSlot?: string }[]): Promise<void> {
+    const { infoBanners } = await import("@shared/schema");
+    for (const order of orders) {
+      const updateData: any = {};
+      if (order.desktopOrder !== undefined) updateData.desktopOrder = order.desktopOrder;
+      if (order.mobileOrder !== undefined) updateData.mobileOrder = order.mobileOrder;
+      if (order.desktopSlot !== undefined) updateData.desktopSlot = order.desktopSlot;
+      if (order.mobileSlot !== undefined) updateData.mobileSlot = order.mobileSlot;
+      
+      if (Object.keys(updateData).length > 0) {
+        await db.update(infoBanners)
+          .set(updateData)
+          .where(eq(infoBanners.id, order.id));
+      }
+    }
   }
 }
 
