@@ -62,6 +62,30 @@ export const insertWalletTransactionSchema = createInsertSchema(walletTransactio
 export type InsertWalletTransaction = z.infer<typeof insertWalletTransactionSchema>;
 export type WalletTransaction = typeof walletTransactions.$inferSelect;
 
+// XP Transactions table (loyalty program history)
+export const xpTransactions = pgTable("xp_transactions", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  amount: integer("amount").notNull(), // Positive for accrual, negative for deduction
+  reason: text("reason").notNull(), // "online_order" | "offline_purchase" | "manual_adjustment" | "bonus"
+  description: text("description").notNull(), // Human-readable description
+  orderId: integer("order_id"), // Related order ID (for online orders)
+  createdBy: text("created_by"), // "system" | admin user ID
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertXpTransactionSchema = createInsertSchema(xpTransactions, {
+  userId: z.string(),
+  amount: z.number().int(),
+  reason: z.enum(["online_order", "offline_purchase", "manual_adjustment", "bonus"]),
+  description: z.string().min(1),
+  orderId: z.number().int().optional().nullable(),
+  createdBy: z.string().optional().nullable(),
+}).omit({ id: true, createdAt: true });
+
+export type InsertXpTransaction = z.infer<typeof insertXpTransactionSchema>;
+export type XpTransaction = typeof xpTransactions.$inferSelect;
+
 // SMS Verifications table
 export const smsVerifications = pgTable("sms_verifications", {
   id: serial("id").primaryKey(),

@@ -959,25 +959,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/users/:id/xp", requireAdminAuth, async (req, res) => {
     try {
       const userId = req.params.id;
-      const { xp } = req.body;
+      const { xp, reason, description } = req.body;
       
       if (typeof xp !== 'number' || xp < 0) {
         res.status(400).json({ error: "Invalid XP value" });
         return;
       }
       
+      const validReasons = ["online_order", "offline_purchase", "manual_adjustment", "bonus"];
+      const validatedReason = reason && validReasons.includes(reason) ? reason : "manual_adjustment";
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      
+      const xpDiff = xp - user.xp;
       const updatedUser = await storage.updateUserXP(userId, xp);
       if (!updatedUser) {
         res.status(404).json({ error: "User not found" });
         return;
       }
       
-      // Remove password from response
+      if (xpDiff !== 0) {
+        await storage.createXpTransaction({
+          userId,
+          amount: xpDiff,
+          reason: validatedReason,
+          description: description || (xpDiff > 0 ? `Ручное начисление: +${xpDiff} XP` : `Ручная корректировка: ${xpDiff} XP`),
+          orderId: null,
+          createdBy: "admin",
+        });
+      }
+      
       const { password, ...userWithoutPassword } = updatedUser;
       res.json(userWithoutPassword);
     } catch (error) {
       console.error("[Admin] Update user XP error:", error);
       res.status(500).json({ error: "Failed to update user XP" });
+    }
+  });
+
+  app.post("/api/admin/xp-transactions", requireAdminAuth, async (req, res) => {
+    try {
+      const { userId, amount, reason, description } = req.body;
+      
+      if (!userId || typeof amount !== 'number') {
+        res.status(400).json({ error: "userId and amount are required" });
+        return;
+      }
+      
+      const validReasons = ["online_order", "offline_purchase", "manual_adjustment", "bonus"];
+      const validatedReason = reason && validReasons.includes(reason) ? reason : "offline_purchase";
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      
+      await storage.addUserXP(userId, amount);
+      
+      const transaction = await storage.createXpTransaction({
+        userId,
+        amount,
+        reason: validatedReason,
+        description: description || `Начисление бонусов: ${amount > 0 ? '+' : ''}${amount} XP`,
+        orderId: null,
+        createdBy: "admin",
+      });
+      
+      res.json(transaction);
+    } catch (error) {
+      console.error("[Admin] Create XP transaction error:", error);
+      res.status(500).json({ error: "Failed to create XP transaction" });
+    }
+  });
+
+  app.get("/api/admin/xp-transactions", requireAdminAuth, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 1000;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const transactions = await storage.getXpTransactions(limit, offset);
+      res.json(transactions);
+    } catch (error) {
+      console.error("[Admin] Get XP transactions error:", error);
+      res.status(500).json({ error: "Failed to get XP transactions" });
+    }
+  });
+
+  app.get("/api/admin/loyalty/export", requireAdminAuth, async (req, res) => {
+    try {
+      const XLSX = await import("xlsx");
+      const transactions = await storage.getXpTransactions(10000, 0);
+      
+      const data = transactions.map(t => ({
+        "Дата": new Date(t.createdAt).toLocaleString("ru-RU"),
+        "Сумма XP": t.amount,
+        "Причина": t.reason === "online_order" ? "Онлайн-заказ" :
+                   t.reason === "offline_purchase" ? "Офлайн-покупка" :
+                   t.reason === "manual_adjustment" ? "Ручная корректировка" :
+                   t.reason === "bonus" ? "Бонус" : t.reason,
+        "Описание": t.description,
+        "Телефон": t.user?.phone || "",
+        "Имя": t.user?.name || "",
+        "Email": t.user?.email || "",
+        "Текущий XP": t.user?.xp || 0,
+      }));
+      
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(data);
+      
+      ws["!cols"] = [
+        { wch: 20 },
+        { wch: 12 },
+        { wch: 20 },
+        { wch: 40 },
+        { wch: 18 },
+        { wch: 20 },
+        { wch: 25 },
+        { wch: 12 },
+      ];
+      
+      XLSX.utils.book_append_sheet(wb, ws, "Программа лояльности");
+      
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="loyalty_export_${new Date().toISOString().split('T')[0]}.xlsx"`);
+      res.send(buffer);
+    } catch (error) {
+      console.error("[Admin] Export loyalty error:", error);
+      res.status(500).json({ error: "Failed to export loyalty data" });
     }
   });
 
@@ -1062,6 +1176,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (shouldAwardXP && orderBeforeUpdate.userId) {
         const xpToAward = Math.floor(orderBeforeUpdate.total);
         await storage.addUserXP(orderBeforeUpdate.userId, xpToAward);
+        await storage.createXpTransaction({
+          userId: orderBeforeUpdate.userId,
+          amount: xpToAward,
+          reason: "online_order",
+          description: `Заказ #${orderId}: +${xpToAward} XP`,
+          orderId,
+          createdBy: "system",
+        });
         console.log(`[Admin] Order #${orderId} completed: Awarded ${xpToAward} XP to user ${orderBeforeUpdate.userId}`);
       }
       

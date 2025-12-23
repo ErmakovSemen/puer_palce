@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress, type XpTransaction, type InsertXpTransaction } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { normalizePhone } from "./utils";
 
@@ -90,6 +90,11 @@ export interface IStorage {
   updateInfoBanner(id: number, banner: import("@shared/schema").UpdateInfoBanner): Promise<import("@shared/schema").InfoBanner | undefined>;
   deleteInfoBanner(id: number): Promise<boolean>;
   reorderBanners(orders: { id: number; desktopOrder?: number; mobileOrder?: number; desktopSlot?: string; mobileSlot?: string }[]): Promise<void>;
+  
+  // XP Transactions (loyalty program history)
+  createXpTransaction(transaction: InsertXpTransaction): Promise<XpTransaction>;
+  getXpTransactions(limit?: number, offset?: number): Promise<Array<XpTransaction & { user: User }>>;
+  getUserXpTransactions(userId: string): Promise<XpTransaction[]>;
   
   // Session store for auth
   sessionStore: any;
@@ -455,6 +460,41 @@ export class MemStorage implements IStorage {
     const updated: User = { ...user, phoneVerified: true };
     this.users.set(userId, updated);
     return updated;
+  }
+
+  private xpTransactions: XpTransaction[] = [];
+  private xpTransactionIdCounter: number = 1;
+
+  async createXpTransaction(transaction: InsertXpTransaction): Promise<XpTransaction> {
+    const newTransaction: XpTransaction = {
+      id: this.xpTransactionIdCounter++,
+      userId: transaction.userId,
+      amount: transaction.amount,
+      reason: transaction.reason,
+      description: transaction.description,
+      orderId: transaction.orderId ?? null,
+      createdBy: transaction.createdBy ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    this.xpTransactions.push(newTransaction);
+    return newTransaction;
+  }
+
+  async getXpTransactions(limit: number = 1000, offset: number = 0): Promise<Array<XpTransaction & { user: User }>> {
+    const sorted = [...this.xpTransactions].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    const sliced = sorted.slice(offset, offset + limit);
+    return sliced.map(t => {
+      const user = this.users.get(t.userId);
+      return { ...t, user: user! };
+    }).filter(t => t.user);
+  }
+
+  async getUserXpTransactions(userId: string): Promise<XpTransaction[]> {
+    return this.xpTransactions
+      .filter(t => t.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 }
 
@@ -1165,6 +1205,37 @@ export class DbStorage implements IStorage {
           .where(eq(infoBanners.id, order.id));
       }
     }
+  }
+
+  async createXpTransaction(transaction: InsertXpTransaction): Promise<XpTransaction> {
+    const { xpTransactions } = await import("@shared/schema");
+    const [newTransaction] = await db.insert(xpTransactions).values(transaction).returning();
+    return newTransaction;
+  }
+
+  async getXpTransactions(limit: number = 1000, offset: number = 0): Promise<Array<XpTransaction & { user: User }>> {
+    const { xpTransactions } = await import("@shared/schema");
+    const transactions = await db
+      .select()
+      .from(xpTransactions)
+      .leftJoin(usersTable, eq(xpTransactions.userId, usersTable.id))
+      .orderBy(desc(xpTransactions.createdAt))
+      .limit(limit)
+      .offset(offset);
+    
+    return transactions.map(t => ({
+      ...t.xp_transactions,
+      user: t.users!,
+    }));
+  }
+
+  async getUserXpTransactions(userId: string): Promise<XpTransaction[]> {
+    const { xpTransactions } = await import("@shared/schema");
+    return db
+      .select()
+      .from(xpTransactions)
+      .where(eq(xpTransactions.userId, userId))
+      .orderBy(desc(xpTransactions.createdAt));
   }
 }
 

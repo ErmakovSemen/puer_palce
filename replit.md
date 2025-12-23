@@ -27,7 +27,7 @@ Powered by Express.js and TypeScript, providing a RESTful API. Drizzle ORM inter
 -   **Dynamic Tag Management**: Admins can create new tea types and effects, dynamically updating homepage filters.
 -   **Site Settings Management**: Admin interface for managing contact information (email, phone, Telegram) and delivery details, displayed dynamically on the frontend.
 -   **First Order Discount System**: 20% discount automatically applied to a registered user's first order, tracked in the database and validated server-side.
--   **Loyalty Program**: XP-based progression (1 RUB = 1 XP) for authenticated and phone-verified users, offering tiered discounts.
+-   **Loyalty Program**: XP-based progression (1 RUB = 1 XP) for authenticated and phone-verified users, offering tiered discounts. Includes **XP transactions history tracking** with database table `xp_transactions` that logs all bonus accruals (online orders, offline purchases, manual adjustments). Admin panel features Excel export button in Users tab for downloading complete transaction history with Russian column headers (Дата, Сумма XP, Причина, Описание, Телефон, Имя, Email, Текущий XP).
 -   **Order Management**: Admin panel for viewing, filtering, and updating order statuses with pagination support (10 orders per page, load-more functionality).
 -   **User Management**: Admin tools to search users by phone, view profiles, manage loyalty levels, and view order history.
 -   **Payment Processing**: Integrated Tinkoff Acquiring API for secure online payments (54-ФЗ compliant), with custom implementation for token generation and amount handling (in kopecks). Supports proportional discount distribution. Includes SBP (Fast Payment System) integration via Tinkoff's hosted payment page.

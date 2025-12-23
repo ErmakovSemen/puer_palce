@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, Pencil, Trash2, LogOut, Palette, Download, Link as LinkIcon, Copy, Check } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Palette, Download, Link as LinkIcon, Copy, Check, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -516,11 +516,46 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="users">
-            <div className="mb-6">
-              <h2 className="font-serif text-2xl font-semibold">Управление пользователями</h2>
-              <p className="text-muted-foreground mt-2">
-                Поиск пользователей и управление их уровнем лояльности
-              </p>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6">
+              <div>
+                <h2 className="font-serif text-2xl font-semibold">Управление пользователями</h2>
+                <p className="text-muted-foreground mt-2">
+                  Поиск пользователей и управление их уровнем лояльности
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  if (adminPassword) {
+                    try {
+                      const response = await fetch("/api/admin/loyalty/export", {
+                        headers: { "X-Admin-Password": adminPassword }
+                      });
+                      if (!response.ok) {
+                        toast({ title: "Ошибка", description: "Не удалось экспортировать данные", variant: "destructive" });
+                        return;
+                      }
+                      const blob = await response.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const link = document.createElement("a");
+                      link.href = url;
+                      link.download = `loyalty_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      window.URL.revokeObjectURL(url);
+                      toast({ title: "Успешно", description: "Файл загружен" });
+                    } catch (error) {
+                      toast({ title: "Ошибка", description: "Не удалось экспортировать данные", variant: "destructive" });
+                    }
+                  }
+                }}
+                data-testid="button-export-loyalty"
+                aria-label="Экспортировать историю XP"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span className="hidden sm:inline ml-2">Экспорт XP в Excel</span>
+              </Button>
             </div>
             {adminPassword && <AdminUserManagement adminPassword={adminPassword} />}
           </TabsContent>
