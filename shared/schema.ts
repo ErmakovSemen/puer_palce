@@ -465,6 +465,10 @@ export const infoBanners = pgTable("info_banners", {
   hideOnMobile: boolean("hide_on_mobile").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  betweenRowIndexDesktop: integer("between_row_index_desktop"), // Row index for between_products slot (0 = after row 1)
+  betweenRowIndexMobile: integer("between_row_index_mobile"), // Row index for between_products slot on mobile
+  widthVariant: text("width_variant").notNull().default("full"), // quarter | half | threeQuarter | full
+  heightVariant: text("height_variant").notNull().default("standard"), // compact | standard | tall
 });
 
 // Available slots for banner placement
@@ -472,10 +476,29 @@ export const BANNER_SLOTS = [
   { id: "after_header", name: "После шапки" },
   { id: "after_filters", name: "После фильтров" },
   { id: "before_products", name: "Перед товарами" },
+  { id: "between_products", name: "Между товарами" },
   { id: "between_categories", name: "Между категориями" },
   { id: "after_products", name: "После товаров" },
   { id: "before_footer", name: "Перед подвалом" },
 ] as const;
+
+// Width variants for banners
+export const BANNER_WIDTH_VARIANTS = [
+  { id: "quarter", name: "25%", className: "w-1/4" },
+  { id: "half", name: "50%", className: "w-1/2" },
+  { id: "threeQuarter", name: "75%", className: "w-3/4" },
+  { id: "full", name: "100%", className: "w-full" },
+] as const;
+
+// Height variants for banners
+export const BANNER_HEIGHT_VARIANTS = [
+  { id: "compact", name: "Компактный", className: "py-3" },
+  { id: "standard", name: "Стандартный", className: "py-5" },
+  { id: "tall", name: "Высокий", className: "py-8" },
+] as const;
+
+export type BannerWidthVariant = typeof BANNER_WIDTH_VARIANTS[number]["id"];
+export type BannerHeightVariant = typeof BANNER_HEIGHT_VARIANTS[number]["id"];
 
 export type BannerSlotId = typeof BANNER_SLOTS[number]["id"];
 
@@ -497,6 +520,10 @@ export const insertInfoBannerSchema = createInsertSchema(infoBanners, {
   hideOnDesktop: z.boolean().default(false),
   hideOnMobile: z.boolean().default(false),
   isActive: z.boolean().default(true),
+  betweenRowIndexDesktop: z.number().int().optional().nullable(),
+  betweenRowIndexMobile: z.number().int().optional().nullable(),
+  widthVariant: z.enum(["quarter", "half", "threeQuarter", "full"]).default("full"),
+  heightVariant: z.enum(["compact", "standard", "tall"]).default("standard"),
 }).omit({ id: true, createdAt: true });
 
 export const updateInfoBannerSchema = z.object({
@@ -512,6 +539,10 @@ export const updateInfoBannerSchema = z.object({
   hideOnDesktop: z.boolean().optional(),
   hideOnMobile: z.boolean().optional(),
   isActive: z.boolean().optional(),
+  betweenRowIndexDesktop: z.number().int().optional().nullable(),
+  betweenRowIndexMobile: z.number().int().optional().nullable(),
+  widthVariant: z.enum(["quarter", "half", "threeQuarter", "full"]).optional(),
+  heightVariant: z.enum(["compact", "standard", "tall"]).optional(),
 });
 
 export type InsertInfoBanner = z.infer<typeof insertInfoBannerSchema>;

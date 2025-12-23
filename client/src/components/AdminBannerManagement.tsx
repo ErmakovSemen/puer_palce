@@ -10,9 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import type { InfoBanner, InsertInfoBanner, BannerButton } from "@shared/schema";
-import { BANNER_SLOTS } from "@shared/schema";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Monitor, Smartphone, GripVertical, X } from "lucide-react";
+import type { InfoBanner, InsertInfoBanner, BannerButton, BannerWidthVariant, BannerHeightVariant } from "@shared/schema";
+import { BANNER_SLOTS, BANNER_WIDTH_VARIANTS, BANNER_HEIGHT_VARIANTS } from "@shared/schema";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Monitor, Smartphone, GripVertical, X, LayoutDashboard } from "lucide-react";
+import BannerLayoutPreview from "./BannerLayoutPreview";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +60,10 @@ type FormData = {
   hideOnDesktop: boolean;
   hideOnMobile: boolean;
   isActive: boolean;
+  betweenRowIndexDesktop: number | null;
+  betweenRowIndexMobile: number | null;
+  widthVariant: BannerWidthVariant;
+  heightVariant: BannerHeightVariant;
 };
 
 const defaultFormData: FormData = {
@@ -72,6 +77,10 @@ const defaultFormData: FormData = {
   hideOnDesktop: false,
   hideOnMobile: false,
   isActive: true,
+  betweenRowIndexDesktop: null,
+  betweenRowIndexMobile: null,
+  widthVariant: "full",
+  heightVariant: "standard",
 };
 
 export default function AdminBannerManagement({ adminFetch }: AdminBannerManagementProps) {
@@ -81,6 +90,7 @@ export default function AdminBannerManagement({ adminFetch }: AdminBannerManagem
   const [deletingBanner, setDeletingBanner] = useState<InfoBanner | null>(null);
   const [formData, setFormData] = useState<FormData>(defaultFormData);
   const [deviceView, setDeviceView] = useState<"desktop" | "mobile">("desktop");
+  const [viewMode, setViewMode] = useState<"list" | "visual">("visual");
 
   const { data: banners = [], isLoading } = useQuery<InfoBanner[]>({
     queryKey: ["/api/admin/banners"],
@@ -209,6 +219,10 @@ export default function AdminBannerManagement({ adminFetch }: AdminBannerManagem
       hideOnDesktop: banner.hideOnDesktop,
       hideOnMobile: banner.hideOnMobile,
       isActive: banner.isActive,
+      betweenRowIndexDesktop: banner.betweenRowIndexDesktop ?? null,
+      betweenRowIndexMobile: banner.betweenRowIndexMobile ?? null,
+      widthVariant: (banner.widthVariant as BannerWidthVariant) || "full",
+      heightVariant: (banner.heightVariant as BannerHeightVariant) || "standard",
     });
     setIsDialogOpen(true);
   };
@@ -228,6 +242,10 @@ export default function AdminBannerManagement({ adminFetch }: AdminBannerManagem
         hideOnDesktop: formData.hideOnDesktop,
         hideOnMobile: formData.hideOnMobile,
         isActive: formData.isActive,
+        betweenRowIndexDesktop: formData.betweenRowIndexDesktop,
+        betweenRowIndexMobile: formData.betweenRowIndexMobile,
+        widthVariant: formData.widthVariant,
+        heightVariant: formData.heightVariant,
       };
       updateMutation.mutate({ id: editingBanner.id, data: updateData });
     } else {
@@ -244,6 +262,10 @@ export default function AdminBannerManagement({ adminFetch }: AdminBannerManagem
         hideOnDesktop: formData.hideOnDesktop,
         hideOnMobile: formData.hideOnMobile,
         isActive: formData.isActive,
+        betweenRowIndexDesktop: formData.betweenRowIndexDesktop,
+        betweenRowIndexMobile: formData.betweenRowIndexMobile,
+        widthVariant: formData.widthVariant,
+        heightVariant: formData.heightVariant,
       };
       createMutation.mutate(createData);
     }
@@ -311,27 +333,49 @@ export default function AdminBannerManagement({ adminFetch }: AdminBannerManagem
                 Управляйте баннерами и информационными карточками на сайте
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center bg-muted rounded-lg p-1">
                 <Button
                   size="sm"
-                  variant={deviceView === "desktop" ? "default" : "ghost"}
-                  onClick={() => setDeviceView("desktop")}
-                  data-testid="button-device-desktop"
+                  variant={viewMode === "visual" ? "default" : "ghost"}
+                  onClick={() => setViewMode("visual")}
+                  data-testid="button-view-visual"
                 >
-                  <Monitor className="w-4 h-4 mr-1" />
-                  Десктоп
+                  <LayoutDashboard className="w-4 h-4 mr-1" />
+                  Визуальный
                 </Button>
                 <Button
                   size="sm"
-                  variant={deviceView === "mobile" ? "default" : "ghost"}
-                  onClick={() => setDeviceView("mobile")}
-                  data-testid="button-device-mobile"
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  onClick={() => setViewMode("list")}
+                  data-testid="button-view-list"
                 >
-                  <Smartphone className="w-4 h-4 mr-1" />
-                  Мобильный
+                  <GripVertical className="w-4 h-4 mr-1" />
+                  Список
                 </Button>
               </div>
+              {viewMode === "list" && (
+                <div className="flex items-center bg-muted rounded-lg p-1">
+                  <Button
+                    size="sm"
+                    variant={deviceView === "desktop" ? "default" : "ghost"}
+                    onClick={() => setDeviceView("desktop")}
+                    data-testid="button-device-desktop"
+                  >
+                    <Monitor className="w-4 h-4 mr-1" />
+                    Десктоп
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={deviceView === "mobile" ? "default" : "ghost"}
+                    onClick={() => setDeviceView("mobile")}
+                    data-testid="button-device-mobile"
+                  >
+                    <Smartphone className="w-4 h-4 mr-1" />
+                    Мобильный
+                  </Button>
+                </div>
+              )}
               <Button onClick={openCreateDialog} data-testid="button-create-banner">
                 <Plus className="w-4 h-4 mr-2" />
                 Добавить
@@ -348,6 +392,12 @@ export default function AdminBannerManagement({ adminFetch }: AdminBannerManagem
                 Создать первый баннер
               </Button>
             </div>
+          ) : viewMode === "visual" ? (
+            <BannerLayoutPreview
+              banners={banners}
+              adminFetch={adminFetch}
+              onEditBanner={openEditDialog}
+            />
           ) : (
             <div className="space-y-6">
               {BANNER_SLOTS.map(slot => {
@@ -548,6 +598,86 @@ export default function AdminBannerManagement({ adminFetch }: AdminBannerManagem
                   <SelectContent>
                     {BANNER_SLOTS.map(slot => (
                       <SelectItem key={slot.id} value={slot.id}>{slot.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {(formData.desktopSlot === "between_products" || formData.mobileSlot === "between_products") && (
+              <div className="grid grid-cols-2 gap-4">
+                {formData.desktopSlot === "between_products" && (
+                  <div className="space-y-2">
+                    <Label>Ряд товаров (десктоп)</Label>
+                    <Select
+                      value={formData.betweenRowIndexDesktop?.toString() || "0"}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, betweenRowIndexDesktop: parseInt(value) }))}
+                    >
+                      <SelectTrigger data-testid="select-desktop-row">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">После ряда 1</SelectItem>
+                        <SelectItem value="1">После ряда 2</SelectItem>
+                        <SelectItem value="2">После ряда 3</SelectItem>
+                        <SelectItem value="3">После ряда 4</SelectItem>
+                        <SelectItem value="4">После ряда 5</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {formData.mobileSlot === "between_products" && (
+                  <div className="space-y-2">
+                    <Label>Ряд товаров (мобильный)</Label>
+                    <Select
+                      value={formData.betweenRowIndexMobile?.toString() || "0"}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, betweenRowIndexMobile: parseInt(value) }))}
+                    >
+                      <SelectTrigger data-testid="select-mobile-row">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">После ряда 1</SelectItem>
+                        <SelectItem value="1">После ряда 2</SelectItem>
+                        <SelectItem value="2">После ряда 3</SelectItem>
+                        <SelectItem value="3">После ряда 4</SelectItem>
+                        <SelectItem value="4">После ряда 5</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Ширина баннера</Label>
+                <Select
+                  value={formData.widthVariant}
+                  onValueChange={(value: BannerWidthVariant) => setFormData(prev => ({ ...prev, widthVariant: value }))}
+                >
+                  <SelectTrigger data-testid="select-width-variant">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BANNER_WIDTH_VARIANTS.map(v => (
+                      <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Высота баннера</Label>
+                <Select
+                  value={formData.heightVariant}
+                  onValueChange={(value: BannerHeightVariant) => setFormData(prev => ({ ...prev, heightVariant: value }))}
+                >
+                  <SelectTrigger data-testid="select-height-variant">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BANNER_HEIGHT_VARIANTS.map(v => (
+                      <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
