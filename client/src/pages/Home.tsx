@@ -50,6 +50,96 @@ interface ApiCartItem {
   product: Product;
 }
 
+// Helper component to render product grid with between-rows banners
+interface ProductGridWithBannersProps {
+  products: Product[];
+  banners: InfoBanner[];
+  onAddToCart: (productId: number, quantity: number) => void;
+  onProductClick: (productId: number) => void;
+}
+
+function ProductGridWithBanners({ products, banners, onAddToCart, onProductClick }: ProductGridWithBannersProps) {
+  const DESKTOP_COLS = 4;
+  const MOBILE_COLS = 2;
+
+  const desktopRows: Product[][] = [];
+  const mobileRows: Product[][] = [];
+
+  for (let i = 0; i < products.length; i += DESKTOP_COLS) {
+    desktopRows.push(products.slice(i, i + DESKTOP_COLS));
+  }
+  for (let i = 0; i < products.length; i += MOBILE_COLS) {
+    mobileRows.push(products.slice(i, i + MOBILE_COLS));
+  }
+
+  const hasBannersForRow = (rowIndex: number, isMobile: boolean) => {
+    return banners.some(b => {
+      const slot = isMobile ? b.mobileSlot : b.desktopSlot;
+      const isHidden = isMobile ? b.hideOnMobile : b.hideOnDesktop;
+      const bannerRowIndex = isMobile ? b.betweenRowIndexMobile : b.betweenRowIndexDesktop;
+      return slot === "between_products" && !isHidden && b.isActive && bannerRowIndex === rowIndex;
+    });
+  };
+
+  return (
+    <>
+      {/* Desktop Layout */}
+      <div className="hidden md:block">
+        {desktopRows.map((row, rowIndex) => (
+          <div key={rowIndex}>
+            <div className="grid grid-cols-4 gap-6 mb-6">
+              {row.map((product) => (
+                <div key={product.id} className="h-full">
+                  <ProductCard
+                    {...product}
+                    onAddToCart={onAddToCart}
+                    onClick={onProductClick}
+                  />
+                </div>
+              ))}
+            </div>
+            {hasBannersForRow(rowIndex, false) && (
+              <BannerSlot 
+                slotId="between_products" 
+                banners={banners} 
+                betweenRowIndex={rowIndex}
+                className="mb-6" 
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Mobile Layout */}
+      <div className="md:hidden">
+        {mobileRows.map((row, rowIndex) => (
+          <div key={rowIndex}>
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {row.map((product) => (
+                <div key={product.id} className="h-full">
+                  <ProductCard
+                    {...product}
+                    onAddToCart={onAddToCart}
+                    onClick={onProductClick}
+                  />
+                </div>
+              ))}
+            </div>
+            {hasBannersForRow(rowIndex, true) && (
+              <BannerSlot 
+                slotId="between_products" 
+                banners={banners} 
+                betweenRowIndex={rowIndex}
+                className="mb-3" 
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 export default function Home() {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -430,8 +520,8 @@ export default function Home() {
           />
         )}
 
-        {/* Banner slot: after categories */}
-        <BannerSlot slotId="after_categories" banners={banners} className="mb-6" />
+        {/* Banner slot: before products */}
+        <BannerSlot slotId="before_products" banners={banners} className="mb-6" />
 
         {/* Decorative divider with Chinese meander elements */}
         <div className="flex items-center gap-2 mb-6">
@@ -468,23 +558,18 @@ export default function Home() {
               />
             )}
 
-            {/* Tea Products */}
+            {/* Tea Products with between-rows banners */}
             {teaProducts.length > 0 && (
               <div className="mb-12">
                 <h2 className="font-serif text-2xl font-semibold mb-4" data-testid="heading-tea-section">
                   Все товары
                 </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                  {teaProducts.map((product) => (
-                    <div key={product.id} className="h-full">
-                      <ProductCard
-                        {...product}
-                        onAddToCart={addToCart}
-                        onClick={setSelectedProductId}
-                      />
-                    </div>
-                  ))}
-                </div>
+                <ProductGridWithBanners
+                  products={teaProducts}
+                  banners={banners}
+                  onAddToCart={addToCart}
+                  onProductClick={setSelectedProductId}
+                />
               </div>
             )}
 
