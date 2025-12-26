@@ -545,7 +545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Serve public objects
+  // Serve public objects (with HEIC to WebP conversion)
   app.get("/public/:filePath(*)", async (req, res) => {
     const filePath = req.params.filePath;
     const objectStorageService = new ObjectStorageService();
@@ -554,6 +554,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!file) {
         return res.status(404).json({ error: "File not found" });
       }
+      
+      // Check if file is HEIC - convert to WebP for better compatibility
+      const isHeic = filePath.toLowerCase().endsWith('.heic');
+      if (isHeic) {
+        try {
+          const sharp = (await import('sharp')).default;
+          const [buffer] = await file.download();
+          
+          const webpBuffer = await sharp(buffer)
+            .resize(1920, 1920, { 
+              fit: 'inside', 
+              withoutEnlargement: true 
+            })
+            .webp({ quality: 80 })
+            .toBuffer();
+          
+          res.set({
+            "Content-Type": "image/webp",
+            "Content-Length": webpBuffer.length,
+            "Cache-Control": "public, max-age=31536000", // Cache for 1 year
+          });
+          res.send(webpBuffer);
+          return;
+        } catch (conversionError) {
+          console.error("[Public] HEIC conversion failed, serving original:", conversionError);
+          // Fallback to original file
+        }
+      }
+      
       objectStorageService.downloadObject(file, res);
     } catch (error) {
       console.error("Error searching for public object:", error);
