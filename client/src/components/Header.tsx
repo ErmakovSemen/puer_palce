@@ -1,9 +1,7 @@
-import { useRef, useState } from "react";
-import { ShoppingCart, User, LogOut, MessageCircle, Sparkles } from "lucide-react";
+import { useRef } from "react";
+import { ShoppingCart, User, LogOut, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -14,13 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 interface HeaderProps {
   cartItemCount: number;
@@ -32,8 +23,6 @@ interface HeaderProps {
 export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmin = false }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
   const cartFormRef = useRef<HTMLFormElement>(null);
-  const contactFormRef = useRef<HTMLFormElement>(null);
-  const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
   
   const handleLogoClick = () => {
     if (onLogoClick) {
@@ -67,31 +56,65 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
               </h1>
             </Link>
             
-            {/* Contact button - mobile only (left side) */}
+            {/* Contact button - mobile only (left side) - wrapped in form for Yandex Direct */}
             {!isAdmin && (
-              <Button
-                onClick={() => setIsContactDialogOpen(true)}
-                className="btn-gradient btn-gradient-sparkle px-3 py-1.5 text-sm flex items-center gap-1.5 no-default-hover-elevate no-default-active-elevate sm:hidden"
-                data-testid="button-contact-mobile"
+              <form
+                id="goal-contact-form-mobile"
+                name="contact-telegram"
+                action="/goal/contact"
+                method="POST"
+                target="goal-contact-iframe"
+                className="ym-disable-keys sm:hidden"
+                onSubmit={() => {
+                  setTimeout(() => {
+                    window.open("https://t.me/PuerPabbot?start=ask", "_blank", "noopener,noreferrer");
+                  }, 0);
+                }}
+                data-testid="form-contact-goal-mobile"
               >
-                <Sparkles className="w-4 h-4" />
-                <span>Написать</span>
-              </Button>
+                <input type="hidden" name="goal" value="contact" />
+                <input type="hidden" name="form_name" value="contact-telegram" />
+                <Button
+                  type="submit"
+                  className="btn-gradient btn-gradient-sparkle px-3 py-1.5 text-sm flex items-center gap-1.5 no-default-hover-elevate no-default-active-elevate"
+                  data-testid="button-contact-mobile"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Написать</span>
+                </Button>
+              </form>
             )}
           </div>
           
           <div className="flex items-center gap-3 md:gap-4">
             
-            {/* Contact button - desktop only (right side next to Войти) */}
+            {/* Contact button - desktop only (right side next to Войти) - wrapped in form for Yandex Direct */}
             {!isAdmin && (
-              <Button
-                onClick={() => setIsContactDialogOpen(true)}
-                className="btn-gradient btn-gradient-sparkle px-5 py-2 text-base hidden sm:flex items-center gap-2 no-default-hover-elevate no-default-active-elevate"
-                data-testid="button-contact"
+              <form
+                id="goal-contact-form"
+                name="contact-telegram"
+                action="/goal/contact"
+                method="POST"
+                target="goal-contact-iframe"
+                className="ym-disable-keys hidden sm:block"
+                onSubmit={() => {
+                  setTimeout(() => {
+                    window.open("https://t.me/PuerPabbot?start=ask", "_blank", "noopener,noreferrer");
+                  }, 0);
+                }}
+                data-testid="form-contact-goal"
               >
-                <Sparkles className="w-5 h-5" />
-                <span>Связаться с нами</span>
-              </Button>
+                <input type="hidden" name="goal" value="contact" />
+                <input type="hidden" name="form_name" value="contact-telegram" />
+                <Button
+                  type="submit"
+                  className="btn-gradient btn-gradient-sparkle px-5 py-2 text-base flex items-center gap-2 no-default-hover-elevate no-default-active-elevate"
+                  data-testid="button-contact"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  <span>Связаться с нами</span>
+                </Button>
+              </form>
             )}
             
             {/* User auth button */}
@@ -195,65 +218,6 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
         </div>
       </div>
 
-      {/* Contact Dialog */}
-      <Dialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-serif text-center">
-              Связаться с нами
-            </DialogTitle>
-            <DialogDescription className="text-center pt-4 text-base">
-              Задайте вопрос и получите бесплатную консультацию по подбору чая
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-4 pt-4">
-            <form
-              ref={contactFormRef}
-              id="goal-contact-form"
-              name="contact-telegram"
-              action="/goal/contact"
-              method="POST"
-              target="goal-contact-iframe"
-              className="ym-disable-keys flex flex-col gap-4"
-              onSubmit={() => {
-                setTimeout(() => {
-                  window.open("https://t.me/PuerPabbot?start=ask", "_blank", "noopener,noreferrer");
-                  setIsContactDialogOpen(false);
-                }, 0);
-              }}
-              data-testid="form-contact-goal"
-            >
-              <input type="hidden" name="goal" value="contact" />
-              <input type="hidden" name="form_name" value="contact-telegram" />
-              <div className="space-y-2">
-                <Label htmlFor="contact-name">Ваше имя</Label>
-                <Input 
-                  id="contact-name"
-                  name="name"
-                  type="text"
-                  placeholder="Как к вам обращаться?"
-                  data-testid="input-contact-name"
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full"
-                data-testid="button-telegram-contact"
-              >
-                <MessageCircle className="w-5 h-5 mr-2" />
-                Написать в Telegram
-              </Button>
-            </form>
-            <Button
-              variant="outline"
-              onClick={() => setIsContactDialogOpen(false)}
-              data-testid="button-close-contact-dialog"
-            >
-              Закрыть
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </header>
   );
 }
