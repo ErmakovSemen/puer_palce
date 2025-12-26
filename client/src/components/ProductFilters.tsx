@@ -35,6 +35,7 @@ export default function ProductFilters({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [openFilter, setOpenFilter] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const quizFormRef = useRef<HTMLFormElement>(null);
 
   // Fetch tea types from API for colors
   const { data: teaTypesFromAPI } = useTeaTypes();
@@ -136,15 +137,38 @@ export default function ProductFilters({
         </div>
       )}
 
+      {/* Hidden iframe for quiz goal tracking */}
+      <iframe
+        name="goal-quiz-iframe"
+        style={{ display: 'none', width: 0, height: 0, border: 'none' }}
+        aria-hidden="true"
+      />
+
       {/* Квиз */}
-      <Button
-        onClick={onQuizClick}
-        className="btn-gradient px-4 py-2 text-sm flex items-center gap-1.5 no-default-hover-elevate no-default-active-elevate"
-        data-testid="button-open-quiz"
+      <form
+        ref={quizFormRef}
+        id="goal-quiz-form"
+        name="quiz-tea-selection"
+        action="/goal/quiz"
+        method="POST"
+        target="goal-quiz-iframe"
+        className="ym-disable-keys"
+        onSubmit={() => {
+          setTimeout(() => onQuizClick(), 0);
+        }}
+        data-testid="form-quiz-goal"
       >
-        <span className="text-base">🌟</span>
-        Подобрать чай
-      </Button>
+        <input type="hidden" name="goal" value="quiz" />
+        <input type="hidden" name="form_name" value="quiz-tea-selection" />
+        <Button
+          type="submit"
+          className="btn-gradient px-4 py-2 text-sm flex items-center gap-1.5 no-default-hover-elevate no-default-active-elevate"
+          data-testid="button-open-quiz"
+        >
+          <span className="text-base">🌟</span>
+          Подобрать чай
+        </Button>
+      </form>
 
       {/* Фильтр: Тип чая */}
       <Popover 

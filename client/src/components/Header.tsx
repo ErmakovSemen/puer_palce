@@ -208,9 +208,11 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
             <form
               ref={contactFormRef}
               id="goal-contact-form"
+              name="contact-telegram"
               action="/goal/contact"
               method="POST"
               target="goal-contact-iframe"
+              className="ym-disable-keys"
               onSubmit={() => {
                 setTimeout(() => {
                   window.open("https://t.me/PuerPabbot?start=ask", "_blank", "noopener,noreferrer");
@@ -220,6 +222,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
               data-testid="form-contact-goal"
             >
               <input type="hidden" name="goal" value="contact" />
+              <input type="hidden" name="form_name" value="contact-telegram" />
               <Button
                 type="submit"
                 className="w-full"
