@@ -154,6 +154,8 @@ export async function sendPhoto(
   }
 
   try {
+    console.log("[TelegramBot] Attempting to send photo:", { chatId, photoUrl: photoUrl.substring(0, 100) + "..." });
+    
     const body: any = {
       chat_id: chatId,
       photo: photoUrl,
@@ -179,9 +181,14 @@ export async function sendPhoto(
 
     const data = await response.json();
     if (!data.ok) {
-      console.error("[TelegramBot] sendPhoto API error:", data);
+      console.error("[TelegramBot] sendPhoto API error:", { 
+        error: data.description, 
+        error_code: data.error_code,
+        photoUrl: photoUrl.substring(0, 100) + "..."
+      });
       return false;
     }
+    console.log("[TelegramBot] Photo sent successfully");
     return true;
   } catch (error) {
     console.error("[TelegramBot] sendPhoto error:", error);
@@ -1358,7 +1365,11 @@ async function handleProductDetail(chatId: string, productId: number, username?:
     // Try to send with photo if available
     const hasPhoto = product.images && product.images.length > 0;
     if (hasPhoto) {
-      const photoUrl = product.images[0];
+      // Construct full URL for Telegram to access the image
+      const imagePath = product.images[0];
+      const photoUrl = imagePath.startsWith('http') 
+        ? imagePath 
+        : `https://puerpub.replit.app${imagePath}`;
       const photoSent = await sendPhoto(chatId, photoUrl, caption, keyboard);
       if (!photoSent) {
         // Fallback to text message if photo fails
