@@ -142,6 +142,53 @@ export async function sendMessage(
   }
 }
 
+export async function sendPhoto(
+  chatId: string | number,
+  photoUrl: string,
+  caption?: string,
+  replyMarkup?: InlineKeyboardMarkup
+): Promise<boolean> {
+  if (!TELEGRAM_BOT_TOKEN) {
+    console.error("[TelegramBot] Bot token not configured");
+    return false;
+  }
+
+  try {
+    const body: any = {
+      chat_id: chatId,
+      photo: photoUrl,
+      parse_mode: "HTML",
+    };
+
+    if (caption) {
+      body.caption = caption;
+    }
+
+    if (replyMarkup) {
+      body.reply_markup = replyMarkup;
+    }
+
+    const response = await fetch(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }
+    );
+
+    const data = await response.json();
+    if (!data.ok) {
+      console.error("[TelegramBot] sendPhoto API error:", data);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("[TelegramBot] sendPhoto error:", error);
+    return false;
+  }
+}
+
 async function answerCallbackQuery(callbackQueryId: string, text?: string): Promise<boolean> {
   if (!TELEGRAM_BOT_TOKEN) return false;
 
@@ -595,22 +642,34 @@ async function handleMenuCategory(chatId: string, category: "tea" | "teaware") {
     }
 
     if (category === "tea") {
-      const teaTypes = Array.from(new Set(productList.map(p => p.teaType || "Другое")));
+      const rawTeaTypes = productList.map(p => p.teaType || "Другое");
+      
+      const normalizeTeaType = (teaType: string): string => {
+        const normalized = teaType.toLowerCase().trim();
+        if (normalized === "шэн пуэр" || normalized === "шен пуэр") return "Шэн Пуэр";
+        if (normalized === "тёмный улун" || normalized === "темный улун") return "Тёмный улун";
+        if (normalized === "светлый улун") return "Светлый улун";
+        return teaType;
+      };
+
+      const teaTypes = Array.from(new Set(rawTeaTypes.map(normalizeTeaType)));
       
       const teaTypeLabels: Record<string, string> = {
-        "Шу Пуэр": "🟤 Шу Пуэр",
-        "Шэн Пуэр": "🟢 Шэн Пуэр", 
-        "Улун": "🔵 Улун",
-        "Габа": "🟡 Габа",
-        "Красный чай": "🔴 Красный чай",
-        "красный": "🔴 Красный чай",
-        "Белый чай": "⚪ Белый чай",
-        "Зеленый чай": "🟢 Зелёный чай",
-        "Другое": "🍃 Другие сорта"
+        "Шу Пуэр": "🫖 Шу Пуэр",
+        "Шэн Пуэр": "🌱 Шэн Пуэр", 
+        "Тёмный улун": "🌙 Тёмный улун",
+        "Светлый улун": "🌿 Светлый улун",
+        "Габа": "🍯 Габа",
+        "Красный чай": "🍂 Красный чай",
+        "красный": "🍂 Красный чай",
+        "Белый чай": "🤍 Белый чай",
+        "Зелёный чай": "🍃 Зелёный чай",
+        "Зеленый чай": "🍃 Зелёный чай",
+        "Другое": "☕ Другие сорта"
       };
 
       const buttons: InlineKeyboardButton[][] = teaTypes.map(teaType => [{
-        text: teaTypeLabels[teaType] || `🍃 ${teaType}`,
+        text: teaTypeLabels[teaType] || `☕ ${teaType}`,
         callback_data: `tth_${getTeaTypeHash(teaType)}`
       }]);
 
@@ -654,8 +713,17 @@ async function handleTeaTypeProductsByHash(chatId: string, hash: string) {
       .from(products)
       .where(eq(products.category, "tea"));
 
-    const teaTypesWithHashes = Array.from(new Set(productList.map(p => p.teaType || "Другое")))
-      .map(teaType => ({ teaType, hash: getTeaTypeHash(teaType) }));
+    const normalizeTeaType = (teaType: string): string => {
+      const normalized = teaType.toLowerCase().trim();
+      if (normalized === "шэн пуэр" || normalized === "шен пуэр") return "Шэн Пуэр";
+      if (normalized === "тёмный улун" || normalized === "темный улун") return "Тёмный улун";
+      if (normalized === "светлый улун") return "Светлый улун";
+      return teaType;
+    };
+
+    const normalizedProductTypes = productList.map(p => normalizeTeaType(p.teaType || "Другое"));
+    const uniqueTypes = Array.from(new Set(normalizedProductTypes));
+    const teaTypesWithHashes = uniqueTypes.map(teaType => ({ teaType, hash: getTeaTypeHash(teaType) }));
     
     const match = teaTypesWithHashes.find(t => t.hash === hash);
     
@@ -665,7 +733,7 @@ async function handleTeaTypeProductsByHash(chatId: string, hash: string) {
     }
     
     const teaType = match.teaType;
-    const filteredProducts = productList.filter(p => (p.teaType || "Другое") === teaType);
+    const filteredProducts = productList.filter(p => normalizeTeaType(p.teaType || "Другое") === teaType);
 
     if (filteredProducts.length === 0) {
       const keyboard: InlineKeyboardMarkup = {
@@ -1240,24 +1308,24 @@ async function handleProductDetail(chatId: string, productId: number, username?:
       ? `${product.pricePerGram} ₽/г`
       : `${product.pricePerGram} ₽`;
 
-    let text = `<b>${product.name}</b>\n\n`;
+    let caption = `<b>${product.name}</b>\n\n`;
     
     if (product.description) {
-      text += `${product.description}\n\n`;
+      caption += `${product.description}\n\n`;
     }
 
-    text += `💰 Цена: ${priceText}\n`;
+    caption += `💰 Цена: ${priceText}\n`;
 
     if (isTea && product.teaType) {
-      text += `🍃 Тип: ${product.teaType}\n`;
+      caption += `🍃 Тип: ${product.teaType}\n`;
     }
 
     if (product.effects && product.effects.length > 0) {
-      text += `✨ Эффекты: ${product.effects.join(", ")}\n`;
+      caption += `✨ Эффекты: ${product.effects.join(", ")}\n`;
     }
 
     if (product.outOfStock) {
-      text += `\n⚠️ <b>Нет в наличии</b>`;
+      caption += `\n⚠️ <b>Нет в наличии</b>`;
     }
 
     const categoryCallback = isTea ? "menu_tea" : "menu_teaware";
@@ -1287,7 +1355,18 @@ async function handleProductDetail(chatId: string, productId: number, username?:
 
     const keyboard: InlineKeyboardMarkup = { inline_keyboard: buttons };
 
-    await sendMessage(chatId, text, keyboard);
+    // Try to send with photo if available
+    const hasPhoto = product.images && product.images.length > 0;
+    if (hasPhoto) {
+      const photoUrl = product.images[0];
+      const photoSent = await sendPhoto(chatId, photoUrl, caption, keyboard);
+      if (!photoSent) {
+        // Fallback to text message if photo fails
+        await sendMessage(chatId, caption, keyboard);
+      }
+    } else {
+      await sendMessage(chatId, caption, keyboard);
+    }
   } catch (error) {
     console.error("[TelegramBot] Product detail error:", error);
     await sendMessage(chatId, "Произошла ошибка. Попробуйте позже.");
@@ -1328,10 +1407,9 @@ async function handleProfileCommand(chatId: string, username?: string, firstName
   profileText += `📱 ${user.phone}\n\n`;
   
   profileText += `<b>🏆 Программа лояльности</b>\n`;
-  profileText += `━━━━━━━━━━━━━━━━━━━━\n`;
   profileText += `Уровень: <b>${progress.currentLevel.name}</b>\n`;
-  profileText += `💎 XP: ${user.xp.toLocaleString("ru-RU")}\n`;
-  profileText += `🎁 Ваша скидка: <b>${progress.currentLevel.discount}%</b>\n`;
+  profileText += `💎 XP: <code>${user.xp.toLocaleString("ru-RU")}</code>\n`;
+  profileText += `🎁 Ваша скидка: ${progress.currentLevel.discount}%\n`;
 
   if (progress.nextLevel) {
     const progressPercent = Math.min(100, Math.round((1 - progress.xpToNextLevel / (progress.nextLevel.minXP - progress.currentLevel.minXP)) * 100));
@@ -1339,37 +1417,66 @@ async function handleProfileCommand(chatId: string, username?: string, firstName
     const emptyBars = 10 - filledBars;
     const progressBar = "▓".repeat(filledBars) + "░".repeat(emptyBars);
     
-    profileText += `\n📈 <b>Прогресс до "${progress.nextLevel.name}"</b>\n`;
+    profileText += `\n📈 Прогресс до "<b>${progress.nextLevel.name}</b>"\n`;
     profileText += `${progressBar} ${progressPercent}%\n`;
-    profileText += `Осталось: ${progress.xpToNextLevel.toLocaleString("ru-RU")} XP\n`;
+    profileText += `Осталось: <code>${progress.xpToNextLevel.toLocaleString("ru-RU")}</code> XP\n`;
     profileText += `Скидка на следующем уровне: ${progress.nextLevel.discount}%`;
   } else {
     profileText += `\n🎉 <b>Максимальный уровень достигнут!</b>`;
   }
 
-  profileText += `\n\n<b>📊 Все уровни программы</b>\n`;
-  profileText += `━━━━━━━━━━━━━━━━━━━━\n`;
-  
-  const levelIcons = ["🥉", "🥈", "🥇", "👑"];
-  LOYALTY_LEVELS.forEach((level, index) => {
-    const isCurrentLevel = level.level === progress.currentLevel.level;
-    const marker = isCurrentLevel ? "➤ " : "   ";
-    const xpRange = level.maxXP 
-      ? `${level.minXP.toLocaleString("ru-RU")} - ${level.maxXP.toLocaleString("ru-RU")} XP`
-      : `от ${level.minXP.toLocaleString("ru-RU")} XP`;
-    
-    profileText += `${marker}${levelIcons[index]} <b>${level.name}</b>\n`;
-    profileText += `      ${xpRange} • Скидка ${level.discount}%\n`;
-  });
-
   const keyboard: InlineKeyboardMarkup = {
     inline_keyboard: [
-      [{ text: "🛒 Мои заказы", url: "https://puerpub.replit.app/profile" }],
+      [{ text: "📊 Все уровни программы", callback_data: "loyalty_levels" }],
+      [{ text: "🛒 Мои заказы", callback_data: "my_orders" }],
       [{ text: "↩️ Главное меню", callback_data: "main_menu" }],
     ],
   };
 
   await sendMessage(chatId, profileText, keyboard);
+}
+
+async function handleLoyaltyLevelsCommand(chatId: string, username?: string, firstName?: string) {
+  const profile = await getOrCreateProfile(chatId, username, firstName);
+  const user = profile ? await getLinkedUser(profile) : null;
+  const progress = user ? getLoyaltyProgress(user.xp) : null;
+
+  let text = `<b>📊 Уровни программы лояльности</b>\n\n`;
+  text += `За каждый рубль покупки вы получаете 1 XP.\nНакапливайте XP и получайте скидки!\n\n`;
+  
+  const levelIcons = ["🥉", "🥈", "🥇", "👑"];
+  const levelBenefits: Record<string, string[]> = {
+    "Новичок": ["Добро пожаловать в чайную семью"],
+    "Ценитель": ["Скидка 5% на все заказы", "Ранний доступ к новинкам"],
+    "Чайный мастер": ["Скидка 10% на все заказы", "Бесплатная доставка от 2000₽", "Эксклюзивные предложения"],
+    "Чайный Гуру": ["Скидка 15% на все заказы", "Бесплатная доставка", "VIP-поддержка", "Подарки к заказам"],
+  };
+
+  LOYALTY_LEVELS.forEach((level, index) => {
+    const isCurrentLevel = progress && level.level === progress.currentLevel.level;
+    const marker = isCurrentLevel ? "➤ " : "";
+    const xpRange = level.maxXP 
+      ? `${level.minXP.toLocaleString("ru-RU")} – ${level.maxXP.toLocaleString("ru-RU")}`
+      : `от ${level.minXP.toLocaleString("ru-RU")}`;
+    
+    text += `${marker}${levelIcons[index]} <b>${level.name}</b>\n`;
+    text += `   <code>${xpRange}</code> XP • Скидка ${level.discount}%\n`;
+    
+    const benefits = levelBenefits[level.name] || [];
+    benefits.forEach(benefit => {
+      text += `   ✓ ${benefit}\n`;
+    });
+    text += `\n`;
+  });
+
+  const keyboard: InlineKeyboardMarkup = {
+    inline_keyboard: [
+      [{ text: "↩️ Назад к профилю", callback_data: "profile" }],
+      [{ text: "🏠 Главное меню", callback_data: "main_menu" }],
+    ],
+  };
+
+  await sendMessage(chatId, text, keyboard);
 }
 
 async function handleLinkAccountCallback(chatId: string) {
@@ -1514,6 +1621,17 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
       break;
     case "link_account":
       await handleLinkAccountCallback(chatId);
+      break;
+    case "loyalty_levels":
+      await handleLoyaltyLevelsCommand(chatId, username, firstName);
+      break;
+    case "my_orders":
+      await sendMessage(chatId, `<b>🛒 Мои заказы</b>\n\nДля просмотра истории заказов перейдите в личный кабинет на сайте.`, {
+        inline_keyboard: [
+          [{ text: "🌐 Открыть личный кабинет", url: "https://puerpub.replit.app/profile" }],
+          [{ text: "↩️ Назад к профилю", callback_data: "profile" }],
+        ],
+      });
       break;
     case "cart":
       await handleCartCommand(chatId, username, firstName);
