@@ -30,6 +30,7 @@ interface HeaderProps {
 export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmin = false }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
   const cartFormRef = useRef<HTMLFormElement>(null);
+  const contactFormRef = useRef<HTMLFormElement>(null);
   const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
   
   const handleLogoClick = () => {
@@ -46,6 +47,11 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
     <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
       <iframe
         name="goal-cart-iframe"
+        style={{ display: 'none', width: 0, height: 0, border: 'none' }}
+        aria-hidden="true"
+      />
+      <iframe
+        name="goal-contact-iframe"
         style={{ display: 'none', width: 0, height: 0, border: 'none' }}
         aria-hidden="true"
       />
@@ -185,20 +191,30 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4 pt-4">
-            <Button
-              asChild
-              className="w-full"
-              data-testid="button-telegram-contact"
+            <form
+              ref={contactFormRef}
+              id="goal-contact-form"
+              action="/goal/contact"
+              method="POST"
+              target="goal-contact-iframe"
+              onSubmit={() => {
+                setTimeout(() => {
+                  window.open("https://t.me/PuerPabbot?start=ask", "_blank", "noopener,noreferrer");
+                  setIsContactDialogOpen(false);
+                }, 0);
+              }}
+              data-testid="form-contact-goal"
             >
-              <a
-                href="https://t.me/PuerPabbot?start=ask"
-                target="_blank"
-                rel="noopener noreferrer"
+              <input type="hidden" name="goal" value="contact" />
+              <Button
+                type="submit"
+                className="w-full"
+                data-testid="button-telegram-contact"
               >
                 <MessageCircle className="w-5 h-5 mr-2" />
                 Написать в Telegram
-              </a>
-            </Button>
+              </Button>
+            </form>
             <Button
               variant="outline"
               onClick={() => setIsContactDialogOpen(false)}

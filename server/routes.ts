@@ -209,6 +209,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
   });
   
+  app.post("/goal/contact", (_req, res) => {
+    res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
+  });
+  
   // Also handle GET requests for goal pages (needed for Yandex Metrica visual editor)
   app.get("/goal/cart", (_req, res) => {
     res.status(200).send(`<!DOCTYPE html><html><head><title>Cart Goal</title></head><body>
@@ -232,6 +236,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(200).send(`<!DOCTYPE html><html><head><title>Registration Goal</title></head><body>
       <form id="goal-registration-form" action="/goal/registration" method="POST">
         <input type="hidden" name="goal" value="registration" />
+        <button type="submit">Submit</button>
+      </form>
+    </body></html>`);
+  });
+  
+  app.get("/goal/contact", (_req, res) => {
+    res.status(200).send(`<!DOCTYPE html><html><head><title>Contact Goal</title></head><body>
+      <form id="goal-contact-form" action="/goal/contact" method="POST">
+        <input type="hidden" name="goal" value="contact" />
         <button type="submit">Submit</button>
       </form>
     </body></html>`);
