@@ -11,6 +11,7 @@ import PaymentSuccess from "@/pages/PaymentSuccess";
 import PaymentError from "@/pages/PaymentError";
 import OrderSuccess from "@/pages/OrderSuccess";
 import OrderError from "@/pages/OrderError";
+import Leaderboard from "@/pages/Leaderboard";
 import { useDesignMode } from "@/hooks/use-design-mode";
 import { AuthProvider } from "@/hooks/use-auth";
 
@@ -19,6 +20,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/admin" component={Admin} />
+      <Route path="/admin/leaderboard" component={Leaderboard} />
       <Route path="/auth" component={Auth} />
       <Route path="/profile" component={Profile} />
       <Route path="/payment/success" component={PaymentSuccess} />

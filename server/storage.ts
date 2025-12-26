@@ -96,6 +96,9 @@ export interface IStorage {
   getXpTransactions(limit?: number, offset?: number): Promise<Array<XpTransaction & { user: User }>>;
   getUserXpTransactions(userId: string): Promise<XpTransaction[]>;
   
+  // Leaderboard
+  getMonthlyLeaderboard(): Promise<import("@shared/schema").LeaderboardEntry[]>;
+  
   // Session store for auth
   sessionStore: any;
 }
@@ -495,6 +498,38 @@ export class MemStorage implements IStorage {
     return this.xpTransactions
       .filter(t => t.userId === userId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  
+  async getMonthlyLeaderboard(): Promise<import("@shared/schema").LeaderboardEntry[]> {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const userXpMap = new Map<string, number>();
+    
+    for (const t of this.xpTransactions) {
+      const txDate = new Date(t.createdAt);
+      if (txDate >= startOfMonth && t.amount > 0) {
+        userXpMap.set(t.userId, (userXpMap.get(t.userId) || 0) + t.amount);
+      }
+    }
+    
+    const entries: import("@shared/schema").LeaderboardEntry[] = [];
+    for (const [userId, xpThisMonth] of Array.from(userXpMap.entries())) {
+      const user = this.users.get(userId);
+      if (user && xpThisMonth > 0) {
+        entries.push({
+          rank: 0,
+          userId,
+          name: user.name || "Гость",
+          xpThisMonth,
+        });
+      }
+    }
+    
+    entries.sort((a, b) => b.xpThisMonth - a.xpThisMonth);
+    entries.forEach((e, i) => e.rank = i + 1);
+    
+    return entries.slice(0, 10);
   }
 }
 
@@ -1236,6 +1271,35 @@ export class DbStorage implements IStorage {
       .from(xpTransactions)
       .where(eq(xpTransactions.userId, userId))
       .orderBy(desc(xpTransactions.createdAt));
+  }
+
+  async getMonthlyLeaderboard(): Promise<import("@shared/schema").LeaderboardEntry[]> {
+    const { xpTransactions } = await import("@shared/schema");
+    
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfMonthStr = startOfMonth.toISOString();
+    
+    const results = await db
+      .select({
+        userId: xpTransactions.userId,
+        xpThisMonth: sql<number>`COALESCE(SUM(CASE WHEN ${xpTransactions.amount} > 0 THEN ${xpTransactions.amount} ELSE 0 END), 0)`.as('xp_this_month'),
+        name: usersTable.name,
+      })
+      .from(xpTransactions)
+      .innerJoin(usersTable, eq(xpTransactions.userId, usersTable.id))
+      .where(sql`${xpTransactions.createdAt} >= ${startOfMonthStr}`)
+      .groupBy(xpTransactions.userId, usersTable.name)
+      .having(sql`SUM(CASE WHEN ${xpTransactions.amount} > 0 THEN ${xpTransactions.amount} ELSE 0 END) > 0`)
+      .orderBy(sql`xp_this_month DESC`)
+      .limit(10);
+    
+    return results.map((r, index) => ({
+      rank: index + 1,
+      userId: r.userId,
+      name: r.name || "Гость",
+      xpThisMonth: Number(r.xpThisMonth),
+    }));
   }
 }
 

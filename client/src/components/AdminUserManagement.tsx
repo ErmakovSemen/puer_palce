@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Minus } from "lucide-react";
+import { Search, Plus, Minus, Trophy, Copy, Check } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { format } from "date-fns";
@@ -26,7 +26,27 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   const [xpAmount, setXpAmount] = useState<string>("100");
   const [discountAmount, setDiscountAmount] = useState<string>("");
   const [showRecentUsers, setShowRecentUsers] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const { toast } = useToast();
+
+  const handleCopyLeaderboardLink = async () => {
+    const url = `${window.location.origin}/admin/leaderboard`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setIsCopied(true);
+      toast({
+        title: "Ссылка скопирована",
+        description: "Ссылка на лидерборд скопирована в буфер обмена",
+      });
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      toast({
+        title: "Ошибка",
+        description: "Не удалось скопировать ссылку",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Recent users query
   const { data: recentUsers, isLoading: isLoadingRecent } = useQuery({
@@ -239,8 +259,22 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-4">
           <CardTitle>Поиск пользователя</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopyLeaderboardLink}
+            data-testid="button-copy-leaderboard"
+          >
+            {isCopied ? (
+              <Check className="h-4 w-4 mr-2 text-green-500" />
+            ) : (
+              <Trophy className="h-4 w-4 mr-2" />
+            )}
+            {isCopied ? "Скопировано!" : "Лидерборд"}
+            {!isCopied && <Copy className="h-3 w-3 ml-1.5" />}
+          </Button>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2 mb-4">

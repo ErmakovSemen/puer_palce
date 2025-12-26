@@ -549,3 +549,11 @@ export type InsertInfoBanner = z.infer<typeof insertInfoBannerSchema>;
 export type UpdateInfoBanner = z.infer<typeof updateInfoBannerSchema>;
 export type InfoBanner = typeof infoBanners.$inferSelect;
 export type BannerButton = z.infer<typeof bannerButtonSchema>;
+
+// Leaderboard types
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  name: string;
+  xpThisMonth: number;
+}

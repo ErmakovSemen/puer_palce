@@ -1049,6 +1049,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/admin/leaderboard/monthly", requireAdminAuth, async (_req, res) => {
+    try {
+      const leaderboard = await storage.getMonthlyLeaderboard();
+      res.json(leaderboard);
+    } catch (error) {
+      console.error("[Admin] Get monthly leaderboard error:", error);
+      res.status(500).json({ error: "Failed to get monthly leaderboard" });
+    }
+  });
+
   app.get("/api/admin/loyalty/export", requireAdminAuth, async (req, res) => {
     try {
       const XLSX = await import("xlsx");
