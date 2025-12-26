@@ -21,6 +21,7 @@ interface ProductCardProps {
   fixedQuantityOnly?: boolean;
   fixedQuantity?: number | null;
   outOfStock?: boolean;
+  isInCart?: boolean;
   onAddToCart: (id: number, quantity: number) => void;
   onClick: (id: number) => void;
 }
@@ -39,6 +40,7 @@ export default function ProductCard({
   fixedQuantityOnly = false,
   fixedQuantity = null,
   outOfStock = false,
+  isInCart = false,
   onAddToCart, 
   onClick 
 }: ProductCardProps) {
@@ -192,7 +194,10 @@ export default function ProductCard({
                 onAddToCart(id, defaultQuantity);
               }}
               size="icon"
-              className="bg-black text-white hover:bg-black/90 border-2 border-white shadow-lg opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity duration-300 h-9 w-9 sm:h-8 sm:w-8"
+              className={`${isInCart 
+                ? "btn-gradient-icon no-default-hover-elevate no-default-active-elevate" 
+                : "bg-black text-white hover:bg-black/90 border-2 border-white"
+              } shadow-lg opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-all duration-300 h-9 w-9 sm:h-8 sm:w-8`}
               data-testid={`button-add-to-cart-${id}`}
             >
               <ShoppingCart className="w-4 h-4" />

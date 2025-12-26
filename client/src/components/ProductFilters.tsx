@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Sparkles, ChevronDown } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
@@ -139,12 +139,10 @@ export default function ProductFilters({
       {/* Квиз */}
       <Button
         onClick={onQuizClick}
-        variant="outline"
-        size="sm"
-        className="bg-primary/10 hover:bg-primary/20 text-primary border-primary/20 gap-1.5 transition-all duration-300"
+        className="btn-gradient px-4 py-2 text-sm flex items-center gap-1.5 no-default-hover-elevate no-default-active-elevate"
         data-testid="button-open-quiz"
       >
-        <Sparkles className="w-4 h-4" />
+        <span className="text-base">🌟</span>
         Подобрать чай
       </Button>
 

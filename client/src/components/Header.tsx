@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ShoppingCart, User, LogOut, MessageCircle } from "lucide-react";
+import { ShoppingCart, User, LogOut, MessageCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
@@ -57,26 +57,29 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
       />
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          <Link href="/" onClick={handleLogoClick} data-testid="link-home">
-            <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground cursor-pointer hover-elevate px-4 py-2 rounded-md transition-all">
-              Пуэр Паб
-            </h1>
-          </Link>
-          
-          <div className="flex items-center gap-3 md:gap-4">
-            {/* Contact button */}
+          {/* Left side: Logo + Contact button on mobile */}
+          <div className="flex items-center gap-2 sm:gap-0">
+            <Link href="/" onClick={handleLogoClick} data-testid="link-home">
+              <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground cursor-pointer hover-elevate px-2 sm:px-4 py-2 rounded-md transition-all">
+                Пуэр Паб
+              </h1>
+            </Link>
+            
+            {/* Contact button - mobile: left side under logo, desktop: larger gradient button */}
             {!isAdmin && (
               <Button
-                variant="ghost"
-                size="sm"
                 onClick={() => setIsContactDialogOpen(true)}
-                className="hidden sm:flex items-center gap-2"
+                className="btn-gradient btn-gradient-sparkle px-3 py-1.5 sm:px-5 sm:py-2 text-sm sm:text-base flex items-center gap-1.5 sm:gap-2 no-default-hover-elevate no-default-active-elevate"
                 data-testid="button-contact"
               >
-                <MessageCircle className="w-4 h-4" />
-                <span className="hidden md:inline">Связаться с нами</span>
+                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline">Связаться с нами</span>
+                <span className="sm:hidden">Написать</span>
               </Button>
             )}
+          </div>
+          
+          <div className="flex items-center gap-3 md:gap-4">
             
             {/* User auth button */}
             {!isAdmin && (

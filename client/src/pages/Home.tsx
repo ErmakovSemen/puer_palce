@@ -54,11 +54,12 @@ interface ApiCartItem {
 interface ProductGridWithBannersProps {
   products: Product[];
   banners: InfoBanner[];
+  cartProductIds: number[];
   onAddToCart: (productId: number, quantity: number) => void;
   onProductClick: (productId: number) => void;
 }
 
-function ProductGridWithBanners({ products, banners, onAddToCart, onProductClick }: ProductGridWithBannersProps) {
+function ProductGridWithBanners({ products, banners, cartProductIds, onAddToCart, onProductClick }: ProductGridWithBannersProps) {
   const DESKTOP_COLS = 4;
   const MOBILE_COLS = 2;
 
@@ -92,6 +93,7 @@ function ProductGridWithBanners({ products, banners, onAddToCart, onProductClick
                 <div key={product.id} className="h-full">
                   <ProductCard
                     {...product}
+                    isInCart={cartProductIds.includes(product.id)}
                     onAddToCart={onAddToCart}
                     onClick={onProductClick}
                   />
@@ -119,6 +121,7 @@ function ProductGridWithBanners({ products, banners, onAddToCart, onProductClick
                 <div key={product.id} className="h-full">
                   <ProductCard
                     {...product}
+                    isInCart={cartProductIds.includes(product.id)}
                     onAddToCart={onAddToCart}
                     onClick={onProductClick}
                   />
@@ -486,6 +489,7 @@ export default function Home() {
   };
 
   const cartItemCount = cartItems.length;
+  const cartProductIds = useMemo(() => cartItems.map(item => item.id), [cartItems]);
 
   return (
     <div className="min-h-screen">
@@ -567,6 +571,7 @@ export default function Home() {
                 <ProductGridWithBanners
                   products={teaProducts}
                   banners={banners}
+                  cartProductIds={cartProductIds}
                   onAddToCart={addToCart}
                   onProductClick={setSelectedProductId}
                 />
@@ -587,6 +592,7 @@ export default function Home() {
                     <div key={product.id} className="h-full">
                       <ProductCard
                         {...product}
+                        isInCart={cartProductIds.includes(product.id)}
                         onAddToCart={addToCart}
                         onClick={setSelectedProductId}
                       />
