@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import { ShoppingCart, User, LogOut, MessageCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -212,7 +214,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
               action="/goal/contact"
               method="POST"
               target="goal-contact-iframe"
-              className="ym-disable-keys"
+              className="ym-disable-keys flex flex-col gap-4"
               onSubmit={() => {
                 setTimeout(() => {
                   window.open("https://t.me/PuerPabbot?start=ask", "_blank", "noopener,noreferrer");
@@ -223,6 +225,16 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
             >
               <input type="hidden" name="goal" value="contact" />
               <input type="hidden" name="form_name" value="contact-telegram" />
+              <div className="space-y-2">
+                <Label htmlFor="contact-name">Ваше имя</Label>
+                <Input 
+                  id="contact-name"
+                  name="name"
+                  type="text"
+                  placeholder="Как к вам обращаться?"
+                  data-testid="input-contact-name"
+                />
+              </div>
               <Button
                 type="submit"
                 className="w-full"
