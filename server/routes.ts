@@ -1078,7 +1078,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/admin/leaderboard/monthly", requireAdminAuth, async (_req, res) => {
+  // Public leaderboard - no auth required
+  app.get("/api/admin/leaderboard/monthly", async (_req, res) => {
     try {
       const leaderboard = await storage.getMonthlyLeaderboard();
       res.json(leaderboard);

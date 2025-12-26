@@ -1,10 +1,7 @@
-import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Trophy, Crown, Medal, Award, Lock, RefreshCw } from "lucide-react";
-import { getApiUrl } from "@/lib/api-config";
+import { Trophy, Crown, Medal, Award, RefreshCw } from "lucide-react";
 import type { LeaderboardEntry } from "@shared/schema";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -12,54 +9,11 @@ import { ru } from "date-fns/locale";
 const REFETCH_INTERVAL = 5 * 60 * 1000;
 
 export default function Leaderboard() {
-  const [adminPassword, setAdminPassword] = useState("");
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [authError, setAuthError] = useState("");
-
-  const storedPassword = sessionStorage.getItem("adminPassword");
-  
-  useEffect(() => {
-    if (storedPassword) {
-      setAdminPassword(storedPassword);
-      setIsAuthenticated(true);
-    }
-  }, [storedPassword]);
-
   const { data: leaderboard, isLoading, refetch, dataUpdatedAt } = useQuery<LeaderboardEntry[]>({
     queryKey: ["/api/admin/leaderboard/monthly"],
-    enabled: isAuthenticated,
     refetchInterval: REFETCH_INTERVAL,
     staleTime: REFETCH_INTERVAL,
-    queryFn: async () => {
-      const res = await fetch(getApiUrl("/api/admin/leaderboard/monthly"), {
-        headers: { "X-Admin-Password": adminPassword },
-        credentials: "include",
-      });
-      if (!res.ok) {
-        if (res.status === 401) {
-          setIsAuthenticated(false);
-          sessionStorage.removeItem("adminPassword");
-          throw new Error("Unauthorized");
-        }
-        throw new Error("Failed to fetch leaderboard");
-      }
-      return res.json();
-    },
   });
-
-  const handleLogin = async () => {
-    setAuthError("");
-    const res = await fetch(getApiUrl("/api/admin/leaderboard/monthly"), {
-      headers: { "X-Admin-Password": adminPassword },
-      credentials: "include",
-    });
-    if (res.ok) {
-      sessionStorage.setItem("adminPassword", adminPassword);
-      setIsAuthenticated(true);
-    } else {
-      setAuthError("Неверный пароль администратора");
-    }
-  };
 
   const currentMonth = format(new Date(), "LLLL yyyy", { locale: ru });
   const capitalizedMonth = currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1);
@@ -83,45 +37,6 @@ export default function Leaderboard() {
     }
     return "";
   };
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-        <Card className="max-w-md w-full">
-          <CardHeader className="text-center">
-            <div className="flex justify-center mb-4">
-              <div className="rounded-full bg-amber-100 dark:bg-amber-900/30 p-3">
-                <Lock className="w-8 h-8 text-amber-600 dark:text-amber-400" />
-              </div>
-            </div>
-            <CardTitle className="text-xl font-serif" data-testid="text-leaderboard-login-title">
-              Доступ к лидерборду
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Input
-                type="password"
-                placeholder="Пароль администратора"
-                value={adminPassword}
-                onChange={(e) => setAdminPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                data-testid="input-admin-password"
-              />
-              {authError && (
-                <p className="text-sm text-destructive mt-2" data-testid="text-auth-error">
-                  {authError}
-                </p>
-              )}
-            </div>
-            <Button onClick={handleLogin} className="w-full" data-testid="button-login">
-              Войти
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
