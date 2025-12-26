@@ -195,9 +195,9 @@ export default function ProductCard({
               }}
               size="icon"
               className={`${isInCart 
-                ? "btn-gradient-icon no-default-hover-elevate no-default-active-elevate" 
-                : "bg-black text-white hover:bg-black/90 border-2 border-white"
-              } shadow-lg opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-all duration-300 h-9 w-9 sm:h-8 sm:w-8`}
+                ? "btn-gradient-icon no-default-hover-elevate no-default-active-elevate opacity-100" 
+                : "bg-black text-white hover:bg-black/90 border-2 border-white opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100"
+              } shadow-lg transition-all duration-300 h-9 w-9 sm:h-8 sm:w-8`}
               data-testid={`button-add-to-cart-${id}`}
             >
               <ShoppingCart className="w-4 h-4" />

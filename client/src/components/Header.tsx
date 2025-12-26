@@ -65,21 +65,32 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
               </h1>
             </Link>
             
-            {/* Contact button - mobile: left side under logo, desktop: larger gradient button */}
+            {/* Contact button - mobile only (left side) */}
             {!isAdmin && (
               <Button
                 onClick={() => setIsContactDialogOpen(true)}
-                className="btn-gradient btn-gradient-sparkle px-3 py-1.5 sm:px-5 sm:py-2 text-sm sm:text-base flex items-center gap-1.5 sm:gap-2 no-default-hover-elevate no-default-active-elevate"
-                data-testid="button-contact"
+                className="btn-gradient btn-gradient-sparkle px-3 py-1.5 text-sm flex items-center gap-1.5 no-default-hover-elevate no-default-active-elevate sm:hidden"
+                data-testid="button-contact-mobile"
               >
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Связаться с нами</span>
-                <span className="sm:hidden">Написать</span>
+                <Sparkles className="w-4 h-4" />
+                <span>Написать</span>
               </Button>
             )}
           </div>
           
           <div className="flex items-center gap-3 md:gap-4">
+            
+            {/* Contact button - desktop only (right side next to Войти) */}
+            {!isAdmin && (
+              <Button
+                onClick={() => setIsContactDialogOpen(true)}
+                className="btn-gradient btn-gradient-sparkle px-5 py-2 text-base hidden sm:flex items-center gap-2 no-default-hover-elevate no-default-active-elevate"
+                data-testid="button-contact"
+              >
+                <Sparkles className="w-5 h-5" />
+                <span>Связаться с нами</span>
+              </Button>
+            )}
             
             {/* User auth button */}
             {!isAdmin && (
