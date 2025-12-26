@@ -449,6 +449,30 @@ export const pendingTelegramOrders = pgTable("pending_telegram_orders", {
 
 export type PendingTelegramOrder = typeof pendingTelegramOrders.$inferSelect;
 
+// Telegram Questions - for "Ask a Question" feature in bot
+export const telegramQuestions = pgTable("telegram_questions", {
+  id: serial("id").primaryKey(),
+  chatId: text("chat_id").notNull(), // Telegram chat ID of the user asking
+  username: text("username"), // Telegram username (optional)
+  firstName: text("first_name"), // Telegram first name
+  question: text("question").notNull(),
+  answer: text("answer"), // Admin's response
+  adminChatId: text("admin_chat_id"), // Which admin answered
+  status: text("status").notNull().default("pending"), // "pending" | "answered"
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  answeredAt: text("answered_at"),
+});
+
+export const insertTelegramQuestionSchema = createInsertSchema(telegramQuestions, {
+  chatId: z.string().min(1),
+  username: z.string().optional().nullable(),
+  firstName: z.string().optional().nullable(),
+  question: z.string().min(1),
+}).omit({ id: true, answer: true, adminChatId: true, status: true, createdAt: true, answeredAt: true });
+
+export type InsertTelegramQuestion = z.infer<typeof insertTelegramQuestionSchema>;
+export type TelegramQuestion = typeof telegramQuestions.$inferSelect;
+
 // Info Banners table - customizable information blocks for the site
 export const infoBanners = pgTable("info_banners", {
   id: serial("id").primaryKey(),

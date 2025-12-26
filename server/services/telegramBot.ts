@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { telegramProfiles, users, siteSettings, products, magicLinks, telegramCart, pendingTelegramOrders, orders, savedAddresses, type TelegramProfile, type Product } from "@shared/schema";
+import { telegramProfiles, users, siteSettings, products, magicLinks, telegramCart, pendingTelegramOrders, orders, savedAddresses, telegramQuestions, type TelegramProfile, type Product } from "@shared/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { validateAndConsumeMagicLink } from "./magicLink";
@@ -21,11 +21,12 @@ function isAdmin(chatId: string): boolean {
 
 // User state tracking for multi-step interactions
 type UserState = {
-  action: "awaiting_address" | "awaiting_cart_quantity" | "awaiting_broadcast_message" | "awaiting_broadcast_confirm";
+  action: "awaiting_address" | "awaiting_cart_quantity" | "awaiting_broadcast_message" | "awaiting_broadcast_confirm" | "awaiting_question" | "awaiting_admin_reply";
   expiresAt: number;
   productId?: number; // For cart quantity input
   broadcastAudience?: "all" | "linked" | "unlinked"; // For broadcast targeting
   broadcastMessage?: string; // Message to broadcast
+  questionId?: number; // For admin reply
 };
 const userStates = new Map<string, UserState>();
 
@@ -289,6 +290,7 @@ function getMainMenuKeyboard(isLinked: boolean): InlineKeyboardMarkup {
   const keyboard: InlineKeyboardButton[][] = [
     [{ text: "📞 Контакты", callback_data: "contacts" }],
     [{ text: "🍵 Меню чая", callback_data: "menu" }],
+    [{ text: "✉️ Задать вопрос", callback_data: "ask_question" }],
   ];
 
   if (isLinked) {
@@ -308,6 +310,13 @@ async function handleStartCommand(chatId: string, username?: string, firstName?:
     const token = payload.substring(5);
     console.log(`[TelegramBot] Magic link detected, token length: ${token.length}`);
     await handleMagicLinkConfirmation(chatId, token, username, firstName);
+    return;
+  }
+
+  // Handle "ask" deep link - direct to question form
+  if (payload === "ask") {
+    await getOrCreateProfile(chatId, username, firstName);
+    await handleAskQuestionStart(chatId, username, firstName);
     return;
   }
 
@@ -395,6 +404,199 @@ async function handleHelpCommand(chatId: string) {
 Для использования корзины и программы лояльности привяжите аккаунт с сайта.`;
 
   await sendMessage(chatId, helpText);
+}
+
+// ============ ASK QUESTION ============
+
+async function handleAskQuestionStart(chatId: string, username?: string, firstName?: string) {
+  setUserState(chatId, {
+    action: "awaiting_question",
+    expiresAt: Date.now() + 30 * 60 * 1000, // 30 minutes
+  });
+
+  await sendMessage(chatId, `<b>✉️ Задайте ваш вопрос</b>
+
+Напишите ваш вопрос, и мы ответим вам как можно скорее.
+
+<i>Мы с радостью поможем с подбором чая или ответим на любые вопросы о нашей продукции.</i>`, {
+    inline_keyboard: [[{ text: "❌ Отмена", callback_data: "main_menu" }]],
+  });
+}
+
+async function handleQuestionSubmit(chatId: string, questionText: string, username?: string, firstName?: string) {
+  clearUserState(chatId);
+
+  try {
+    // Save question to database
+    const [question] = await db.insert(telegramQuestions).values({
+      chatId,
+      username: username || null,
+      firstName: firstName || null,
+      question: questionText,
+    }).returning();
+
+    // Confirm to user
+    await sendMessage(chatId, `<b>✅ Вопрос отправлен!</b>
+
+Мы получили ваш вопрос и скоро ответим вам в этом чате.
+
+Спасибо за обращение!`, {
+      inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
+    });
+
+    // Notify admins
+    await notifyAdminsAboutQuestion(question.id, chatId, firstName || username || "Пользователь", questionText);
+  } catch (error) {
+    console.error("[TelegramBot] Failed to save question:", error);
+    await sendMessage(chatId, `<b>❌ Произошла ошибка</b>
+
+Не удалось отправить вопрос. Попробуйте позже.`, {
+      inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
+    });
+  }
+}
+
+async function notifyAdminsAboutQuestion(questionId: number, userChatId: string, userName: string, questionText: string) {
+  const adminIds = process.env.TELEGRAM_ADMIN_IDS;
+  const fallbackId = process.env.TELEGRAM_CHAT_ID;
+  
+  const adminList = adminIds 
+    ? adminIds.split(',').map(id => id.trim())
+    : (fallbackId ? [fallbackId] : []);
+
+  if (adminList.length === 0) {
+    console.error("[TelegramBot] No admin IDs configured for question notifications");
+    return;
+  }
+
+  const notificationText = `<b>📬 Новый вопрос</b>
+
+<b>От:</b> ${userName}
+<b>Chat ID:</b> <code>${userChatId}</code>
+
+<b>Вопрос:</b>
+${questionText}`;
+
+  const keyboard: InlineKeyboardMarkup = {
+    inline_keyboard: [[
+      { text: "💬 Ответить", callback_data: `admin_reply_question_${questionId}` },
+    ]],
+  };
+
+  for (const adminChatId of adminList) {
+    try {
+      await sendMessage(adminChatId, notificationText, keyboard);
+    } catch (error) {
+      console.error(`[TelegramBot] Failed to notify admin ${adminChatId}:`, error);
+    }
+  }
+}
+
+async function handleAdminReplyStart(chatId: string, questionId: number) {
+  if (!isAdmin(chatId)) {
+    await sendMessage(chatId, "⛔ Доступ запрещён");
+    return;
+  }
+
+  // Get question details
+  const [question] = await db.select().from(telegramQuestions).where(eq(telegramQuestions.id, questionId));
+  
+  if (!question) {
+    await sendMessage(chatId, "❌ Вопрос не найден");
+    return;
+  }
+
+  if (question.status === "answered") {
+    await sendMessage(chatId, `<b>ℹ️ На этот вопрос уже ответили</b>
+
+<b>Вопрос:</b>
+${question.question}
+
+<b>Ответ:</b>
+${question.answer}`, {
+      inline_keyboard: [[{ text: "🔧 Админ-панель", callback_data: "admin_panel" }]],
+    });
+    return;
+  }
+
+  setUserState(chatId, {
+    action: "awaiting_admin_reply",
+    expiresAt: Date.now() + 30 * 60 * 1000,
+    questionId,
+  });
+
+  await sendMessage(chatId, `<b>💬 Ответ на вопрос</b>
+
+<b>От:</b> ${question.firstName || question.username || "Пользователь"}
+
+<b>Вопрос:</b>
+${question.question}
+
+<i>Введите ваш ответ:</i>`, {
+    inline_keyboard: [[{ text: "❌ Отмена", callback_data: "admin_panel" }]],
+  });
+}
+
+async function handleAdminReplySubmit(chatId: string, answerText: string) {
+  if (!isAdmin(chatId)) {
+    clearUserState(chatId);
+    return;
+  }
+
+  const state = getUserState(chatId);
+  if (!state || state.action !== "awaiting_admin_reply" || !state.questionId) {
+    return;
+  }
+
+  clearUserState(chatId);
+
+  try {
+    // Get question
+    const [question] = await db.select().from(telegramQuestions).where(eq(telegramQuestions.id, state.questionId));
+    
+    if (!question) {
+      await sendMessage(chatId, "❌ Вопрос не найден");
+      return;
+    }
+
+    // Update question in database
+    await db.update(telegramQuestions)
+      .set({
+        answer: answerText,
+        adminChatId: chatId,
+        status: "answered",
+        answeredAt: new Date().toISOString(),
+      })
+      .where(eq(telegramQuestions.id, state.questionId));
+
+    // Send answer to user
+    await sendMessage(question.chatId, `<b>💬 Ответ на ваш вопрос</b>
+
+<b>Ваш вопрос:</b>
+${question.question}
+
+<b>Ответ:</b>
+${answerText}
+
+<i>Если у вас есть ещё вопросы, нажмите кнопку ниже.</i>`, {
+      inline_keyboard: [
+        [{ text: "✉️ Задать ещё вопрос", callback_data: "ask_question" }],
+        [{ text: "🏠 Главное меню", callback_data: "main_menu" }],
+      ],
+    });
+
+    // Confirm to admin
+    await sendMessage(chatId, `<b>✅ Ответ отправлен!</b>
+
+Пользователь получил ваш ответ.`, {
+      inline_keyboard: [[{ text: "🔧 Админ-панель", callback_data: "admin_panel" }]],
+    });
+  } catch (error) {
+    console.error("[TelegramBot] Failed to send reply:", error);
+    await sendMessage(chatId, "❌ Не удалось отправить ответ", {
+      inline_keyboard: [[{ text: "🔧 Админ-панель", callback_data: "admin_panel" }]],
+    });
+  }
 }
 
 // ============ ADMIN PANEL ============
@@ -1574,6 +1776,15 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
 
   try {
   // Handle product detail callbacks
+  // Admin reply to question
+  if (data.startsWith("admin_reply_question_")) {
+    const questionId = parseInt(data.substring(21), 10);
+    if (!isNaN(questionId)) {
+      await handleAdminReplyStart(chatId, questionId);
+      return;
+    }
+  }
+
   if (data.startsWith("product_")) {
     const productId = parseInt(data.substring(8), 10);
     if (!isNaN(productId)) {
@@ -1613,6 +1824,7 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
 
   switch (data) {
     case "main_menu":
+      clearUserState(chatId); // Clear any pending state when returning to main menu
       await handleStartCommand(chatId, username, firstName);
       break;
     case "contacts":
@@ -1644,6 +1856,9 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
         ],
       });
       break;
+    case "ask_question":
+      await handleAskQuestionStart(chatId, username, firstName);
+      break;
     case "cart":
       await handleCartCommand(chatId, username, firstName);
       break;
@@ -1666,11 +1881,11 @@ async function handleCallbackQuery(callbackQuery: TelegramCallbackQuery) {
       break;
     // Admin panel callbacks - all require admin check
     case "admin_panel":
+      clearUserState(chatId); // Clear any pending admin reply state
       if (!isAdmin(chatId)) {
         await sendMessage(chatId, "⛔ Доступ запрещён");
         break;
       }
-      clearUserState(chatId);
       await handleAdminCommand(chatId);
       break;
     case "admin_broadcast_all":
@@ -1767,6 +1982,18 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
     if (userState.action === "awaiting_broadcast_message") {
       // Admin entering broadcast message
       await handleBroadcastMessage(chatId, text);
+      return;
+    }
+    
+    if (userState.action === "awaiting_question") {
+      // User submitting their question
+      await handleQuestionSubmit(chatId, text, username, firstName);
+      return;
+    }
+    
+    if (userState.action === "awaiting_admin_reply") {
+      // Admin submitting reply to question
+      await handleAdminReplySubmit(chatId, text);
       return;
     }
   }

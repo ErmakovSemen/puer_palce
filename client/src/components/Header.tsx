@@ -1,5 +1,5 @@
-import { useRef } from "react";
-import { ShoppingCart, User, LogOut } from "lucide-react";
+import { useRef, useState } from "react";
+import { ShoppingCart, User, LogOut, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
@@ -12,6 +12,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface HeaderProps {
   cartItemCount: number;
@@ -23,6 +30,7 @@ interface HeaderProps {
 export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmin = false }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
   const cartFormRef = useRef<HTMLFormElement>(null);
+  const [isContactDialogOpen, setIsContactDialogOpen] = useState(false);
   
   const handleLogoClick = () => {
     if (onLogoClick) {
@@ -50,6 +58,20 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
           </Link>
           
           <div className="flex items-center gap-3 md:gap-4">
+            {/* Contact button */}
+            {!isAdmin && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsContactDialogOpen(true)}
+                className="hidden sm:flex items-center gap-2"
+                data-testid="button-contact"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="hidden md:inline">Связаться с нами</span>
+              </Button>
+            )}
+            
             {/* User auth button */}
             {!isAdmin && (
               <>
@@ -150,6 +172,43 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
           </div>
         </div>
       </div>
+
+      {/* Contact Dialog */}
+      <Dialog open={isContactDialogOpen} onOpenChange={setIsContactDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-serif text-center">
+              Связаться с нами
+            </DialogTitle>
+            <DialogDescription className="text-center pt-4 text-base">
+              Задайте вопрос и получите бесплатную консультацию по подбору чая
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 pt-4">
+            <Button
+              asChild
+              className="w-full"
+              data-testid="button-telegram-contact"
+            >
+              <a
+                href="https://t.me/PuerPabbot?start=ask"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <MessageCircle className="w-5 h-5 mr-2" />
+                Написать в Telegram
+              </a>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setIsContactDialogOpen(false)}
+              data-testid="button-close-contact-dialog"
+            >
+              Закрыть
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }
