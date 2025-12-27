@@ -214,7 +214,7 @@ export default function Home() {
   });
 
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
+    const filtered = products.filter((product) => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description?.toLowerCase() ?? "").includes(searchTerm.toLowerCase());
       const matchesType = selectedTypes.length === 0 || selectedTypes.includes(product.teaType);
@@ -225,6 +225,11 @@ export default function Home() {
           )
         );
       return matchesSearch && matchesType && matchesEffects;
+    });
+    // Sort: out of stock items go to the end
+    return filtered.sort((a, b) => {
+      if (a.outOfStock === b.outOfStock) return 0;
+      return a.outOfStock ? 1 : -1;
     });
   }, [products, searchTerm, selectedTypes, selectedEffects]);
 
