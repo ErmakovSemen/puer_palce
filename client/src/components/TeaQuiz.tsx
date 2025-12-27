@@ -58,7 +58,8 @@ export default function TeaQuiz({ onClose, onRecommend }: TeaQuizProps) {
       }
     }
     
-    return bestMatch.teaType;
+    // Fallback на "Габа" если ничего не подошло
+    return bestMatch?.teaType || "Габа";
   };
 
   const question = quizConfig.questions[currentQuestion];
