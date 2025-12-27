@@ -307,7 +307,7 @@ export default function ProductCard({
                         ? fixedQuantity 
                         : currentWeight
                     );
-                    const effectivePrice = showDiscount ? Math.round(pricePerGram * 0.9) : pricePerGram;
+                    const effectivePrice = showDiscount ? pricePerGram * (1 - BULK_DISCOUNT) : pricePerGram;
                     onAddToCart(id, qty, effectivePrice);
                   }}
                   size="icon"
