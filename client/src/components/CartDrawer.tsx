@@ -189,7 +189,7 @@ export default function CartDrawer({
                     <div className="flex items-center justify-between text-sm" data-testid="discount-bulk">
                       <span className="text-green-400 flex items-center gap-1.5">
                         <Percent className="w-3.5 h-3.5" />
-                        Скидка за объём (от 100г)
+                        При покупке от 100 г
                       </span>
                       <span className="text-green-400">−{Math.round(bulkDiscountAmount)} ₽</span>
                     </div>
