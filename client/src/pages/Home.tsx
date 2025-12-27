@@ -55,6 +55,8 @@ interface ApiCartItem {
 // Helper component to render product grid with between-rows banners
 interface CartItemInfo {
   quantity: number; // Total grams/pieces in cart
+  pricePerUnit: number; // Effective price per unit (may include discount)
+  originalPrice: number; // Original price per unit (without discount)
 }
 
 interface ProductGridWithBannersProps {
@@ -104,6 +106,8 @@ function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onU
                       {...product}
                       isInCart={!!cartInfo}
                       cartQuantity={cartInfo?.quantity || 0}
+                      cartPricePerUnit={cartInfo?.pricePerUnit}
+                      cartOriginalPrice={cartInfo?.originalPrice}
                       onAddToCart={onAddToCart}
                       onUpdateQuantity={onUpdateQuantity}
                       onClick={onProductClick}
@@ -137,6 +141,8 @@ function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onU
                       {...product}
                       isInCart={!!cartInfo}
                       cartQuantity={cartInfo?.quantity || 0}
+                      cartPricePerUnit={cartInfo?.pricePerUnit}
+                      cartOriginalPrice={cartInfo?.originalPrice}
                       onAddToCart={onAddToCart}
                       onUpdateQuantity={onUpdateQuantity}
                       onClick={onProductClick}
@@ -530,7 +536,11 @@ export default function Home() {
       if (existing) {
         existing.quantity += item.quantity;
       } else {
-        map.set(item.id, { quantity: item.quantity });
+        map.set(item.id, { 
+          quantity: item.quantity,
+          pricePerUnit: item.price,
+          originalPrice: item.originalPrice
+        });
       }
     });
     return map;
@@ -642,6 +652,8 @@ export default function Home() {
                           {...product}
                           isInCart={!!cartInfo}
                           cartQuantity={cartInfo?.quantity || 0}
+                          cartPricePerUnit={cartInfo?.pricePerUnit}
+                          cartOriginalPrice={cartInfo?.originalPrice}
                           onAddToCart={addToCart}
                           onUpdateQuantity={updateQuantity}
                           onClick={setSelectedProductId}

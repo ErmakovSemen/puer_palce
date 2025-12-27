@@ -23,6 +23,8 @@ interface ProductCardProps {
   outOfStock?: boolean;
   isInCart?: boolean;
   cartQuantity?: number; // Current quantity in cart (grams or pieces)
+  cartPricePerUnit?: number; // Effective price per unit in cart (may include discount)
+  cartOriginalPrice?: number; // Original price per unit (without discount)
   onAddToCart: (id: number, quantity: number, pricePerUnit: number) => void;
   onUpdateQuantity?: (id: number, quantity: number) => void;
   onClick: (id: number) => void;
@@ -44,6 +46,8 @@ export default function ProductCard({
   outOfStock = false,
   isInCart = false,
   cartQuantity = 0,
+  cartPricePerUnit,
+  cartOriginalPrice,
   onAddToCart,
   onUpdateQuantity,
   onClick 
@@ -263,10 +267,12 @@ export default function ProductCard({
                   </Button>
                   <div className="flex-1 text-center py-2 px-1">
                     <span className="text-white font-semibold text-sm sm:text-base" data-testid={`text-product-price-${id}`}>
-                      {showDiscount && (
-                        <span className="line-through opacity-60 mr-1 text-xs">{basePrice}</span>
+                      {/* Show crossed-out original price if discount was applied */}
+                      {cartPricePerUnit && cartOriginalPrice && cartPricePerUnit < cartOriginalPrice && (
+                        <span className="line-through opacity-60 mr-1 text-xs">{Math.round(cartOriginalPrice * cartQuantity)}</span>
                       )}
-                      {isTeaware ? `${pricePerGram} ₽` : `${discountedPrice} ₽`}
+                      {/* Calculate total from cartQuantity × pricePerUnit */}
+                      {Math.round((cartPricePerUnit ?? pricePerGram) * cartQuantity)} ₽
                     </span>
                   </div>
                   <Button
