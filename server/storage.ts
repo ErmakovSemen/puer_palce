@@ -908,6 +908,7 @@ export class DbStorage implements IStorage {
         userId: cartItemsTable.userId,
         productId: cartItemsTable.productId,
         quantity: cartItemsTable.quantity,
+        pricePerUnit: cartItemsTable.pricePerUnit,
         addedAt: cartItemsTable.addedAt,
         product: productsTable,
       })

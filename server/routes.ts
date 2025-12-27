@@ -1470,21 +1470,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
+      // Check if item already exists in cart to calculate total quantity
+      const existingCartItems = await storage.getCartItems(userId);
+      const existingItem = existingCartItems.find(item => item.productId === productId);
+      const totalQuantity = (existingItem?.quantity || 0) + quantity;
+      
       const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
       const isTea = product.category === "tea";
-      const calculatedPricePerUnit = (isTea && quantity >= 100)
+      const calculatedPricePerUnit = (isTea && totalQuantity >= 100)
         ? product.pricePerGram * (1 - BULK_DISCOUNT)
         : product.pricePerGram;
       
-      const cartItemData = insertCartItemSchema.parse({
-        productId,
-        quantity,
-        pricePerUnit: calculatedPricePerUnit,
-        userId,
-      });
-      
-      const cartItem = await storage.addToCart(cartItemData);
-      res.json(cartItem);
+      if (existingItem) {
+        // Update existing item with new total quantity and recalculated price
+        const updatedItem = await storage.updateCartItem(existingItem.id, totalQuantity, userId, calculatedPricePerUnit);
+        res.json(updatedItem);
+      } else {
+        // Add new item
+        const cartItemData = insertCartItemSchema.parse({
+          productId,
+          quantity,
+          pricePerUnit: calculatedPricePerUnit,
+          userId,
+        });
+        const cartItem = await storage.addToCart(cartItemData);
+        res.json(cartItem);
+      }
     } catch (error) {
       console.error("[Cart] Add to cart error:", error);
       if (error instanceof Error && error.name === "ZodError") {
