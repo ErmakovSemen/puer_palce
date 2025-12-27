@@ -7,6 +7,7 @@ interface CartItem {
   name: string;
   category?: string;
   price: number;
+  originalPrice: number;
   quantity: number;
   image: string;
 }
@@ -73,7 +74,12 @@ export default function CartDrawer({
                       />
                       <div className="flex-1 space-y-2">
                         <h3 className="font-semibold text-sm text-white" data-testid={`text-cart-item-name-${item.id}`}>{item.name}</h3>
-                        <p className="text-white font-semibold" data-testid={`text-cart-item-price-${item.id}`}>{Math.round(item.price * item.quantity)} ₽</p>
+                        <div className="flex items-center gap-2" data-testid={`text-cart-item-price-${item.id}`}>
+                          {item.originalPrice && item.price < item.originalPrice && (
+                            <span className="text-white/50 line-through text-sm">{Math.round(item.originalPrice * item.quantity)} ₽</span>
+                          )}
+                          <span className="text-white font-semibold">{Math.round(item.price * item.quantity)} ₽</span>
+                        </div>
                         <div className="flex items-center gap-2">
                           {item.category === "teaware" ? (
                             <>
@@ -140,7 +146,7 @@ export default function CartDrawer({
             <div className="border-t border-white/10 p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-lg font-semibold text-white">Итого:</span>
-                <span className="text-2xl font-bold text-white" data-testid="text-cart-total">{total} ₽</span>
+                <span className="text-2xl font-bold text-white" data-testid="text-cart-total">{Math.round(total)} ₽</span>
               </div>
               <Button
                 className="w-full bg-white text-black hover:bg-white/90 border-0"

@@ -36,6 +36,7 @@ interface CartItem {
   name: string;
   category?: string;
   price: number;
+  originalPrice: number; // Base price without discount
   quantity: number;
   image: string;
 }
@@ -173,9 +174,16 @@ export default function Home() {
   const { user } = useAuth();
 
   // Guest cart (localStorage for unauthenticated users)
+  // Migrate legacy cart items that may not have originalPrice
   const [guestCartItems, setGuestCartItems] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('guestCart');
-    return saved ? JSON.parse(saved) : [];
+    if (!saved) return [];
+    const items = JSON.parse(saved) as CartItem[];
+    // Backfill originalPrice for legacy items (default to price if no discount was applied)
+    return items.map(item => ({
+      ...item,
+      originalPrice: item.originalPrice ?? item.price
+    }));
   });
 
   // Load cart from API for authenticated users
@@ -192,6 +200,7 @@ export default function Home() {
         name: item.product.name,
         category: item.product.category,
         price: item.pricePerUnit ?? item.product.pricePerGram, // Use stored price or fallback to product price
+        originalPrice: item.product.pricePerGram, // Base price without discount
         quantity: item.quantity,
         image: item.product.images[0] || fallbackImage,
       }))
@@ -358,6 +367,7 @@ export default function Home() {
           name: product.name,
           category: product.category,
           price: effectivePrice,
+          originalPrice: product.pricePerGram,
           quantity: quantityInGrams,
           image: product.images[0] || fallbackImage
         }];
