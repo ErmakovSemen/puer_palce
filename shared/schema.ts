@@ -41,7 +41,7 @@ export type User = typeof users.$inferSelect;
 // Wallet Transactions table
 export const walletTransactions = pgTable("wallet_transactions", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   type: text("type").notNull(), // "topup" | "purchase" | "refund"
   amount: integer("amount").notNull(), // Сумма в копейках (положительная для пополнения, отрицательная для списания)
   description: text("description").notNull(),
@@ -65,7 +65,7 @@ export type WalletTransaction = typeof walletTransactions.$inferSelect;
 // XP Transactions table (loyalty program history)
 export const xpTransactions = pgTable("xp_transactions", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   amount: integer("amount").notNull(), // Positive for accrual, negative for deduction
   reason: text("reason").notNull(), // "online_order" | "offline_purchase" | "manual_adjustment" | "bonus"
   description: text("description").notNull(), // Human-readable description
