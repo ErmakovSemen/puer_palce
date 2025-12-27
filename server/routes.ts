@@ -820,13 +820,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Backend security check: Recalculate total with proper discount
       // This prevents manipulation of discounts
+      const BULK_DISCOUNT = 0.10; // 10% discount for 100g or more per item
       let calculatedTotal = 0;
       const products = await storage.getProducts();
       
       for (const item of orderData.items) {
         const product = products.find((p: any) => p.id === item.id);
         if (product) {
-          calculatedTotal += (product.pricePerGram || 0) * item.quantity;
+          let itemPrice = (product.pricePerGram || 0) * item.quantity;
+          // Apply bulk discount for tea products with quantity >= 100g
+          if (product.category === "tea" && item.quantity >= 100) {
+            itemPrice = itemPrice * (1 - BULK_DISCOUNT);
+          }
+          calculatedTotal += itemPrice;
         }
       }
       
@@ -1454,8 +1460,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/cart", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
+      const { productId, quantity } = req.body;
+      
+      // Server-side calculation of pricePerUnit based on product data
+      const products = await storage.getProducts();
+      const product = products.find(p => p.id === productId);
+      if (!product) {
+        res.status(404).json({ error: "Product not found" });
+        return;
+      }
+      
+      const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
+      const isTea = product.category === "tea";
+      const calculatedPricePerUnit = (isTea && quantity >= 100)
+        ? product.pricePerGram * (1 - BULK_DISCOUNT)
+        : product.pricePerGram;
+      
       const cartItemData = insertCartItemSchema.parse({
-        ...req.body,
+        productId,
+        quantity,
+        pricePerUnit: calculatedPricePerUnit,
         userId,
       });
       
@@ -1477,7 +1501,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.id;
       const { quantity } = updateCartItemSchema.parse(req.body);
       
-      const updatedItem = await storage.updateCartItem(id, quantity, userId);
+      // Get current cart item to find productId
+      const cartItems = await storage.getCartItems(userId);
+      const currentItem = cartItems.find(item => item.id === id);
+      if (!currentItem) {
+        res.status(404).json({ error: "Cart item not found" });
+        return;
+      }
+      
+      // Server-side calculation of pricePerUnit based on quantity threshold
+      const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
+      const product = currentItem.product;
+      const isTea = product.category === "tea";
+      const calculatedPricePerUnit = (isTea && quantity >= 100)
+        ? product.pricePerGram * (1 - BULK_DISCOUNT)
+        : product.pricePerGram;
+      
+      const updatedItem = await storage.updateCartItem(id, quantity, userId, calculatedPricePerUnit);
       if (!updatedItem) {
         res.status(404).json({ error: "Cart item not found" });
         return;

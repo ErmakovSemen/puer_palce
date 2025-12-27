@@ -60,7 +60,7 @@ export interface IStorage {
   // Cart
   getCartItems(userId: string): Promise<Array<DbCartItem & { product: Product }>>;
   addToCart(cartItem: InsertCartItem): Promise<DbCartItem>;
-  updateCartItem(id: number, quantity: number, userId: string): Promise<DbCartItem | undefined>;
+  updateCartItem(id: number, quantity: number, userId: string, pricePerUnit?: number): Promise<DbCartItem | undefined>;
   removeFromCart(id: number, userId: string): Promise<boolean>;
   clearCart(userId: string): Promise<void>;
   
@@ -407,7 +407,7 @@ export class MemStorage implements IStorage {
     throw new Error("Cart operations not supported in MemStorage");
   }
 
-  async updateCartItem(id: number, quantity: number, userId: string): Promise<DbCartItem | undefined> {
+  async updateCartItem(id: number, quantity: number, userId: string, pricePerUnit?: number): Promise<DbCartItem | undefined> {
     return undefined;
   }
 
@@ -934,10 +934,14 @@ export class DbStorage implements IStorage {
     return item;
   }
 
-  async updateCartItem(id: number, quantity: number, userId: string): Promise<DbCartItem | undefined> {
+  async updateCartItem(id: number, quantity: number, userId: string, pricePerUnit?: number): Promise<DbCartItem | undefined> {
+    const updateData: { quantity: number; pricePerUnit?: number } = { quantity };
+    if (pricePerUnit !== undefined) {
+      updateData.pricePerUnit = pricePerUnit;
+    }
     const [item] = await db
       .update(cartItemsTable)
-      .set({ quantity })
+      .set(updateData)
       .where(and(eq(cartItemsTable.id, id), eq(cartItemsTable.userId, userId)))
       .returning();
     return item;

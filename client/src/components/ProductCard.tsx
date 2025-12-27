@@ -76,9 +76,9 @@ export default function ProductCard({
   // Calculate prices
   const currentWeight = selectedWeight === 'min' ? minWeight : maxWeight;
   const basePrice = pricePerGram * currentWeight;
-  const BULK_DISCOUNT = 0.10; // 10% discount for max weight
-  const discountedPrice = selectedWeight === 'max' ? Math.round(basePrice * (1 - BULK_DISCOUNT)) : basePrice;
-  const showDiscount = selectedWeight === 'max' && hasWeightOptions;
+  const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
+  const showDiscount = !isTeaware && currentWeight >= 100;
+  const discountedPrice = showDiscount ? Math.round(basePrice * (1 - BULK_DISCOUNT)) : basePrice;
   
   // Use images array if available, otherwise fallback to single image or default
   const imageList = images && images.length > 0 ? images : (image ? [image] : [fallbackImage]);
@@ -235,9 +235,11 @@ export default function ProductCard({
               data-testid={`button-weight-max-${id}`}
             >
               {maxWeight} г
-              <span className="absolute -top-2 -right-1 text-[10px] font-bold text-green-600 bg-green-100 px-1 rounded">
-                -10%
-              </span>
+              {maxWeight >= 100 && (
+                <span className="absolute -top-2 -right-1 text-[10px] font-bold text-green-600 bg-green-100 px-1 rounded">
+                  -10%
+                </span>
+              )}
             </button>
           </div>
         )}

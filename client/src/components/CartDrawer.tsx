@@ -1,6 +1,7 @@
-import { X, Minus, Plus, Trash2 } from "lucide-react";
+import { X, Minus, Plus, Trash2, Gift, Star, Crown, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { getLoyaltyDiscount, getLoyaltyLevel } from "@shared/loyalty";
 
 interface CartItem {
   id: number;
@@ -12,6 +13,13 @@ interface CartItem {
   image: string;
 }
 
+interface UserInfo {
+  xp: number;
+  phoneVerified: boolean;
+  firstOrderDiscountUsed: boolean;
+  customDiscount?: number | null;
+}
+
 interface CartDrawerProps {
   isOpen: boolean;
   onClose: () => void;
@@ -19,6 +27,7 @@ interface CartDrawerProps {
   onUpdateQuantity: (id: number, quantity: number) => void;
   onRemoveItem: (id: number) => void;
   onCheckout: () => void;
+  user?: UserInfo | null;
 }
 
 export default function CartDrawer({ 
@@ -27,9 +36,34 @@ export default function CartDrawer({
   items, 
   onUpdateQuantity, 
   onRemoveItem,
-  onCheckout 
+  onCheckout,
+  user
 }: CartDrawerProps) {
-  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const originalTotal = items.reduce((sum, item) => sum + item.originalPrice * item.quantity, 0);
+  
+  const bulkDiscountAmount = originalTotal - subtotal;
+  
+  let runningTotal = subtotal;
+  
+  const canGetFirstOrderDiscount = user && !user.firstOrderDiscountUsed;
+  const firstOrderDiscountAmount = canGetFirstOrderDiscount ? runningTotal * 0.20 : 0;
+  if (canGetFirstOrderDiscount) {
+    runningTotal = runningTotal - firstOrderDiscountAmount;
+  }
+  
+  const loyaltyDiscount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
+  const loyaltyLevel = user ? getLoyaltyLevel(user.xp) : null;
+  const loyaltyDiscountAmount = (runningTotal * loyaltyDiscount) / 100;
+  runningTotal = runningTotal - loyaltyDiscountAmount;
+  
+  const customDiscount = user?.customDiscount || 0;
+  const customDiscountAmount = (runningTotal * customDiscount) / 100;
+  runningTotal = runningTotal - customDiscountAmount;
+  
+  const finalTotal = Math.max(runningTotal, 0);
+  
+  const hasAnyDiscount = bulkDiscountAmount > 0 || firstOrderDiscountAmount > 0 || loyaltyDiscountAmount > 0 || customDiscountAmount > 0;
 
   if (!isOpen) return null;
 
@@ -143,10 +177,64 @@ export default function CartDrawer({
               </div>
             </div>
 
-            <div className="border-t border-white/10 p-6 space-y-4">
+            <div className="border-t border-white/10 p-6 space-y-3">
+              {hasAnyDiscount && (
+                <div className="space-y-2 pb-3 border-b border-white/10">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-white/60">Сумма товаров:</span>
+                    <span className="text-white/60">{Math.round(originalTotal)} ₽</span>
+                  </div>
+                  
+                  {bulkDiscountAmount > 0 && (
+                    <div className="flex items-center justify-between text-sm" data-testid="discount-bulk">
+                      <span className="text-green-400 flex items-center gap-1.5">
+                        <Percent className="w-3.5 h-3.5" />
+                        Скидка за объём (от 100г)
+                      </span>
+                      <span className="text-green-400">−{Math.round(bulkDiscountAmount)} ₽</span>
+                    </div>
+                  )}
+                  
+                  {firstOrderDiscountAmount > 0 && (
+                    <div className="flex items-center justify-between text-sm" data-testid="discount-first-order">
+                      <span className="text-amber-400 flex items-center gap-1.5">
+                        <Gift className="w-3.5 h-3.5" />
+                        Скидка на первый заказ (20%)
+                      </span>
+                      <span className="text-amber-400">−{Math.round(firstOrderDiscountAmount)} ₽</span>
+                    </div>
+                  )}
+                  
+                  {loyaltyDiscountAmount > 0 && loyaltyLevel && (
+                    <div className="flex items-center justify-between text-sm" data-testid="discount-loyalty">
+                      <span className="text-purple-400 flex items-center gap-1.5">
+                        <Star className="w-3.5 h-3.5" />
+                        {loyaltyLevel.name} ({loyaltyDiscount}%)
+                      </span>
+                      <span className="text-purple-400">−{Math.round(loyaltyDiscountAmount)} ₽</span>
+                    </div>
+                  )}
+                  
+                  {customDiscountAmount > 0 && (
+                    <div className="flex items-center justify-between text-sm" data-testid="discount-custom">
+                      <span className="text-cyan-400 flex items-center gap-1.5">
+                        <Crown className="w-3.5 h-3.5" />
+                        Персональная скидка ({customDiscount}%)
+                      </span>
+                      <span className="text-cyan-400">−{Math.round(customDiscountAmount)} ₽</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
               <div className="flex items-center justify-between">
                 <span className="text-lg font-semibold text-white">Итого:</span>
-                <span className="text-2xl font-bold text-white" data-testid="text-cart-total">{Math.round(total)} ₽</span>
+                <div className="flex items-center gap-2">
+                  {hasAnyDiscount && (
+                    <span className="text-white/50 line-through text-lg">{Math.round(originalTotal)} ₽</span>
+                  )}
+                  <span className="text-2xl font-bold text-white" data-testid="text-cart-total">{Math.round(finalTotal)} ₽</span>
+                </div>
               </div>
               <Button
                 className="w-full bg-white text-black hover:bg-white/90 border-0"

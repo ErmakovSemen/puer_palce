@@ -387,8 +387,17 @@ export default function Home() {
   };
 
   const updateQuantity = (productId: number, quantity: number) => {
+    const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
+    const product = products.find(p => p.id === productId);
+    const isTea = product?.category === "tea";
+    
+    // Calculate new price per unit based on quantity threshold (for guest cart)
+    const newPricePerUnit = (isTea && quantity >= 100) 
+      ? product!.pricePerGram * (1 - BULK_DISCOUNT)
+      : product?.pricePerGram ?? 0;
+    
     if (user) {
-      // Authenticated: update in DB
+      // Authenticated: update in DB (server recalculates pricePerUnit)
       const cartItem = cartItems.find(item => item.id === productId);
       if (!cartItem || !cartItem.cartItemId) return;
 
@@ -398,12 +407,12 @@ export default function Home() {
         updateCartMutation.mutate({ cartItemId: cartItem.cartItemId, quantity });
       }
     } else {
-      // Guest: update localStorage
+      // Guest: update localStorage with client-side price calculation
       if (quantity === 0) {
         setGuestCartItems(prev => prev.filter(item => item.id !== productId));
       } else {
         setGuestCartItems(prev =>
-          prev.map(item => (item.id === productId ? { ...item, quantity } : item))
+          prev.map(item => (item.id === productId ? { ...item, quantity, price: newPricePerUnit } : item))
         );
       }
     }
@@ -675,6 +684,12 @@ export default function Home() {
         onUpdateQuantity={updateQuantity}
         onRemoveItem={removeItem}
         onCheckout={handleCheckout}
+        user={user ? {
+          xp: user.xp,
+          phoneVerified: user.phoneVerified,
+          firstOrderDiscountUsed: user.firstOrderDiscountUsed,
+          customDiscount: user.customDiscount
+        } : null}
       />
 
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>

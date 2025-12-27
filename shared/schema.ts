@@ -313,6 +313,7 @@ export const insertCartItemSchema = createInsertSchema(cartItems, {
 
 export const updateCartItemSchema = z.object({
   quantity: z.number().int().positive("Количество должно быть больше 0"),
+  pricePerUnit: z.number().positive().optional(),
 });
 
 export type InsertCartItem = z.infer<typeof insertCartItemSchema>;
