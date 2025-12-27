@@ -298,6 +298,7 @@ export const cartItems = pgTable("cart_items", {
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
   quantity: integer("quantity").notNull(), // quantity in grams or pieces
+  pricePerUnit: integer("price_per_unit"), // price per gram/piece at time of adding (null = use product price)
   addedAt: text("added_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => ({
   userProductUnique: sql`CONSTRAINT ${sql.identifier("cart_items_user_product_unique")} UNIQUE (${table.userId}, ${table.productId})`
@@ -307,6 +308,7 @@ export const insertCartItemSchema = createInsertSchema(cartItems, {
   userId: z.string(),
   productId: z.number().int().positive(),
   quantity: z.number().int().positive("Количество должно быть больше 0"),
+  pricePerUnit: z.number().int().positive().optional().nullable(),
 }).omit({ id: true, addedAt: true });
 
 export const updateCartItemSchema = z.object({

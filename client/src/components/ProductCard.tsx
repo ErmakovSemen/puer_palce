@@ -23,7 +23,7 @@ interface ProductCardProps {
   outOfStock?: boolean;
   isInCart?: boolean;
   cartQuantity?: number; // Current quantity in cart (grams or pieces)
-  onAddToCart: (id: number, quantity: number) => void;
+  onAddToCart: (id: number, quantity: number, pricePerUnit: number) => void;
   onUpdateQuantity?: (id: number, quantity: number) => void;
   onClick: (id: number) => void;
 }
@@ -307,7 +307,8 @@ export default function ProductCard({
                         ? fixedQuantity 
                         : currentWeight
                     );
-                    onAddToCart(id, qty);
+                    const effectivePrice = showDiscount ? Math.round(pricePerGram * 0.9) : pricePerGram;
+                    onAddToCart(id, qty, effectivePrice);
                   }}
                   size="icon"
                   className="bg-black text-white hover:bg-black/90 border-2 border-white opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 shadow-lg transition-all duration-300 h-9 w-9 sm:h-8 sm:w-8"

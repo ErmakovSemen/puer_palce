@@ -46,6 +46,7 @@ interface ApiCartItem {
   userId: string;
   productId: number;
   quantity: number;
+  pricePerUnit: number | null;
   addedAt: string;
   product: Product;
 }
@@ -190,7 +191,7 @@ export default function Home() {
         cartItemId: item.id, // DB cart item ID for updates/deletes
         name: item.product.name,
         category: item.product.category,
-        price: item.product.pricePerGram,
+        price: item.pricePerUnit ?? item.product.pricePerGram, // Use stored price or fallback to product price
         quantity: item.quantity,
         image: item.product.images[0] || fallbackImage,
       }))
@@ -286,8 +287,8 @@ export default function Home() {
 
   // Mutation for adding items to cart
   const addToCartMutation = useMutation({
-    mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
-      return await apiRequest("POST", "/api/cart", { productId, quantity });
+    mutationFn: async ({ productId, quantity, pricePerUnit }: { productId: number; quantity: number; pricePerUnit?: number }) => {
+      return await apiRequest("POST", "/api/cart", { productId, quantity, pricePerUnit });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
@@ -321,16 +322,17 @@ export default function Home() {
     },
   });
 
-  const addToCart = (productId: number, quantityInGrams: number) => {
+  const addToCart = (productId: number, quantityInGrams: number, pricePerUnit?: number) => {
     const product = products.find(p => p.id === productId);
     if (!product) return;
 
     const isTeaware = product.category === "teaware";
+    const effectivePrice = pricePerUnit ?? product.pricePerGram;
 
     if (user) {
-      // Authenticated: save to DB
+      // Authenticated: save to DB with effective price
       addToCartMutation.mutate(
-        { productId, quantity: quantityInGrams },
+        { productId, quantity: quantityInGrams, pricePerUnit: effectivePrice },
         {
           onSuccess: () => {
             toast({
@@ -341,7 +343,7 @@ export default function Home() {
         }
       );
     } else {
-      // Guest: save to localStorage
+      // Guest: save to localStorage with effective price
       setGuestCartItems(prev => {
         const existing = prev.find(item => item.id === productId);
         if (existing) {
@@ -355,7 +357,7 @@ export default function Home() {
           id: product.id,
           name: product.name,
           category: product.category,
-          price: product.pricePerGram,
+          price: effectivePrice,
           quantity: quantityInGrams,
           image: product.images[0] || fallbackImage
         }];
