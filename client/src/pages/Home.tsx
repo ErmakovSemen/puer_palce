@@ -51,15 +51,20 @@ interface ApiCartItem {
 }
 
 // Helper component to render product grid with between-rows banners
+interface CartItemInfo {
+  quantity: number; // Total grams/pieces in cart
+}
+
 interface ProductGridWithBannersProps {
   products: Product[];
   banners: InfoBanner[];
-  cartProductIds: number[];
+  cartItems: Map<number, CartItemInfo>;
   onAddToCart: (productId: number, quantity: number) => void;
+  onUpdateQuantity: (productId: number, quantity: number) => void;
   onProductClick: (productId: number) => void;
 }
 
-function ProductGridWithBanners({ products, banners, cartProductIds, onAddToCart, onProductClick }: ProductGridWithBannersProps) {
+function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onUpdateQuantity, onProductClick }: ProductGridWithBannersProps) {
   const DESKTOP_COLS = 4;
   const MOBILE_COLS = 2;
 
@@ -89,16 +94,21 @@ function ProductGridWithBanners({ products, banners, cartProductIds, onAddToCart
         {desktopRows.map((row, rowIndex) => (
           <div key={rowIndex}>
             <div className="grid grid-cols-4 gap-6 mb-6">
-              {row.map((product) => (
-                <div key={product.id} className="h-full">
-                  <ProductCard
-                    {...product}
-                    isInCart={cartProductIds.includes(product.id)}
-                    onAddToCart={onAddToCart}
-                    onClick={onProductClick}
-                  />
-                </div>
-              ))}
+              {row.map((product) => {
+                const cartInfo = cartItems.get(product.id);
+                return (
+                  <div key={product.id} className="h-full">
+                    <ProductCard
+                      {...product}
+                      isInCart={!!cartInfo}
+                      cartQuantity={cartInfo?.quantity || 0}
+                      onAddToCart={onAddToCart}
+                      onUpdateQuantity={onUpdateQuantity}
+                      onClick={onProductClick}
+                    />
+                  </div>
+                );
+              })}
             </div>
             {hasBannersForRow(rowIndex, false) && (
               <BannerSlot 
@@ -117,16 +127,21 @@ function ProductGridWithBanners({ products, banners, cartProductIds, onAddToCart
         {mobileRows.map((row, rowIndex) => (
           <div key={rowIndex}>
             <div className="grid grid-cols-2 gap-3 mb-3">
-              {row.map((product) => (
-                <div key={product.id} className="h-full">
-                  <ProductCard
-                    {...product}
-                    isInCart={cartProductIds.includes(product.id)}
-                    onAddToCart={onAddToCart}
-                    onClick={onProductClick}
-                  />
-                </div>
-              ))}
+              {row.map((product) => {
+                const cartInfo = cartItems.get(product.id);
+                return (
+                  <div key={product.id} className="h-full">
+                    <ProductCard
+                      {...product}
+                      isInCart={!!cartInfo}
+                      cartQuantity={cartInfo?.quantity || 0}
+                      onAddToCart={onAddToCart}
+                      onUpdateQuantity={onUpdateQuantity}
+                      onClick={onProductClick}
+                    />
+                  </div>
+                );
+              })}
             </div>
             {hasBannersForRow(rowIndex, true) && (
               <BannerSlot 
@@ -489,7 +504,20 @@ export default function Home() {
   };
 
   const cartItemCount = cartItems.length;
-  const cartProductIds = useMemo(() => cartItems.map(item => item.id), [cartItems]);
+  
+  // Create a map of cart items with quantity info
+  const cartItemsMap = useMemo(() => {
+    const map = new Map<number, CartItemInfo>();
+    cartItems.forEach(item => {
+      const existing = map.get(item.id);
+      if (existing) {
+        existing.quantity += item.quantity;
+      } else {
+        map.set(item.id, { quantity: item.quantity });
+      }
+    });
+    return map;
+  }, [cartItems]);
 
   return (
     <div className="min-h-screen">
@@ -571,8 +599,9 @@ export default function Home() {
                 <ProductGridWithBanners
                   products={teaProducts}
                   banners={banners}
-                  cartProductIds={cartProductIds}
+                  cartItems={cartItemsMap}
                   onAddToCart={addToCart}
+                  onUpdateQuantity={updateQuantity}
                   onProductClick={setSelectedProductId}
                 />
               </div>
@@ -588,16 +617,21 @@ export default function Home() {
                   Чайная посуда
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                  {teawareProducts.map((product) => (
-                    <div key={product.id} className="h-full">
-                      <ProductCard
-                        {...product}
-                        isInCart={cartProductIds.includes(product.id)}
-                        onAddToCart={addToCart}
-                        onClick={setSelectedProductId}
-                      />
-                    </div>
-                  ))}
+                  {teawareProducts.map((product) => {
+                    const cartInfo = cartItemsMap.get(product.id);
+                    return (
+                      <div key={product.id} className="h-full">
+                        <ProductCard
+                          {...product}
+                          isInCart={!!cartInfo}
+                          cartQuantity={cartInfo?.quantity || 0}
+                          onAddToCart={addToCart}
+                          onUpdateQuantity={updateQuantity}
+                          onClick={setSelectedProductId}
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

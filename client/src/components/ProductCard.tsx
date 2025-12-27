@@ -1,9 +1,9 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
+import { ShoppingCart, ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
 import { useTeaTypes } from "@/hooks/use-tea-types";
 
@@ -22,7 +22,9 @@ interface ProductCardProps {
   fixedQuantity?: number | null;
   outOfStock?: boolean;
   isInCart?: boolean;
+  cartQuantity?: number; // Current quantity in cart (grams or pieces)
   onAddToCart: (id: number, quantity: number) => void;
+  onUpdateQuantity?: (id: number, quantity: number) => void;
   onClick: (id: number) => void;
 }
 
@@ -41,13 +43,38 @@ export default function ProductCard({
   fixedQuantity = null,
   outOfStock = false,
   isInCart = false,
-  onAddToCart, 
+  cartQuantity = 0,
+  onAddToCart,
+  onUpdateQuantity,
   onClick 
 }: ProductCardProps) {
   const isTeaware = category === "teaware";
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   const { data: teaTypes } = useTeaTypes();
+  
+  // Parse available quantities and get min/max for tea products
+  const parsedQuantities = useMemo(() => {
+    if (isTeaware || fixedQuantityOnly) return [];
+    return availableQuantities
+      .map(q => parseInt(q, 10))
+      .filter(q => !isNaN(q))
+      .sort((a, b) => a - b);
+  }, [availableQuantities, isTeaware, fixedQuantityOnly]);
+  
+  const minWeight = parsedQuantities.length > 0 ? parsedQuantities[0] : 100;
+  const maxWeight = parsedQuantities.length > 1 ? parsedQuantities[parsedQuantities.length - 1] : minWeight;
+  const hasWeightOptions = !isTeaware && !fixedQuantityOnly && minWeight !== maxWeight;
+  
+  // State for selected weight (default to min)
+  const [selectedWeight, setSelectedWeight] = useState<'min' | 'max'>('min');
+  
+  // Calculate prices
+  const currentWeight = selectedWeight === 'min' ? minWeight : maxWeight;
+  const basePrice = pricePerGram * currentWeight;
+  const BULK_DISCOUNT = 0.10; // 10% discount for max weight
+  const discountedPrice = selectedWeight === 'max' ? Math.round(basePrice * (1 - BULK_DISCOUNT)) : basePrice;
+  const showDiscount = selectedWeight === 'max' && hasWeightOptions;
   
   // Use images array if available, otherwise fallback to single image or default
   const imageList = images && images.length > 0 ? images : (image ? [image] : [fallbackImage]);
@@ -177,31 +204,124 @@ export default function ProductCard({
         <p className="hidden text-muted-foreground text-sm leading-relaxed line-clamp-2" data-testid={`text-product-description-${id}`}>
           {description}
         </p>
-        <div className="flex items-center justify-between gap-2 mt-auto">
-          <span className="text-lg sm:text-xl font-semibold transition-colors duration-300 text-foreground group-hover/card:text-primary" data-testid={`text-product-price-${id}`}>
-            {isTeaware ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
-          </span>
-          {!outOfStock && (
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                // For teaware, always add 1 piece
-                const defaultQuantity = isTeaware ? 1 : (
-                  fixedQuantityOnly && fixedQuantity 
-                    ? fixedQuantity 
-                    : parseInt(availableQuantities[0] || "100", 10)
-                );
-                onAddToCart(id, defaultQuantity);
-              }}
-              size="icon"
-              className={`${isInCart 
-                ? "btn-gradient-icon no-default-hover-elevate no-default-active-elevate opacity-100" 
-                : "bg-black text-white hover:bg-black/90 border-2 border-white opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100"
-              } shadow-lg transition-all duration-300 h-9 w-9 sm:h-8 sm:w-8`}
-              data-testid={`button-add-to-cart-${id}`}
+        
+        {/* Weight toggle for tea products */}
+        {hasWeightOptions && !outOfStock && (
+          <div className="flex items-center gap-2 mt-auto" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setSelectedWeight('min')}
+              className={`flex-1 py-1.5 px-2 text-sm font-medium rounded-md transition-all ${
+                selectedWeight === 'min'
+                  ? 'bg-foreground text-background'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+              data-testid={`button-weight-min-${id}`}
             >
-              <ShoppingCart className="w-4 h-4" />
-            </Button>
+              {minWeight} г
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedWeight('max')}
+              className={`flex-1 py-1.5 px-2 text-sm font-medium rounded-md transition-all relative ${
+                selectedWeight === 'max'
+                  ? 'bg-foreground text-background'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              }`}
+              data-testid={`button-weight-max-${id}`}
+            >
+              {maxWeight} г
+              <span className="absolute -top-2 -right-1 text-[10px] font-bold text-green-600 bg-green-100 px-1 rounded">
+                -10%
+              </span>
+            </button>
+          </div>
+        )}
+        
+        {/* Price and cart controls */}
+        <div className={`flex items-center gap-2 ${hasWeightOptions ? '' : 'mt-auto'}`}>
+          {!outOfStock ? (
+            isInCart && onUpdateQuantity ? (
+              /* In-cart controls: -/price/+ and count */
+              <div className="flex items-center gap-2 w-full">
+                <div 
+                  className="flex items-center flex-1 btn-gradient rounded-lg overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 rounded-none text-white hover:bg-white/20 no-default-hover-elevate no-default-active-elevate"
+                    onClick={() => {
+                      const step = isTeaware ? 1 : currentWeight;
+                      const newQty = Math.max(0, cartQuantity - step);
+                      onUpdateQuantity(id, newQty);
+                    }}
+                    data-testid={`button-decrease-${id}`}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+                  <div className="flex-1 text-center py-2 px-1">
+                    <span className="text-white font-semibold text-sm sm:text-base" data-testid={`text-product-price-${id}`}>
+                      {showDiscount && (
+                        <span className="line-through opacity-60 mr-1 text-xs">{basePrice}</span>
+                      )}
+                      {isTeaware ? `${pricePerGram} ₽` : `${discountedPrice} ₽`}
+                    </span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 rounded-none text-white hover:bg-white/20 no-default-hover-elevate no-default-active-elevate"
+                    onClick={() => {
+                      const step = isTeaware ? 1 : currentWeight;
+                      onUpdateQuantity(id, cartQuantity + step);
+                    }}
+                    data-testid={`button-increase-${id}`}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
+                <span className="text-muted-foreground text-sm whitespace-nowrap" data-testid={`text-cart-count-${id}`}>
+                  {isTeaware ? `x ${cartQuantity}` : `${cartQuantity} г`}
+                </span>
+              </div>
+            ) : (
+              /* Not in cart: show price and add button */
+              <div className="flex items-center justify-between gap-2 w-full">
+                <div className="flex flex-col" data-testid={`text-product-price-${id}`}>
+                  {showDiscount && (
+                    <span className="text-xs text-muted-foreground line-through">{basePrice} ₽</span>
+                  )}
+                  <span className="text-lg sm:text-xl font-semibold transition-colors duration-300 text-foreground group-hover/card:text-primary">
+                    {isTeaware ? `${pricePerGram} ₽` : (
+                      hasWeightOptions || fixedQuantityOnly ? `${discountedPrice} ₽` : `${pricePerGram} ₽/г`
+                    )}
+                  </span>
+                </div>
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const qty = isTeaware ? 1 : (
+                      fixedQuantityOnly && fixedQuantity 
+                        ? fixedQuantity 
+                        : currentWeight
+                    );
+                    onAddToCart(id, qty);
+                  }}
+                  size="icon"
+                  className="bg-black text-white hover:bg-black/90 border-2 border-white opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 shadow-lg transition-all duration-300 h-9 w-9 sm:h-8 sm:w-8"
+                  data-testid={`button-add-to-cart-${id}`}
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                </Button>
+              </div>
+            )
+          ) : (
+            /* Out of stock */
+            <span className="text-lg sm:text-xl font-semibold text-muted-foreground" data-testid={`text-product-price-${id}`}>
+              {isTeaware ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
+            </span>
           )}
         </div>
       </div>
