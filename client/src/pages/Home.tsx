@@ -176,6 +176,7 @@ export default function Home() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState("all");
+  const [recommendedProductIds, setRecommendedProductIds] = useState<number[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -219,6 +220,13 @@ export default function Home() {
     }
   }, [guestCartItems, user]);
 
+  // Clear recommended product IDs when user logs out (recommendations are user-specific)
+  useEffect(() => {
+    if (!user) {
+      setRecommendedProductIds([]);
+    }
+  }, [user]);
+
   const teawareSectionRef = useRef<HTMLDivElement>(null);
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
@@ -249,10 +257,12 @@ export default function Home() {
     });
   }, [products, searchTerm, selectedTypes, selectedEffects]);
 
-  // Split products by category
+  // Split products by category (exclude recommended products from main list)
   const teaProducts = useMemo(() => {
-    return filteredProducts.filter(p => p.category === "tea");
-  }, [filteredProducts]);
+    return filteredProducts.filter(p => 
+      p.category === "tea" && !recommendedProductIds.includes(p.id)
+    );
+  }, [filteredProducts, recommendedProductIds]);
 
   const teawareProducts = useMemo(() => {
     return filteredProducts.filter(p => p.category === "teaware");
@@ -622,7 +632,10 @@ export default function Home() {
             {user && (
               <RecommendedProducts
                 onAddToCart={addToCart}
+                onUpdateQuantity={updateQuantity}
                 onProductClick={setSelectedProductId}
+                cartItems={cartItemsMap}
+                onRecommendationsLoaded={setRecommendedProductIds}
               />
             )}
 
@@ -630,7 +643,7 @@ export default function Home() {
             {teaProducts.length > 0 && (
               <div className="mb-12">
                 <h2 className="font-serif text-2xl font-semibold mb-4" data-testid="heading-tea-section">
-                  Все товары
+                  {recommendedProductIds.length > 0 ? "Остальные товары" : "Все товары"}
                 </h2>
                 <ProductGridWithBanners
                   products={teaProducts}
