@@ -14,14 +14,43 @@ interface DisplayData {
 const REFETCH_INTERVAL = 60 * 1000;
 const CACHE_KEY = "tv-display-cache";
 
+const DOUBLE_PRESS_DELAY = 500;
+
 export default function TVDisplay() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const lastEnterPressRef = useRef<number>(0);
   const [cachedData, setCachedData] = useState<DisplayData | null>(() => {
     const cached = localStorage.getItem(CACHE_KEY);
     return cached ? JSON.parse(cached) : null;
   });
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Select") {
+        const now = Date.now();
+        if (now - lastEnterPressRef.current < DOUBLE_PRESS_DELAY) {
+          toggleFullscreen();
+          lastEnterPressRef.current = 0;
+        } else {
+          lastEnterPressRef.current = now;
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleFullscreen]);
 
   const { data: displayData, isError } = useQuery<DisplayData>({
     queryKey: ["/api/tv/display"],
@@ -193,7 +222,9 @@ export default function TVDisplay() {
 
   return (
     <div
-      className={`transition-opacity duration-500 ${
+      ref={containerRef}
+      onDoubleClick={toggleFullscreen}
+      className={`transition-opacity duration-500 cursor-pointer ${
         isTransitioning ? "opacity-0" : "opacity-100"
       }`}
       style={{
