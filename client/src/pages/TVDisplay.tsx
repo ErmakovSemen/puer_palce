@@ -75,7 +75,7 @@ export default function TVDisplay() {
   const capitalizedMonth = currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1);
 
   const getRankIcon = (rank: number) => {
-    const iconClass = "w-20 h-20";
+    const iconClass = "w-10 h-10";
     switch (rank) {
       case 1:
         return <Crown className={`${iconClass} text-amber-500`} />;
@@ -85,7 +85,7 @@ export default function TVDisplay() {
         return <Award className={`${iconClass} text-amber-700`} />;
       default:
         return (
-          <span className="w-20 h-20 flex items-center justify-center text-6xl font-bold text-muted-foreground">
+          <span className="w-10 h-10 flex items-center justify-center text-2xl font-bold text-muted-foreground">
             {rank}
           </span>
         );
@@ -94,46 +94,46 @@ export default function TVDisplay() {
 
   const getGlowClass = (rank: number) => {
     if (rank <= 3) {
-      return "relative before:content-[''] before:absolute before:inset-[-4px] before:rounded-2xl before:bg-gradient-to-r before:from-amber-400/30 before:via-yellow-300/40 before:to-amber-400/30 before:blur-lg before:-z-10";
+      return "relative before:content-[''] before:absolute before:inset-[-2px] before:rounded-xl before:bg-gradient-to-r before:from-amber-400/30 before:via-yellow-300/40 before:to-amber-400/30 before:blur-md before:-z-10";
     }
     return "";
   };
 
   const renderLeaderboard = () => (
-    <div className="min-h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 p-16 flex flex-col">
-      <div className="text-center mb-16">
-        <div className="inline-flex items-center justify-center rounded-full bg-amber-100/10 p-8 mb-8">
-          <Trophy className="w-32 h-32 text-amber-400" />
+    <div className="h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 p-6 flex flex-col overflow-hidden">
+      <div className="text-center mb-4">
+        <div className="inline-flex items-center justify-center rounded-full bg-amber-100/10 p-3 mb-2">
+          <Trophy className="w-12 h-12 text-amber-400" />
         </div>
-        <h1 className="text-8xl font-serif font-bold text-white mb-4">
+        <h1 className="text-4xl font-serif font-bold text-white mb-1">
           Топ-10 покупателей
         </h1>
-        <p className="text-4xl text-amber-200/80">{capitalizedMonth}</p>
+        <p className="text-xl text-amber-200/80">{capitalizedMonth}</p>
       </div>
 
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 flex items-start justify-center overflow-hidden">
         {leaderboard.length === 0 ? (
-          <div className="text-center text-amber-200/60 text-4xl">
+          <div className="text-center text-amber-200/60 text-2xl">
             Пока нет данных за этот месяц
           </div>
         ) : (
-          <div className="w-full max-w-6xl grid grid-cols-1 gap-6">
+          <div className="w-full max-w-4xl grid grid-cols-1 gap-2">
             {leaderboard.map((entry) => (
               <div
                 key={entry.userId}
-                className={`flex items-center gap-8 p-8 rounded-2xl border-2 border-amber-400/20 bg-gradient-to-r from-amber-900/40 to-stone-900/60 backdrop-blur transition-all ${getGlowClass(entry.rank)}`}
+                className={`flex items-center gap-4 px-4 py-3 rounded-xl border border-amber-400/20 bg-gradient-to-r from-amber-900/40 to-stone-900/60 backdrop-blur transition-all ${getGlowClass(entry.rank)}`}
               >
                 <div className="flex-shrink-0">{getRankIcon(entry.rank)}</div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-5xl font-bold text-white truncate">
+                  <p className="text-2xl font-bold text-white truncate">
                     {entry.name}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-6xl font-bold text-amber-400">
+                  <p className="text-3xl font-bold text-amber-400">
                     {entry.xpThisMonth.toLocaleString("ru-RU")}
                   </p>
-                  <p className="text-2xl text-amber-200/60">XP</p>
+                  <p className="text-sm text-amber-200/60">XP</p>
                 </div>
               </div>
             ))}
