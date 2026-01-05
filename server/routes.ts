@@ -2072,6 +2072,177 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==========================================
+  // TV Display Slides Routes
+  // ==========================================
+
+  // Get all TV slides (admin)
+  app.get("/api/admin/tv-slides", requireAdminAuth, async (_req, res) => {
+    try {
+      const slides = await storage.getTvSlides(false);
+      res.json(slides);
+    } catch (error) {
+      console.error("[Admin TV Slides] Error fetching slides:", error);
+      res.status(500).json({ error: "Failed to fetch slides" });
+    }
+  });
+
+  // Get active TV slides (public - for TV display)
+  app.get("/api/tv/slides", async (_req, res) => {
+    try {
+      const slides = await storage.getTvSlides(true);
+      res.json(slides);
+    } catch (error) {
+      console.error("[TV Slides] Error fetching slides:", error);
+      res.status(500).json({ error: "Failed to fetch slides" });
+    }
+  });
+
+  // Get TV display data (slides + leaderboard) for offline caching
+  app.get("/api/tv/display", async (_req, res) => {
+    try {
+      const [slides, leaderboard] = await Promise.all([
+        storage.getTvSlides(true),
+        storage.getMonthlyLeaderboard(),
+      ]);
+      res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+      res.json({ slides, leaderboard, timestamp: Date.now() });
+    } catch (error) {
+      console.error("[TV Display] Error fetching display data:", error);
+      res.status(500).json({ error: "Failed to fetch display data" });
+    }
+  });
+
+  // Create TV slide with image upload
+  app.post("/api/admin/tv-slides", requireAdminAuth, upload.single("image"), async (req, res) => {
+    try {
+      const { type, title, durationSeconds, orderIndex, isActive } = req.body;
+      
+      let imageUrl: string | undefined;
+      
+      // If image file is uploaded, process and upload to Object Storage
+      if (req.file) {
+        const buffer = req.file.buffer;
+        const filename = `tv-slide-${Date.now()}.webp`;
+        
+        // Convert to WebP for better quality on 4K TVs
+        const sharp = (await import('sharp')).default;
+        const webpBuffer = await sharp(buffer)
+          .webp({ quality: 95 })
+          .toBuffer();
+        
+        const objectStorageService = new ObjectStorageService();
+        imageUrl = await objectStorageService.uploadPublicObject(webpBuffer, filename);
+      } else if (req.body.imageUrl) {
+        imageUrl = req.body.imageUrl;
+      }
+
+      // Validate type
+      if (type && type !== "leaderboard" && type !== "image") {
+        res.status(400).json({ error: "Type must be 'leaderboard' or 'image'" });
+        return;
+      }
+
+      // For image type, require an image URL
+      if (type === "image" && !imageUrl) {
+        res.status(400).json({ error: "Image is required for image type slides" });
+        return;
+      }
+
+      const slide = await storage.createTvSlide({
+        type: type || "image",
+        imageUrl: imageUrl || null,
+        title: title || null,
+        durationSeconds: durationSeconds ? parseInt(durationSeconds) : 60,
+        orderIndex: orderIndex ? parseInt(orderIndex) : 0,
+        isActive: isActive === "true" || isActive === true,
+      });
+
+      res.status(201).json(slide);
+    } catch (error) {
+      console.error("[Admin TV Slides] Error creating slide:", error);
+      res.status(500).json({ error: "Failed to create slide" });
+    }
+  });
+
+  // Update TV slide
+  app.patch("/api/admin/tv-slides/:id", requireAdminAuth, upload.single("image"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { type, title, durationSeconds, orderIndex, isActive } = req.body;
+      
+      const existingSlide = await storage.getTvSlide(id);
+      if (!existingSlide) {
+        res.status(404).json({ error: "Slide not found" });
+        return;
+      }
+
+      let imageUrl: string | undefined | null = undefined;
+      
+      // If new image is uploaded
+      if (req.file) {
+        const buffer = req.file.buffer;
+        const filename = `tv-slide-${Date.now()}.webp`;
+        
+        const sharp = (await import('sharp')).default;
+        const webpBuffer = await sharp(buffer)
+          .webp({ quality: 95 })
+          .toBuffer();
+        
+        const objectStorageService = new ObjectStorageService();
+        imageUrl = await objectStorageService.uploadPublicObject(webpBuffer, filename);
+      } else if (req.body.imageUrl !== undefined) {
+        imageUrl = req.body.imageUrl || null;
+      }
+
+      const updateData: any = {};
+      if (type !== undefined) updateData.type = type;
+      if (title !== undefined) updateData.title = title || null;
+      if (durationSeconds !== undefined) updateData.durationSeconds = parseInt(durationSeconds);
+      if (orderIndex !== undefined) updateData.orderIndex = parseInt(orderIndex);
+      if (isActive !== undefined) updateData.isActive = isActive === "true" || isActive === true;
+      if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+
+      const updatedSlide = await storage.updateTvSlide(id, updateData);
+      res.json(updatedSlide);
+    } catch (error) {
+      console.error("[Admin TV Slides] Error updating slide:", error);
+      res.status(500).json({ error: "Failed to update slide" });
+    }
+  });
+
+  // Delete TV slide
+  app.delete("/api/admin/tv-slides/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteTvSlide(id);
+      if (!deleted) {
+        res.status(404).json({ error: "Slide not found" });
+        return;
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Admin TV Slides] Error deleting slide:", error);
+      res.status(500).json({ error: "Failed to delete slide" });
+    }
+  });
+
+  // Reorder TV slides
+  app.post("/api/admin/tv-slides/reorder", requireAdminAuth, async (req, res) => {
+    try {
+      const { orders } = req.body;
+      if (!Array.isArray(orders)) {
+        res.status(400).json({ error: "Orders must be an array" });
+        return;
+      }
+      await storage.reorderTvSlides(orders);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Admin TV Slides] Error reordering slides:", error);
+      res.status(500).json({ error: "Failed to reorder slides" });
+    }
+  });
+
   // Payment routes
   // Initialize payment for an order
   app.post("/api/payments/init", async (req, res) => {

@@ -12,6 +12,7 @@ import PaymentError from "@/pages/PaymentError";
 import OrderSuccess from "@/pages/OrderSuccess";
 import OrderError from "@/pages/OrderError";
 import Leaderboard from "@/pages/Leaderboard";
+import TVDisplay from "@/pages/TVDisplay";
 import { useDesignMode } from "@/hooks/use-design-mode";
 import { AuthProvider } from "@/hooks/use-auth";
 
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/admin" component={Admin} />
       <Route path="/admin/leaderboard" component={Leaderboard} />
+      <Route path="/tv-display" component={TVDisplay} />
       <Route path="/auth" component={Auth} />
       <Route path="/profile" component={Profile} />
       <Route path="/payment/success" component={PaymentSuccess} />

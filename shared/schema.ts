@@ -584,3 +584,37 @@ export interface LeaderboardEntry {
   name: string;
   xpThisMonth: number;
 }
+
+// TV Slides for slideshow display
+export const tvSlides = pgTable("tv_slides", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull().default("image"), // "leaderboard" or "image"
+  imageUrl: text("image_url"), // URL for image slides
+  title: text("title"), // Optional title for the slide
+  durationSeconds: integer("duration_seconds").notNull().default(60), // How long to show slide
+  orderIndex: integer("order_index").notNull().default(0), // Order in rotation
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertTvSlideSchema = createInsertSchema(tvSlides, {
+  type: z.enum(["leaderboard", "image"]),
+  imageUrl: z.string().url().optional().nullable(),
+  title: z.string().optional().nullable(),
+  durationSeconds: z.number().int().min(5).max(3600).default(60),
+  orderIndex: z.number().int().default(0),
+  isActive: z.boolean().default(true),
+}).omit({ id: true, createdAt: true });
+
+export const updateTvSlideSchema = z.object({
+  type: z.enum(["leaderboard", "image"]).optional(),
+  imageUrl: z.string().url().optional().nullable(),
+  title: z.string().optional().nullable(),
+  durationSeconds: z.number().int().min(5).max(3600).optional(),
+  orderIndex: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export type InsertTvSlide = z.infer<typeof insertTvSlideSchema>;
+export type UpdateTvSlide = z.infer<typeof updateTvSlideSchema>;
+export type TvSlide = typeof tvSlides.$inferSelect;

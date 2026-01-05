@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress, type XpTransaction, type InsertXpTransaction } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress, type XpTransaction, type InsertXpTransaction, type TvSlide, type InsertTvSlide, type UpdateTvSlide } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { normalizePhone } from "./utils";
 
@@ -98,6 +98,14 @@ export interface IStorage {
   
   // Leaderboard
   getMonthlyLeaderboard(): Promise<import("@shared/schema").LeaderboardEntry[]>;
+  
+  // TV Slides
+  getTvSlides(activeOnly?: boolean): Promise<TvSlide[]>;
+  getTvSlide(id: number): Promise<TvSlide | undefined>;
+  createTvSlide(slide: InsertTvSlide): Promise<TvSlide>;
+  updateTvSlide(id: number, slide: UpdateTvSlide): Promise<TvSlide | undefined>;
+  deleteTvSlide(id: number): Promise<boolean>;
+  reorderTvSlides(orders: { id: number; orderIndex: number }[]): Promise<void>;
   
   // Session store for auth
   sessionStore: any;
@@ -531,11 +539,65 @@ export class MemStorage implements IStorage {
     
     return entries.slice(0, 10);
   }
+
+  // TV Slides stubs for MemStorage
+  private tvSlides: TvSlide[] = [];
+  private tvSlideIdCounter: number = 1;
+
+  async getTvSlides(activeOnly: boolean = false): Promise<TvSlide[]> {
+    let slides = [...this.tvSlides];
+    if (activeOnly) {
+      slides = slides.filter(s => s.isActive);
+    }
+    return slides.sort((a, b) => a.orderIndex - b.orderIndex);
+  }
+
+  async getTvSlide(id: number): Promise<TvSlide | undefined> {
+    return this.tvSlides.find(s => s.id === id);
+  }
+
+  async createTvSlide(slide: InsertTvSlide): Promise<TvSlide> {
+    const newSlide: TvSlide = {
+      id: this.tvSlideIdCounter++,
+      type: slide.type || "image",
+      imageUrl: slide.imageUrl ?? null,
+      title: slide.title ?? null,
+      durationSeconds: slide.durationSeconds ?? 60,
+      orderIndex: slide.orderIndex ?? 0,
+      isActive: slide.isActive ?? true,
+      createdAt: new Date().toISOString(),
+    };
+    this.tvSlides.push(newSlide);
+    return newSlide;
+  }
+
+  async updateTvSlide(id: number, slide: UpdateTvSlide): Promise<TvSlide | undefined> {
+    const index = this.tvSlides.findIndex(s => s.id === id);
+    if (index === -1) return undefined;
+    this.tvSlides[index] = { ...this.tvSlides[index], ...slide };
+    return this.tvSlides[index];
+  }
+
+  async deleteTvSlide(id: number): Promise<boolean> {
+    const index = this.tvSlides.findIndex(s => s.id === id);
+    if (index === -1) return false;
+    this.tvSlides.splice(index, 1);
+    return true;
+  }
+
+  async reorderTvSlides(orders: { id: number; orderIndex: number }[]): Promise<void> {
+    for (const { id, orderIndex } of orders) {
+      const slide = this.tvSlides.find(s => s.id === id);
+      if (slide) {
+        slide.orderIndex = orderIndex;
+      }
+    }
+  }
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable, siteSettings as siteSettingsTable, savedAddresses as savedAddressesTable } from "@shared/schema";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable, siteSettings as siteSettingsTable, savedAddresses as savedAddressesTable, tvSlides as tvSlidesTable } from "@shared/schema";
+import { eq, desc, and, sql, asc } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
 const PostgresSessionStore = connectPg(session);
@@ -1305,6 +1367,48 @@ export class DbStorage implements IStorage {
       name: r.name || "Гость",
       xpThisMonth: Number(r.xpThisMonth),
     }));
+  }
+
+  // TV Slides implementation for DbStorage
+  async getTvSlides(activeOnly: boolean = false): Promise<TvSlide[]> {
+    let query = db.select().from(tvSlidesTable);
+    if (activeOnly) {
+      return db.select().from(tvSlidesTable).where(eq(tvSlidesTable.isActive, true)).orderBy(asc(tvSlidesTable.orderIndex));
+    }
+    return db.select().from(tvSlidesTable).orderBy(asc(tvSlidesTable.orderIndex));
+  }
+
+  async getTvSlide(id: number): Promise<TvSlide | undefined> {
+    const [slide] = await db.select().from(tvSlidesTable).where(eq(tvSlidesTable.id, id));
+    return slide;
+  }
+
+  async createTvSlide(slide: InsertTvSlide): Promise<TvSlide> {
+    const [newSlide] = await db.insert(tvSlidesTable).values({
+      type: slide.type || "image",
+      imageUrl: slide.imageUrl,
+      title: slide.title,
+      durationSeconds: slide.durationSeconds ?? 60,
+      orderIndex: slide.orderIndex ?? 0,
+      isActive: slide.isActive ?? true,
+    }).returning();
+    return newSlide;
+  }
+
+  async updateTvSlide(id: number, slide: UpdateTvSlide): Promise<TvSlide | undefined> {
+    const [updated] = await db.update(tvSlidesTable).set(slide).where(eq(tvSlidesTable.id, id)).returning();
+    return updated;
+  }
+
+  async deleteTvSlide(id: number): Promise<boolean> {
+    const result = await db.delete(tvSlidesTable).where(eq(tvSlidesTable.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async reorderTvSlides(orders: { id: number; orderIndex: number }[]): Promise<void> {
+    for (const { id, orderIndex } of orders) {
+      await db.update(tvSlidesTable).set({ orderIndex }).where(eq(tvSlidesTable.id, id));
+    }
   }
 }
 

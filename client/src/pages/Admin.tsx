@@ -9,6 +9,7 @@ import AdminOrderManagement from "@/components/AdminOrderManagement";
 import AdminSiteSettings from "@/components/AdminSiteSettings";
 import AdminStats from "@/components/AdminStats";
 import AdminBannerManagement from "@/components/AdminBannerManagement";
+import AdminTVDisplay from "@/components/AdminTVDisplay";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -379,12 +380,13 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="products">
-          <TabsList className="w-full max-w-5xl mb-8 flex overflow-x-auto md:grid md:grid-cols-8">
+          <TabsList className="w-full max-w-5xl mb-8 flex overflow-x-auto md:grid md:grid-cols-9">
             <TabsTrigger value="products" data-testid="tab-products" className="min-w-max">Товары</TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders" className="min-w-max">Заказы</TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users" className="min-w-max">Пользователи</TabsTrigger>
             <TabsTrigger value="stats" data-testid="tab-stats" className="min-w-max">Статистика</TabsTrigger>
             <TabsTrigger value="banners" data-testid="tab-banners" className="min-w-max">Баннеры</TabsTrigger>
+            <TabsTrigger value="tv-display" data-testid="tab-tv-display" className="min-w-max">ТВ-дисплей</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings" className="min-w-max">Настройки</TabsTrigger>
             <TabsTrigger value="tea-types" data-testid="tab-tea-types" className="min-w-max">Типы чая</TabsTrigger>
             <TabsTrigger value="quiz" data-testid="tab-quiz" className="min-w-max">Квиз подбора</TabsTrigger>
@@ -566,6 +568,10 @@ export default function Admin() {
 
           <TabsContent value="banners">
             <AdminBannerManagement adminFetch={adminFetch} />
+          </TabsContent>
+
+          <TabsContent value="tv-display">
+            <AdminTVDisplay adminFetch={adminFetch} />
           </TabsContent>
 
           <TabsContent value="settings">
