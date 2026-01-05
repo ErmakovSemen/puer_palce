@@ -234,21 +234,6 @@ export default function TVDisplay() {
       }}
     >
       {renderCurrentSlide()}
-      
-      {slides.length > 1 && (
-        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 flex gap-4">
-          {slides.map((_, index) => (
-            <div
-              key={index}
-              className={`w-6 h-6 rounded-full transition-all ${
-                index === currentSlideIndex
-                  ? "bg-amber-400 scale-125"
-                  : "bg-white/30"
-              }`}
-            />
-          ))}
-        </div>
-      )}
     </div>
   );
 }
