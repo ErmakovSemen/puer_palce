@@ -35,23 +35,6 @@ export default function TVDisplay() {
     }
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Enter" || e.key === " " || e.key === "Select") {
-        const now = Date.now();
-        if (now - lastEnterPressRef.current < DOUBLE_PRESS_DELAY) {
-          toggleFullscreen();
-          lastEnterPressRef.current = 0;
-        } else {
-          lastEnterPressRef.current = now;
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleFullscreen]);
-
   const { data: displayData, isError } = useQuery<DisplayData>({
     queryKey: ["/api/tv/display"],
     refetchInterval: REFETCH_INTERVAL,
@@ -78,6 +61,37 @@ export default function TVDisplay() {
       setIsTransitioning(false);
     }, 500);
   }, [slides.length]);
+
+  const goToPrevSlide = useCallback(() => {
+    if (slides.length === 0) return;
+    
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCurrentSlideIndex((prev) => (prev - 1 + slides.length) % slides.length);
+      setIsTransitioning(false);
+    }, 500);
+  }, [slides.length]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Select") {
+        const now = Date.now();
+        if (now - lastEnterPressRef.current < DOUBLE_PRESS_DELAY) {
+          toggleFullscreen();
+          lastEnterPressRef.current = 0;
+        } else {
+          lastEnterPressRef.current = now;
+        }
+      } else if (e.key === "ArrowRight" || e.key === "ChannelUp") {
+        goToNextSlide();
+      } else if (e.key === "ArrowLeft" || e.key === "ChannelDown") {
+        goToPrevSlide();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleFullscreen, goToNextSlide, goToPrevSlide]);
 
   useEffect(() => {
     if (slides.length === 0) return;
