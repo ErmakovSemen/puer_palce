@@ -516,7 +516,7 @@ export class MemStorage implements IStorage {
     
     for (const t of this.xpTransactions) {
       const txDate = new Date(t.createdAt);
-      if (txDate >= startOfMonth && t.amount > 0) {
+      if (txDate >= startOfMonth) {
         userXpMap.set(t.userId, (userXpMap.get(t.userId) || 0) + t.amount);
       }
     }
@@ -1350,14 +1350,14 @@ export class DbStorage implements IStorage {
     const results = await db
       .select({
         userId: xpTransactions.userId,
-        xpThisMonth: sql<number>`COALESCE(SUM(CASE WHEN ${xpTransactions.amount} > 0 THEN ${xpTransactions.amount} ELSE 0 END), 0)`.as('xp_this_month'),
+        xpThisMonth: sql<number>`COALESCE(SUM(${xpTransactions.amount}), 0)`.as('xp_this_month'),
         name: usersTable.name,
       })
       .from(xpTransactions)
       .innerJoin(usersTable, eq(xpTransactions.userId, usersTable.id))
       .where(sql`${xpTransactions.createdAt} >= ${startOfMonthStr}`)
       .groupBy(xpTransactions.userId, usersTable.name)
-      .having(sql`SUM(CASE WHEN ${xpTransactions.amount} > 0 THEN ${xpTransactions.amount} ELSE 0 END) > 0`)
+      .having(sql`SUM(${xpTransactions.amount}) > 0`)
       .orderBy(sql`xp_this_month DESC`)
       .limit(10);
     
