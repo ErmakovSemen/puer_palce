@@ -118,17 +118,17 @@ export default function TVDisplay() {
   const capitalizedMonth = currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1);
 
   const getRankIcon = (rank: number) => {
-    const iconClass = "w-10 h-10";
+    const iconStyle = { width: "3vh", height: "3vh" };
     switch (rank) {
       case 1:
-        return <Crown className={`${iconClass} text-amber-500`} />;
+        return <Crown style={iconStyle} className="text-amber-500" />;
       case 2:
-        return <Medal className={`${iconClass} text-gray-400`} />;
+        return <Medal style={iconStyle} className="text-gray-400" />;
       case 3:
-        return <Award className={`${iconClass} text-amber-700`} />;
+        return <Award style={iconStyle} className="text-amber-700" />;
       default:
         return (
-          <span className="w-10 h-10 flex items-center justify-center text-2xl font-bold text-muted-foreground">
+          <span className="flex items-center justify-center font-bold text-muted-foreground" style={{ width: "3vh", height: "3vh", fontSize: "clamp(0.75rem, 2vh, 1.25rem)" }}>
             {rank}
           </span>
         );
@@ -143,40 +143,49 @@ export default function TVDisplay() {
   };
 
   const renderLeaderboard = () => (
-    <div className="h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 p-6 flex flex-col overflow-hidden">
-      <div className="text-center mb-4">
-        <div className="inline-flex items-center justify-center rounded-full bg-amber-100/10 p-3 mb-2">
-          <Trophy className="w-12 h-12 text-amber-400" />
+    <div 
+      className="h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 flex flex-col overflow-hidden"
+      style={{ 
+        padding: "1vh 2vw",
+        "--header-height": "10vh",
+        "--list-height": "calc(100vh - var(--header-height) - 2vh)",
+        "--row-height": "calc((var(--list-height) - 4.5vh) / 10)",
+      } as React.CSSProperties}
+    >
+      <div className="text-center flex-shrink-0 flex flex-col justify-center overflow-hidden" style={{ height: "var(--header-height)" }}>
+        <div className="inline-flex items-center justify-center rounded-full bg-amber-100/10 mx-auto" style={{ padding: "0.8vh", marginBottom: "0.3vh" }}>
+          <Trophy style={{ width: "3vh", height: "3vh" }} className="text-amber-400" />
         </div>
-        <h1 className="text-4xl font-serif font-bold text-white mb-1">
+        <h1 className="font-serif font-bold text-white whitespace-nowrap overflow-hidden" style={{ fontSize: "2.5vh", lineHeight: 1 }}>
           Топ-10 покупателей
         </h1>
-        <p className="text-xl text-amber-200/80">{capitalizedMonth}</p>
+        <p className="text-amber-200/80 whitespace-nowrap overflow-hidden" style={{ fontSize: "1.8vh", lineHeight: 1 }}>{capitalizedMonth}</p>
       </div>
 
-      <div className="flex-1 flex items-start justify-center overflow-hidden">
+      <div className="flex flex-col overflow-hidden" style={{ height: "var(--list-height)" }}>
         {leaderboard.length === 0 ? (
-          <div className="text-center text-amber-200/60 text-2xl">
+          <div className="flex-1 flex items-center justify-center text-amber-200/60" style={{ fontSize: "2vh" }}>
             Пока нет данных за этот месяц
           </div>
         ) : (
-          <div className="w-full max-w-4xl grid grid-cols-1 gap-2">
+          <div className="w-full max-w-4xl mx-auto flex flex-col" style={{ gap: "0.5vh" }}>
             {leaderboard.map((entry) => (
               <div
                 key={entry.userId}
-                className={`flex items-center gap-4 px-4 py-3 rounded-xl border border-amber-400/20 bg-gradient-to-r from-amber-900/40 to-stone-900/60 backdrop-blur transition-all ${getGlowClass(entry.rank)}`}
+                className={`flex items-center rounded-lg border border-amber-400/20 bg-gradient-to-r from-amber-900/40 to-stone-900/60 backdrop-blur transition-all ${getGlowClass(entry.rank)}`}
+                style={{ gap: "1.5vw", padding: "0 1.5vw", height: "var(--row-height)" }}
               >
                 <div className="flex-shrink-0">{getRankIcon(entry.rank)}</div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-2xl font-bold text-white truncate">
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <p className="font-bold text-white truncate" style={{ fontSize: "2vh", lineHeight: 1 }}>
                     {entry.name}
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-3xl font-bold text-amber-400">
+                <div className="text-right flex items-center flex-shrink-0" style={{ gap: "0.5vw" }}>
+                  <p className="font-bold text-amber-400 whitespace-nowrap" style={{ fontSize: "2.5vh", lineHeight: 1 }}>
                     {entry.xpThisMonth.toLocaleString("ru-RU")}
                   </p>
-                  <p className="text-sm text-amber-200/60">XP</p>
+                  <p className="text-amber-200/60 whitespace-nowrap" style={{ fontSize: "1.5vh", lineHeight: 1 }}>XP</p>
                 </div>
               </div>
             ))}
