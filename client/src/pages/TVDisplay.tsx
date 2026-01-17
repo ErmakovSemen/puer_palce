@@ -150,81 +150,138 @@ export default function TVDisplay() {
   const currentMonth = format(new Date(), "LLLL yyyy", { locale: ru });
   const capitalizedMonth = currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1);
 
-  const getRankIcon = (rank: number) => {
-    const iconStyle = { width: "3vh", height: "3vh" };
-    switch (rank) {
-      case 1:
-        return <Crown style={iconStyle} className="text-amber-500" />;
-      case 2:
-        return <Medal style={iconStyle} className="text-gray-400" />;
-      case 3:
-        return <Award style={iconStyle} className="text-amber-700" />;
-      default:
-        return (
-          <span className="flex items-center justify-center font-bold text-muted-foreground" style={{ width: "3vh", height: "3vh", fontSize: "clamp(0.75rem, 2vh, 1.25rem)" }}>
-            {rank}
-          </span>
-        );
-    }
-  };
+  const first = leaderboard[0];
+  const second = leaderboard[1];
+  const third = leaderboard[2];
+  const rest = leaderboard.slice(3, 10);
 
-  const getGlowClass = (rank: number) => {
-    if (rank <= 3) {
-      return "relative before:content-[''] before:absolute before:inset-[-2px] before:rounded-xl before:bg-gradient-to-r before:from-amber-400/30 before:via-yellow-300/40 before:to-amber-400/30 before:blur-md before:-z-10";
-    }
-    return "";
-  };
+  const renderHeroTile = (entry: LeaderboardEntry) => (
+    <div 
+      className="rounded-2xl border-2 border-amber-400/40 bg-gradient-to-br from-amber-800/60 via-amber-900/50 to-stone-900/70 backdrop-blur flex flex-col items-center justify-center text-center relative overflow-hidden"
+      style={{ height: "100%" }}
+    >
+      <div className="absolute inset-0 bg-gradient-to-t from-amber-500/10 to-transparent" />
+      <Crown style={{ width: "8vh", height: "8vh" }} className="text-amber-400 mb-1" />
+      <p data-testid={`text-name-${entry.rank}`} className="font-bold text-white truncate max-w-full px-4" style={{ fontSize: "5vh", lineHeight: 1.1 }}>
+        {entry.name}
+      </p>
+      <div className="flex items-baseline mt-2" style={{ gap: "1vw" }}>
+        <p data-testid={`text-xp-${entry.rank}`} className="font-bold text-amber-300" style={{ fontSize: "6vh", lineHeight: 1 }}>
+          {entry.xpThisMonth.toLocaleString("ru-RU")}
+        </p>
+        <p className="text-amber-200/70" style={{ fontSize: "3vh" }}>XP</p>
+      </div>
+    </div>
+  );
+
+  const renderMediumTile = (entry: LeaderboardEntry, Icon: typeof Medal) => (
+    <div 
+      className="rounded-xl border border-amber-400/30 bg-gradient-to-br from-amber-900/50 to-stone-900/60 backdrop-blur flex flex-col items-center justify-center text-center"
+      style={{ height: "100%" }}
+    >
+      <Icon style={{ width: "5vh", height: "5vh" }} className={entry.rank === 2 ? "text-gray-300" : "text-amber-600"} />
+      <p data-testid={`text-name-${entry.rank}`} className="font-bold text-white truncate max-w-full px-3 mt-1" style={{ fontSize: "3.5vh", lineHeight: 1.1 }}>
+        {entry.name}
+      </p>
+      <div className="flex items-baseline mt-1" style={{ gap: "0.5vw" }}>
+        <p data-testid={`text-xp-${entry.rank}`} className="font-bold text-amber-400" style={{ fontSize: "4vh", lineHeight: 1 }}>
+          {entry.xpThisMonth.toLocaleString("ru-RU")}
+        </p>
+        <p className="text-amber-200/60" style={{ fontSize: "2vh" }}>XP</p>
+      </div>
+    </div>
+  );
+
+  const renderSmallTile = (entry: LeaderboardEntry) => (
+    <div 
+      className="rounded-lg border border-amber-400/20 bg-gradient-to-br from-amber-900/30 to-stone-900/50 backdrop-blur flex items-center justify-between overflow-hidden"
+      style={{ height: "100%", padding: "0 2vw" }}
+    >
+      <div className="flex items-center overflow-hidden" style={{ gap: "1.5vw" }}>
+        <span className="font-bold text-amber-300/80 flex-shrink-0" style={{ fontSize: "3vh", width: "3vw" }}>
+          {entry.rank}
+        </span>
+        <p data-testid={`text-name-${entry.rank}`} className="font-bold text-white truncate" style={{ fontSize: "2.8vh", lineHeight: 1 }}>
+          {entry.name}
+        </p>
+      </div>
+      <div className="flex items-baseline flex-shrink-0" style={{ gap: "0.5vw" }}>
+        <p data-testid={`text-xp-${entry.rank}`} className="font-bold text-amber-400" style={{ fontSize: "3vh", lineHeight: 1 }}>
+          {entry.xpThisMonth.toLocaleString("ru-RU")}
+        </p>
+        <p className="text-amber-200/50" style={{ fontSize: "1.8vh" }}>XP</p>
+      </div>
+    </div>
+  );
 
   const renderLeaderboard = () => (
     <div 
       className="h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 flex flex-col overflow-hidden"
-      style={{ 
-        padding: "1vh 2vw",
-        "--header-height": "10vh",
-        "--list-height": "calc(100vh - var(--header-height) - 2vh)",
-        "--row-height": "calc((var(--list-height) - 4.5vh) / 10)",
-      } as React.CSSProperties}
+      style={{ padding: "1.5vh 2vw" }}
     >
-      <div className="text-center flex-shrink-0 flex flex-col justify-center overflow-hidden" style={{ height: "var(--header-height)" }}>
-        <div className="inline-flex items-center justify-center rounded-full bg-amber-100/10 mx-auto" style={{ padding: "0.8vh", marginBottom: "0.3vh" }}>
-          <Trophy style={{ width: "3vh", height: "3vh" }} className="text-amber-400" />
-        </div>
-        <h1 className="font-serif font-bold text-white whitespace-nowrap overflow-hidden" style={{ fontSize: "2.5vh", lineHeight: 1 }}>
+      {/* Header */}
+      <div className="text-center flex-shrink-0 flex items-center justify-center overflow-hidden" style={{ height: "7vh", gap: "1vw" }}>
+        <Trophy style={{ width: "4vh", height: "4vh" }} className="text-amber-400" />
+        <h1 className="font-serif font-bold text-white whitespace-nowrap" style={{ fontSize: "3.5vh", lineHeight: 1 }}>
           Топ-10 покупателей
         </h1>
-        <p className="text-amber-200/80 whitespace-nowrap overflow-hidden" style={{ fontSize: "1.8vh", lineHeight: 1 }}>{capitalizedMonth}</p>
+        <span className="text-amber-200/70 whitespace-nowrap" style={{ fontSize: "2.5vh" }}>• {capitalizedMonth}</span>
       </div>
 
-      <div className="flex flex-col overflow-hidden" style={{ height: "var(--list-height)" }}>
-        {leaderboard.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center text-amber-200/60" style={{ fontSize: "2vh" }}>
-            Пока нет данных за этот месяц
-          </div>
-        ) : (
-          <div className="w-full max-w-4xl mx-auto flex flex-col" style={{ gap: "0.5vh" }}>
-            {leaderboard.map((entry) => (
-              <div
-                key={entry.userId}
-                className={`flex items-center rounded-lg border border-amber-400/20 bg-gradient-to-r from-amber-900/40 to-stone-900/60 backdrop-blur transition-all ${getGlowClass(entry.rank)}`}
-                style={{ gap: "1.5vw", padding: "0 1.5vw", height: "var(--row-height)" }}
-              >
-                <div className="flex-shrink-0">{getRankIcon(entry.rank)}</div>
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <p className="font-bold text-white truncate" style={{ fontSize: "2vh", lineHeight: 1 }}>
-                    {entry.name}
-                  </p>
-                </div>
-                <div className="text-right flex items-center flex-shrink-0" style={{ gap: "0.5vw" }}>
-                  <p className="font-bold text-amber-400 whitespace-nowrap" style={{ fontSize: "2.5vh", lineHeight: 1 }}>
-                    {entry.xpThisMonth.toLocaleString("ru-RU")}
-                  </p>
-                  <p className="text-amber-200/60 whitespace-nowrap" style={{ fontSize: "1.5vh", lineHeight: 1 }}>XP</p>
-                </div>
+      {leaderboard.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-amber-200/60" style={{ fontSize: "3vh" }}>
+          Пока нет данных за этот месяц
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col overflow-hidden" style={{ gap: "1.5vh" }}>
+          {/* Top 3 Section */}
+          <div className="flex overflow-hidden" style={{ height: "42vh", gap: "1.5vw" }}>
+            {/* 1st Place - Hero */}
+            {first && (
+              <div style={{ flex: "1.2" }} data-testid="tile-rank-1">
+                {renderHeroTile(first)}
               </div>
-            ))}
+            )}
+            {/* 2nd & 3rd Place */}
+            <div className="flex flex-col" style={{ flex: "0.8", gap: "1.5vh" }}>
+              {second && (
+                <div style={{ flex: 1 }} data-testid="tile-rank-2">
+                  {renderMediumTile(second, Medal)}
+                </div>
+              )}
+              {third && (
+                <div style={{ flex: 1 }} data-testid="tile-rank-3">
+                  {renderMediumTile(third, Award)}
+                </div>
+              )}
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* 4-10 Section - Optimized for 10 entries (7 in grid: 4+3 layout) */}
+          {rest.length > 0 && (() => {
+            const cols = rest.length <= 3 ? rest.length : rest.length <= 6 ? 3 : 4;
+            const rows: LeaderboardEntry[][] = [];
+            for (let i = 0; i < rest.length; i += cols) {
+              rows.push(rest.slice(i, i + cols));
+            }
+            const tileWidth = `calc(${100/cols}% - ${(cols-1)/cols}vw)`;
+            
+            return (
+              <div className="flex-1 flex flex-col overflow-hidden" style={{ gap: "1vh" }}>
+                {rows.map((row, rowIndex) => (
+                  <div key={rowIndex} className="flex justify-center overflow-hidden" style={{ flex: 1, gap: "1vw" }}>
+                    {row.map((entry) => (
+                      <div key={entry.userId} data-testid={`tile-rank-${entry.rank}`} style={{ flex: `0 0 ${tileWidth}` }}>
+                        {renderSmallTile(entry)}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 
