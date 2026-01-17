@@ -14,14 +14,16 @@ interface DisplayData {
 const REFETCH_INTERVAL = 60 * 1000;
 const CACHE_KEY = "tv-display-cache";
 
-const DOUBLE_PRESS_DELAY = 500;
+const TRIPLE_PRESS_WINDOW = 700;
 
 export default function TVDisplay() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const lastEnterPressRef = useRef<number>(0);
+  const pressCountRef = useRef<number>(0);
+  const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const firstPressTimeRef = useRef<number>(0);
   const [cachedData, setCachedData] = useState<DisplayData | null>(() => {
     const cached = localStorage.getItem(CACHE_KEY);
     return cached ? JSON.parse(cached) : null;
@@ -73,14 +75,42 @@ export default function TVDisplay() {
   }, [slides.length]);
 
   useEffect(() => {
+    const resetPressState = () => {
+      pressCountRef.current = 0;
+      firstPressTimeRef.current = 0;
+      if (pressTimerRef.current) {
+        clearTimeout(pressTimerRef.current);
+        pressTimerRef.current = null;
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Enter" || e.key === " " || e.key === "Select") {
         const now = Date.now();
-        if (now - lastEnterPressRef.current < DOUBLE_PRESS_DELAY) {
-          toggleFullscreen();
-          lastEnterPressRef.current = 0;
+        
+        if (pressCountRef.current === 0 || now - firstPressTimeRef.current > TRIPLE_PRESS_WINDOW) {
+          resetPressState();
+          firstPressTimeRef.current = now;
+          pressCountRef.current = 1;
+          
+          pressTimerRef.current = setTimeout(() => {
+            const count = pressCountRef.current;
+            resetPressState();
+            if (count === 2) {
+              toggleFullscreen();
+            }
+          }, TRIPLE_PRESS_WINDOW);
         } else {
-          lastEnterPressRef.current = now;
+          pressCountRef.current += 1;
+          
+          if (pressCountRef.current >= 3) {
+            if (pressTimerRef.current) {
+              clearTimeout(pressTimerRef.current);
+              pressTimerRef.current = null;
+            }
+            goToNextSlide();
+            resetPressState();
+          }
         }
       } else if (e.key === "ArrowRight" || e.key === "ChannelUp") {
         goToNextSlide();
@@ -90,7 +120,10 @@ export default function TVDisplay() {
     };
 
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      resetPressState();
+    };
   }, [toggleFullscreen, goToNextSlide, goToPrevSlide]);
 
   useEffect(() => {
