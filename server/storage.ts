@@ -1348,7 +1348,7 @@ export class DbStorage implements IStorage {
     const startOfMonthStr = startOfMonth.toISOString();
     
     // Диагностика: получаем информацию о базе данных
-    const [dbInfo] = await db.execute(sql`
+    const dbInfoResult = await db.execute(sql`
       SELECT 
         NOW() as db_now,
         DATE_TRUNC('month', NOW()) as db_month_start,
@@ -1356,7 +1356,8 @@ export class DbStorage implements IStorage {
         (SELECT COUNT(*) FROM xp_transactions) as total_transactions,
         (SELECT COUNT(*) FROM xp_transactions WHERE created_at::timestamp >= DATE_TRUNC('month', NOW())) as this_month_count,
         (SELECT MAX(created_at) FROM xp_transactions) as last_transaction_date
-    `) as any;
+    `);
+    const dbInfo = (dbInfoResult as any).rows?.[0] || (dbInfoResult as any)[0] || {};
     
     console.log("[Leaderboard] === DIAGNOSTIC INFO ===");
     console.log("[Leaderboard] Server time:", now.toISOString());
