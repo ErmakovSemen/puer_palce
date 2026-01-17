@@ -2105,7 +2105,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getTvSlides(true),
         storage.getMonthlyLeaderboard(),
       ]);
-      res.set("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+      res.set("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.set("Pragma", "no-cache");
+      res.set("Expires", "0");
       res.json({ slides, leaderboard, timestamp: Date.now() });
     } catch (error) {
       console.error("[TV Display] Error fetching display data:", error);

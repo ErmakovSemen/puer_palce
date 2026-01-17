@@ -39,9 +39,17 @@ export default function TVDisplay() {
     leaving: [],
   });
   const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const [cachedData, setCachedData] = useState<DisplayData | null>(() => {
+  const [cachedSlides, setCachedSlides] = useState<TvSlide[]>(() => {
     const cached = localStorage.getItem(CACHE_KEY);
-    return cached ? JSON.parse(cached) : null;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        return parsed.slides || [];
+      } catch {
+        return [];
+      }
+    }
+    return [];
   });
 
   const toggleFullscreen = useCallback(() => {
@@ -55,15 +63,17 @@ export default function TVDisplay() {
   const { data: displayData, isError } = useQuery<DisplayData>({
     queryKey: ["/api/tv/display"],
     refetchInterval: REFETCH_INTERVAL,
-    staleTime: REFETCH_INTERVAL,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: true,
   });
 
   useEffect(() => {
-    if (displayData) {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(displayData));
-      setCachedData(displayData);
+    if (displayData?.slides) {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ slides: displayData.slides }));
+      setCachedSlides(displayData.slides);
     }
-  }, [displayData]);
+  }, [displayData?.slides]);
 
   // Сравнение лидербордов и определение анимаций
   useEffect(() => {
@@ -142,9 +152,8 @@ export default function TVDisplay() {
     };
   }, []);
 
-  const data = displayData || cachedData;
-  const slides = data?.slides || [];
-  const leaderboard = data?.leaderboard || [];
+  const slides = displayData?.slides || cachedSlides;
+  const leaderboard = displayData?.leaderboard || [];
 
   // Функция для получения CSS класса анимации
   const getAnimationClass = (userId: string): string => {
@@ -428,7 +437,7 @@ export default function TVDisplay() {
     return renderImageSlide(currentSlide);
   };
 
-  if (isError && !cachedData) {
+  if (isError && cachedSlides.length === 0) {
     return (
       <div className="min-h-screen bg-stone-900 flex items-center justify-center">
         <div className="text-center text-white">
