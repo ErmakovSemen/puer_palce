@@ -16,6 +16,13 @@ const CACHE_KEY = "tv-display-cache";
 
 const TRIPLE_PRESS_WINDOW = 700;
 
+interface AnimationState {
+  newUsers: Set<string>;      // userId новых пользователей
+  movedUp: Set<string>;       // userId тех кто поднялся
+  movedDown: Set<string>;     // userId тех кто опустился
+  leaving: LeaderboardEntry[]; // пользователи покидающие топ-10
+}
+
 export default function TVDisplay() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -24,6 +31,14 @@ export default function TVDisplay() {
   const pressCountRef = useRef<number>(0);
   const pressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const firstPressTimeRef = useRef<number>(0);
+  const prevLeaderboardRef = useRef<LeaderboardEntry[]>([]);
+  const [animations, setAnimations] = useState<AnimationState>({
+    newUsers: new Set(),
+    movedUp: new Set(),
+    movedDown: new Set(),
+    leaving: [],
+  });
+  const animationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [cachedData, setCachedData] = useState<DisplayData | null>(() => {
     const cached = localStorage.getItem(CACHE_KEY);
     return cached ? JSON.parse(cached) : null;
@@ -50,9 +65,94 @@ export default function TVDisplay() {
     }
   }, [displayData]);
 
+  // Сравнение лидербордов и определение анимаций
+  useEffect(() => {
+    if (!displayData?.leaderboard || displayData.leaderboard.length === 0) return;
+    
+    const newLeaderboard = displayData.leaderboard;
+    const prevLeaderboard = prevLeaderboardRef.current;
+    
+    // Пропускаем первую загрузку
+    if (prevLeaderboard.length === 0) {
+      prevLeaderboardRef.current = newLeaderboard;
+      return;
+    }
+    
+    const prevUserIds = new Set(prevLeaderboard.map(e => e.userId));
+    const newUserIds = new Set(newLeaderboard.map(e => e.userId));
+    const prevRanks = new Map(prevLeaderboard.map(e => [e.userId, e.rank]));
+    
+    const newUsers = new Set<string>();
+    const movedUp = new Set<string>();
+    const movedDown = new Set<string>();
+    const leaving: LeaderboardEntry[] = [];
+    
+    // Проверяем новых и изменивших позицию
+    for (const entry of newLeaderboard) {
+      if (!prevUserIds.has(entry.userId)) {
+        newUsers.add(entry.userId);
+      } else {
+        const prevRank = prevRanks.get(entry.userId);
+        if (prevRank !== undefined && prevRank !== entry.rank) {
+          if (entry.rank < prevRank) {
+            movedUp.add(entry.userId);
+          } else {
+            movedDown.add(entry.userId);
+          }
+        }
+      }
+    }
+    
+    // Проверяем ушедших из топ-10
+    for (const entry of prevLeaderboard) {
+      if (!newUserIds.has(entry.userId)) {
+        leaving.push(entry);
+      }
+    }
+    
+    // Запускаем анимации только если есть изменения
+    if (newUsers.size > 0 || movedUp.size > 0 || movedDown.size > 0 || leaving.length > 0) {
+      // Очищаем предыдущий таймаут
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+      
+      setAnimations({ newUsers, movedUp, movedDown, leaving });
+      
+      // Сбрасываем анимации через 2 секунды
+      animationTimeoutRef.current = setTimeout(() => {
+        setAnimations({
+          newUsers: new Set(),
+          movedUp: new Set(),
+          movedDown: new Set(),
+          leaving: [],
+        });
+      }, 2000);
+    }
+    
+    prevLeaderboardRef.current = newLeaderboard;
+  }, [displayData?.leaderboard]);
+  
+  // Cleanup при размонтировании
+  useEffect(() => {
+    return () => {
+      if (animationTimeoutRef.current) {
+        clearTimeout(animationTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const data = displayData || cachedData;
   const slides = data?.slides || [];
   const leaderboard = data?.leaderboard || [];
+
+  // Функция для получения CSS класса анимации
+  const getAnimationClass = (userId: string): string => {
+    if (animations.newUsers.has(userId)) return "animate-slide-in";
+    if (animations.movedUp.has(userId)) return "animate-glow-green";
+    if (animations.movedDown.has(userId)) return "animate-glow-red";
+    return "";
+  };
 
   const goToNextSlide = useCallback(() => {
     if (slides.length === 0) return;
@@ -235,22 +335,22 @@ export default function TVDisplay() {
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden" style={{ gap: "1.5vh" }}>
           {/* Top 3 Section */}
-          <div className="flex overflow-hidden" style={{ height: "42vh", gap: "1.5vw" }}>
+          <div className="flex overflow-visible" style={{ height: "42vh", gap: "1.5vw" }}>
             {/* 1st Place - Hero */}
             {first && (
-              <div style={{ flex: "1.2" }} data-testid="tile-rank-1">
+              <div className={getAnimationClass(first.userId)} style={{ flex: "1.2" }} data-testid="tile-rank-1">
                 {renderHeroTile(first)}
               </div>
             )}
             {/* 2nd & 3rd Place */}
-            <div className="flex flex-col" style={{ flex: "0.8", gap: "1.5vh" }}>
+            <div className="flex flex-col overflow-visible" style={{ flex: "0.8", gap: "1.5vh" }}>
               {second && (
-                <div style={{ flex: 1 }} data-testid="tile-rank-2">
+                <div className={getAnimationClass(second.userId)} style={{ flex: 1 }} data-testid="tile-rank-2">
                   {renderMediumTile(second, Medal)}
                 </div>
               )}
               {third && (
-                <div style={{ flex: 1 }} data-testid="tile-rank-3">
+                <div className={getAnimationClass(third.userId)} style={{ flex: 1 }} data-testid="tile-rank-3">
                   {renderMediumTile(third, Award)}
                 </div>
               )}
@@ -263,12 +363,12 @@ export default function TVDisplay() {
             const row2 = rest.slice(3);    // места 7, 8, 9, 10
             
             return (
-              <div className="flex-1 flex flex-col overflow-hidden" style={{ gap: "1.5vh" }}>
+              <div className="flex-1 flex flex-col overflow-visible" style={{ gap: "1.5vh" }}>
                 {/* Ряд 4-5-6: на всю ширину */}
                 {row1.length > 0 && (
-                  <div className="flex overflow-hidden" style={{ flex: 1, gap: "1.5vw" }}>
+                  <div className="flex overflow-visible" style={{ flex: 1, gap: "1.5vw" }}>
                     {row1.map((entry) => (
-                      <div key={entry.userId} data-testid={`tile-rank-${entry.rank}`} style={{ flex: 1 }}>
+                      <div key={entry.userId} className={getAnimationClass(entry.userId)} data-testid={`tile-rank-${entry.rank}`} style={{ flex: 1 }}>
                         {renderSmallTile(entry)}
                       </div>
                     ))}
@@ -276,9 +376,9 @@ export default function TVDisplay() {
                 )}
                 {/* Ряд 7-8-9-10: покороче, центрирован */}
                 {row2.length > 0 && (
-                  <div className="flex justify-center overflow-hidden" style={{ flex: 1, gap: "1.5vw" }}>
+                  <div className="flex justify-center overflow-visible" style={{ flex: 1, gap: "1.5vw" }}>
                     {row2.map((entry) => (
-                      <div key={entry.userId} data-testid={`tile-rank-${entry.rank}`} style={{ flex: "0 0 22%" }}>
+                      <div key={entry.userId} className={getAnimationClass(entry.userId)} data-testid={`tile-rank-${entry.rank}`} style={{ flex: "0 0 22%" }}>
                         {renderSmallTile(entry)}
                       </div>
                     ))}
