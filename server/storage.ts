@@ -1347,6 +1347,13 @@ export class DbStorage implements IStorage {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfMonthStr = startOfMonth.toISOString();
     
+    console.log("[Leaderboard] Query params:", {
+      now: now.toISOString(),
+      startOfMonth: startOfMonthStr,
+      serverTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    
+    // Используем DATE_TRUNC на стороне PostgreSQL для корректного сравнения
     const results = await db
       .select({
         userId: xpTransactions.userId,
@@ -1355,11 +1362,14 @@ export class DbStorage implements IStorage {
       })
       .from(xpTransactions)
       .innerJoin(usersTable, eq(xpTransactions.userId, usersTable.id))
-      .where(sql`${xpTransactions.createdAt} >= ${startOfMonthStr}`)
+      .where(sql`${xpTransactions.createdAt}::timestamp >= DATE_TRUNC('month', NOW())`)
       .groupBy(xpTransactions.userId, usersTable.name)
       .having(sql`SUM(${xpTransactions.amount}) > 0`)
       .orderBy(sql`xp_this_month DESC`)
       .limit(10);
+    
+    console.log("[Leaderboard] Results count:", results.length);
+    console.log("[Leaderboard] Top 3:", results.slice(0, 3).map(r => ({ name: r.name, xp: r.xpThisMonth })));
     
     return results.map((r, index) => ({
       rank: index + 1,
