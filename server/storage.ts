@@ -1369,7 +1369,7 @@ export class DbStorage implements IStorage {
       .limit(10);
     
     console.log("[Leaderboard] Results count:", results.length);
-    console.log("[Leaderboard] Top 3:", results.slice(0, 3).map(r => ({ name: r.name, xp: r.xpThisMonth })));
+    console.log("[Leaderboard] Full top-10:", results.map((r, i) => ({ rank: i + 1, name: r.name, xp: r.xpThisMonth })));
     
     return results.map((r, index) => ({
       rank: index + 1,
