@@ -194,22 +194,22 @@ export default function TVDisplay() {
 
   const renderSmallTile = (entry: LeaderboardEntry) => (
     <div 
-      className="rounded-lg border border-amber-400/20 bg-gradient-to-br from-amber-900/30 to-stone-900/50 backdrop-blur flex items-center justify-between overflow-hidden"
-      style={{ height: "100%", padding: "0 2vw" }}
+      className="rounded-lg border border-amber-400/20 bg-gradient-to-br from-amber-900/30 to-stone-900/50 backdrop-blur flex flex-col items-center justify-center text-center overflow-hidden"
+      style={{ height: "100%", padding: "1vh 1vw" }}
     >
-      <div className="flex items-center overflow-hidden" style={{ gap: "1.5vw" }}>
-        <span className="font-bold text-amber-300/80 flex-shrink-0" style={{ fontSize: "3vh", width: "3vw" }}>
+      <div className="flex items-center" style={{ gap: "1vw", marginBottom: "0.5vh" }}>
+        <span className="font-bold text-amber-300/80" style={{ fontSize: "2.8vh" }}>
           {entry.rank}
         </span>
         <p data-testid={`text-name-${entry.rank}`} className="font-bold text-white truncate" style={{ fontSize: "2.8vh", lineHeight: 1 }}>
           {entry.name}
         </p>
       </div>
-      <div className="flex items-baseline flex-shrink-0" style={{ gap: "0.5vw" }}>
-        <p data-testid={`text-xp-${entry.rank}`} className="font-bold text-amber-400" style={{ fontSize: "3vh", lineHeight: 1 }}>
+      <div className="flex items-baseline" style={{ gap: "0.5vw" }}>
+        <p data-testid={`text-xp-${entry.rank}`} className="font-bold text-amber-400" style={{ fontSize: "2.5vh", lineHeight: 1 }}>
           {entry.xpThisMonth.toLocaleString("ru-RU")}
         </p>
-        <p className="text-amber-200/50" style={{ fontSize: "1.8vh" }}>XP</p>
+        <p className="text-amber-200/50" style={{ fontSize: "1.6vh" }}>XP</p>
       </div>
     </div>
   );
@@ -257,26 +257,33 @@ export default function TVDisplay() {
             </div>
           </div>
 
-          {/* 4-10 Section - Optimized for 10 entries (7 in grid: 4+3 layout) */}
+          {/* 4-10 Section - Row 1: 4-5-6 (full width), Row 2: 7-8-9-10 (shorter) */}
           {rest.length > 0 && (() => {
-            const cols = rest.length <= 3 ? rest.length : rest.length <= 6 ? 3 : 4;
-            const rows: LeaderboardEntry[][] = [];
-            for (let i = 0; i < rest.length; i += cols) {
-              rows.push(rest.slice(i, i + cols));
-            }
-            const tileWidth = `calc(${100/cols}% - ${(cols-1)/cols}vw)`;
+            const row1 = rest.slice(0, 3); // места 4, 5, 6
+            const row2 = rest.slice(3);    // места 7, 8, 9, 10
             
             return (
-              <div className="flex-1 flex flex-col overflow-hidden" style={{ gap: "1vh" }}>
-                {rows.map((row, rowIndex) => (
-                  <div key={rowIndex} className="flex justify-center overflow-hidden" style={{ flex: 1, gap: "1vw" }}>
-                    {row.map((entry) => (
-                      <div key={entry.userId} data-testid={`tile-rank-${entry.rank}`} style={{ flex: `0 0 ${tileWidth}` }}>
+              <div className="flex-1 flex flex-col overflow-hidden" style={{ gap: "1.5vh" }}>
+                {/* Ряд 4-5-6: на всю ширину */}
+                {row1.length > 0 && (
+                  <div className="flex overflow-hidden" style={{ flex: 1, gap: "1.5vw" }}>
+                    {row1.map((entry) => (
+                      <div key={entry.userId} data-testid={`tile-rank-${entry.rank}`} style={{ flex: 1 }}>
                         {renderSmallTile(entry)}
                       </div>
                     ))}
                   </div>
-                ))}
+                )}
+                {/* Ряд 7-8-9-10: покороче, центрирован */}
+                {row2.length > 0 && (
+                  <div className="flex justify-center overflow-hidden" style={{ flex: 1, gap: "1.5vw" }}>
+                    {row2.map((entry) => (
+                      <div key={entry.userId} data-testid={`tile-rank-${entry.rank}`} style={{ flex: "0 0 22%" }}>
+                        {renderSmallTile(entry)}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })()}
