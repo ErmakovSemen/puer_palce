@@ -1347,11 +1347,27 @@ export class DbStorage implements IStorage {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfMonthStr = startOfMonth.toISOString();
     
-    console.log("[Leaderboard] Query params:", {
-      now: now.toISOString(),
-      startOfMonth: startOfMonthStr,
-      serverTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
+    // Диагностика: получаем информацию о базе данных
+    const [dbInfo] = await db.execute(sql`
+      SELECT 
+        NOW() as db_now,
+        DATE_TRUNC('month', NOW()) as db_month_start,
+        current_setting('TIMEZONE') as db_timezone,
+        (SELECT COUNT(*) FROM xp_transactions) as total_transactions,
+        (SELECT COUNT(*) FROM xp_transactions WHERE created_at::timestamp >= DATE_TRUNC('month', NOW())) as this_month_count,
+        (SELECT MAX(created_at) FROM xp_transactions) as last_transaction_date
+    `) as any;
+    
+    console.log("[Leaderboard] === DIAGNOSTIC INFO ===");
+    console.log("[Leaderboard] Server time:", now.toISOString());
+    console.log("[Leaderboard] Server timezone:", Intl.DateTimeFormat().resolvedOptions().timeZone);
+    console.log("[Leaderboard] DB NOW():", dbInfo?.db_now);
+    console.log("[Leaderboard] DB month start:", dbInfo?.db_month_start);
+    console.log("[Leaderboard] DB timezone:", dbInfo?.db_timezone);
+    console.log("[Leaderboard] Total transactions in DB:", dbInfo?.total_transactions);
+    console.log("[Leaderboard] Transactions THIS MONTH:", dbInfo?.this_month_count);
+    console.log("[Leaderboard] Last transaction date:", dbInfo?.last_transaction_date);
+    console.log("[Leaderboard] ========================");
     
     // Используем DATE_TRUNC на стороне PostgreSQL для корректного сравнения
     const results = await db
