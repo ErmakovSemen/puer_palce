@@ -1,9 +1,14 @@
-const CACHE_NAME = 'puer-pub-v2';
+const CACHE_NAME = 'puer-pub-v3';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
   '/apple-touch-icon.png'
+];
+
+const NO_CACHE_ENDPOINTS = [
+  '/api/tv/display',
+  '/api/admin/leaderboard/monthly'
 ];
 
 self.addEventListener('install', (event) => {
@@ -50,6 +55,13 @@ self.addEventListener('fetch', (event) => {
         })
     );
   } else if (url.pathname.startsWith('/api/')) {
+    const shouldBypassCache = NO_CACHE_ENDPOINTS.some(endpoint => url.pathname.includes(endpoint));
+    
+    if (shouldBypassCache) {
+      event.respondWith(fetch(request));
+      return;
+    }
+    
     event.respondWith(
       fetch(request)
         .then((response) => {
