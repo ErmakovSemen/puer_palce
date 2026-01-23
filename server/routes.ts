@@ -11,7 +11,6 @@ import { normalizePhone } from "./utils";
 import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification } from "./telegram";
 import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
 import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
-import { getLoyaltyDiscount } from "@shared/loyalty";
 import { db } from "./db";
 import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
@@ -836,18 +835,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Apply first order discount first (20% from base total)
+      // Get site settings for discount values
+      const siteSettings = await storage.getSiteSettings();
+      const firstOrderDiscountPercent = siteSettings?.firstOrderDiscount ?? 20;
+      
+      // Apply first order discount first (configurable % from base total)
       let usedFirstOrderDiscount = false;
       let firstOrderDiscountAmount = 0;
       if (user && !user.firstOrderDiscountUsed) {
-        firstOrderDiscountAmount = calculatedTotal * 0.20;
+        firstOrderDiscountAmount = calculatedTotal * (firstOrderDiscountPercent / 100);
         calculatedTotal = calculatedTotal - firstOrderDiscountAmount;
         usedFirstOrderDiscount = true;
-        console.log("[Order] First order discount applied:", firstOrderDiscountAmount);
+        console.log("[Order] First order discount applied:", firstOrderDiscountAmount, `(${firstOrderDiscountPercent}%)`);
       }
       
       // Apply loyalty discount to the reduced total (only if user is verified)
-      const loyaltyDiscount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
+      // Use configurable loyalty levels from site settings
+      let loyaltyDiscount = 0;
+      if (user && user.phoneVerified) {
+        const xp = user.xp;
+        const level4MinXP = siteSettings?.loyaltyLevel4MinXP ?? 15000;
+        const level3MinXP = siteSettings?.loyaltyLevel3MinXP ?? 7000;
+        const level2MinXP = siteSettings?.loyaltyLevel2MinXP ?? 3000;
+        
+        if (xp >= level4MinXP) {
+          loyaltyDiscount = siteSettings?.loyaltyLevel4Discount ?? 15;
+        } else if (xp >= level3MinXP) {
+          loyaltyDiscount = siteSettings?.loyaltyLevel3Discount ?? 10;
+        } else if (xp >= level2MinXP) {
+          loyaltyDiscount = siteSettings?.loyaltyLevel2Discount ?? 5;
+        }
+      }
       const loyaltyDiscountAmount = (calculatedTotal * loyaltyDiscount) / 100;
       calculatedTotal = calculatedTotal - loyaltyDiscountAmount;
       
@@ -1416,14 +1434,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Award XP if payment is confirmed and user is authenticated
       let xpAwarded = false;
       if (tinkoffStatus === "CONFIRMED" && order.userId && orderStatus !== order.status) {
-        const xpToAdd = Math.floor(order.total);
+        const siteSettings = await storage.getSiteSettings();
+        const xpMultiplier = siteSettings?.xpMultiplier ?? 1;
+        const xpToAdd = Math.floor(order.total * xpMultiplier);
         await db.update(usersTable)
           .set({
             xp: sql`${usersTable.xp} + ${xpToAdd}`,
           })
           .where(eq(usersTable.id, order.userId));
         xpAwarded = true;
-        console.log(`[Admin] Added ${xpToAdd} XP to user ${order.userId}`);
+        console.log(`[Admin] Added ${xpToAdd} XP to user ${order.userId} (x${xpMultiplier})`);
       }
       
       res.json({
@@ -2603,7 +2623,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               // Award XP if user exists (user was already queried above for email)
               if (user) {
-                const xpToAdd = Math.floor(pendingOrder.total / 100); // 1 XP per ruble
+                const telegramSiteSettings = await storage.getSiteSettings();
+                const telegramXpMultiplier = telegramSiteSettings?.xpMultiplier ?? 1;
+                const xpToAdd = Math.floor((pendingOrder.total / 100) * telegramXpMultiplier); // XP per ruble with multiplier
                 
                 if (!user.firstOrderDiscountUsed && pendingOrder.discountType === "first_order") {
                   await db.update(usersTable)
@@ -2618,7 +2640,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     .where(eq(usersTable.id, user.id));
                 }
                 
-                console.log("[Telegram Order] Awarded", xpToAdd, "XP to user:", user.id);
+                console.log("[Telegram Order] Awarded", xpToAdd, "XP to user:", user.id, `(x${telegramXpMultiplier})`);
               }
               
               // Send confirmation to customer's Telegram chat
@@ -2899,14 +2921,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Award XP to user if authenticated
           if (order.userId) {
-            const xpToAdd = Math.floor(order.total);
+            const siteSettings = await storage.getSiteSettings();
+            const xpMultiplier = siteSettings?.xpMultiplier ?? 1;
+            const xpToAdd = Math.floor(order.total * xpMultiplier);
             await db.update(usersTable)
               .set({
                 xp: sql`${usersTable.xp} + ${xpToAdd}`,
               })
               .where(eq(usersTable.id, order.userId));
 
-            console.log("[Payment] Added", xpToAdd, "XP to user:", order.userId);
+            console.log("[Payment] Added", xpToAdd, "XP to user:", order.userId, `(x${xpMultiplier})`);
           }
         }
       }

@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { SiteSettings, UpdateSiteSettings } from "@shared/schema";
-import { Save } from "lucide-react";
+import { Save, Gift, Star, Award } from "lucide-react";
 
 interface AdminSiteSettingsProps {
   adminFetch: (url: string, options?: RequestInit) => Promise<any>;
@@ -21,6 +21,14 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
     contactPhone: "",
     contactTelegram: "",
     deliveryInfo: "",
+    firstOrderDiscount: 20,
+    loyaltyLevel2MinXP: 3000,
+    loyaltyLevel2Discount: 5,
+    loyaltyLevel3MinXP: 7000,
+    loyaltyLevel3Discount: 10,
+    loyaltyLevel4MinXP: 15000,
+    loyaltyLevel4Discount: 15,
+    xpMultiplier: 1,
   });
 
   const { data: settings, isLoading } = useQuery<SiteSettings>({
@@ -32,6 +40,14 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
         contactPhone: data.contactPhone,
         contactTelegram: data.contactTelegram,
         deliveryInfo: data.deliveryInfo,
+        firstOrderDiscount: data.firstOrderDiscount ?? 20,
+        loyaltyLevel2MinXP: data.loyaltyLevel2MinXP ?? 3000,
+        loyaltyLevel2Discount: data.loyaltyLevel2Discount ?? 5,
+        loyaltyLevel3MinXP: data.loyaltyLevel3MinXP ?? 7000,
+        loyaltyLevel3Discount: data.loyaltyLevel3Discount ?? 10,
+        loyaltyLevel4MinXP: data.loyaltyLevel4MinXP ?? 15000,
+        loyaltyLevel4Discount: data.loyaltyLevel4Discount ?? 15,
+        xpMultiplier: data.xpMultiplier ?? 1,
       });
       return data;
     },
@@ -66,7 +82,7 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
     updateMutation.mutate(formData);
   };
 
-  const handleChange = (field: keyof UpdateSiteSettings, value: string) => {
+  const handleChange = (field: keyof UpdateSiteSettings, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -152,6 +168,178 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
             type="submit"
             disabled={updateMutation.isPending}
             data-testid="button-save-settings"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {updateMutation.isPending ? "Сохранение..." : "Сохранить"}
+          </Button>
+        </form>
+      </CardContent>
+
+      <CardHeader className="border-t">
+        <CardTitle className="flex items-center gap-2">
+          <Gift className="w-5 h-5" />
+          Скидка на первый заказ
+        </CardTitle>
+        <CardDescription>
+          Скидка автоматически применяется для новых пользователей при первом заказе
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="firstOrderDiscount">Размер скидки (%)</Label>
+            <Input
+              id="firstOrderDiscount"
+              type="number"
+              min={0}
+              max={100}
+              value={formData.firstOrderDiscount || 20}
+              onChange={(e) => handleChange("firstOrderDiscount", parseInt(e.target.value) || 0)}
+              data-testid="input-first-order-discount"
+            />
+            <p className="text-sm text-muted-foreground">
+              Текущее значение: {formData.firstOrderDiscount || 20}%
+            </p>
+          </div>
+
+          <Button
+            type="submit"
+            disabled={updateMutation.isPending}
+            data-testid="button-save-first-order"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {updateMutation.isPending ? "Сохранение..." : "Сохранить"}
+          </Button>
+        </form>
+      </CardContent>
+
+      <CardHeader className="border-t">
+        <CardTitle className="flex items-center gap-2">
+          <Award className="w-5 h-5" />
+          Программа лояльности
+        </CardTitle>
+        <CardDescription>
+          Настройте уровни, пороги XP и скидки для постоянных клиентов
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="xpMultiplier">Множитель XP (XP за 1 рубль)</Label>
+            <Input
+              id="xpMultiplier"
+              type="number"
+              min={1}
+              max={10}
+              value={formData.xpMultiplier || 1}
+              onChange={(e) => handleChange("xpMultiplier", parseInt(e.target.value) || 1)}
+              data-testid="input-xp-multiplier"
+            />
+            <p className="text-sm text-muted-foreground">
+              За каждый рубль покупки клиент получает {formData.xpMultiplier || 1} XP
+            </p>
+          </div>
+
+          <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+            <h4 className="font-medium flex items-center gap-2">
+              <Star className="w-4 h-4 text-green-600" />
+              Уровень 2: Ценитель
+            </h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="loyaltyLevel2MinXP">Минимум XP</Label>
+                <Input
+                  id="loyaltyLevel2MinXP"
+                  type="number"
+                  min={0}
+                  value={formData.loyaltyLevel2MinXP || 3000}
+                  onChange={(e) => handleChange("loyaltyLevel2MinXP", parseInt(e.target.value) || 0)}
+                  data-testid="input-level2-min-xp"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="loyaltyLevel2Discount">Скидка (%)</Label>
+                <Input
+                  id="loyaltyLevel2Discount"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={formData.loyaltyLevel2Discount || 5}
+                  onChange={(e) => handleChange("loyaltyLevel2Discount", parseInt(e.target.value) || 0)}
+                  data-testid="input-level2-discount"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+            <h4 className="font-medium flex items-center gap-2">
+              <Star className="w-4 h-4 text-purple-600" />
+              Уровень 3: Чайный мастер
+            </h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="loyaltyLevel3MinXP">Минимум XP</Label>
+                <Input
+                  id="loyaltyLevel3MinXP"
+                  type="number"
+                  min={0}
+                  value={formData.loyaltyLevel3MinXP || 7000}
+                  onChange={(e) => handleChange("loyaltyLevel3MinXP", parseInt(e.target.value) || 0)}
+                  data-testid="input-level3-min-xp"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="loyaltyLevel3Discount">Скидка (%)</Label>
+                <Input
+                  id="loyaltyLevel3Discount"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={formData.loyaltyLevel3Discount || 10}
+                  onChange={(e) => handleChange("loyaltyLevel3Discount", parseInt(e.target.value) || 0)}
+                  data-testid="input-level3-discount"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+            <h4 className="font-medium flex items-center gap-2">
+              <Star className="w-4 h-4 text-red-600" />
+              Уровень 4: Чайный Гуру
+            </h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="loyaltyLevel4MinXP">Минимум XP</Label>
+                <Input
+                  id="loyaltyLevel4MinXP"
+                  type="number"
+                  min={0}
+                  value={formData.loyaltyLevel4MinXP || 15000}
+                  onChange={(e) => handleChange("loyaltyLevel4MinXP", parseInt(e.target.value) || 0)}
+                  data-testid="input-level4-min-xp"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="loyaltyLevel4Discount">Скидка (%)</Label>
+                <Input
+                  id="loyaltyLevel4Discount"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={formData.loyaltyLevel4Discount || 15}
+                  onChange={(e) => handleChange("loyaltyLevel4Discount", parseInt(e.target.value) || 0)}
+                  data-testid="input-level4-discount"
+                />
+              </div>
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            disabled={updateMutation.isPending}
+            data-testid="button-save-loyalty"
           >
             <Save className="w-4 h-4 mr-2" />
             {updateMutation.isPending ? "Сохранение..." : "Сохранить"}

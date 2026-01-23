@@ -327,6 +327,17 @@ export const siteSettings = pgTable("site_settings", {
   contactPhone: text("contact_phone").notNull(),
   contactTelegram: text("contact_telegram").notNull(),
   deliveryInfo: text("delivery_info").notNull(),
+  // First order discount (percentage)
+  firstOrderDiscount: integer("first_order_discount").notNull().default(20),
+  // Loyalty program settings
+  loyaltyLevel2MinXP: integer("loyalty_level2_min_xp").notNull().default(3000),
+  loyaltyLevel2Discount: integer("loyalty_level2_discount").notNull().default(5),
+  loyaltyLevel3MinXP: integer("loyalty_level3_min_xp").notNull().default(7000),
+  loyaltyLevel3Discount: integer("loyalty_level3_discount").notNull().default(10),
+  loyaltyLevel4MinXP: integer("loyalty_level4_min_xp").notNull().default(15000),
+  loyaltyLevel4Discount: integer("loyalty_level4_discount").notNull().default(15),
+  // XP multiplier (XP per 1 ruble spent)
+  xpMultiplier: integer("xp_multiplier").notNull().default(1),
 });
 
 export const insertSiteSettingsSchema = createInsertSchema(siteSettings, {
@@ -334,6 +345,14 @@ export const insertSiteSettingsSchema = createInsertSchema(siteSettings, {
   contactPhone: z.string().min(10, "Введите корректный номер телефона"),
   contactTelegram: z.string().min(1, "Введите Telegram"),
   deliveryInfo: z.string().min(10, "Введите информацию о доставке"),
+  firstOrderDiscount: z.number().int().min(0).max(100).default(20),
+  loyaltyLevel2MinXP: z.number().int().min(0).default(3000),
+  loyaltyLevel2Discount: z.number().int().min(0).max(100).default(5),
+  loyaltyLevel3MinXP: z.number().int().min(0).default(7000),
+  loyaltyLevel3Discount: z.number().int().min(0).max(100).default(10),
+  loyaltyLevel4MinXP: z.number().int().min(0).default(15000),
+  loyaltyLevel4Discount: z.number().int().min(0).max(100).default(15),
+  xpMultiplier: z.number().int().min(1).max(10).default(1),
 }).omit({ id: true });
 
 export const updateSiteSettingsSchema = z.object({
@@ -341,6 +360,14 @@ export const updateSiteSettingsSchema = z.object({
   contactPhone: z.string().min(10, "Введите корректный номер телефона").optional(),
   contactTelegram: z.string().min(1, "Введите Telegram").optional(),
   deliveryInfo: z.string().min(10, "Введите информацию о доставке").optional(),
+  firstOrderDiscount: z.number().int().min(0).max(100).optional(),
+  loyaltyLevel2MinXP: z.number().int().min(0).optional(),
+  loyaltyLevel2Discount: z.number().int().min(0).max(100).optional(),
+  loyaltyLevel3MinXP: z.number().int().min(0).optional(),
+  loyaltyLevel3Discount: z.number().int().min(0).max(100).optional(),
+  loyaltyLevel4MinXP: z.number().int().min(0).optional(),
+  loyaltyLevel4Discount: z.number().int().min(0).max(100).optional(),
+  xpMultiplier: z.number().int().min(1).max(10).optional(),
 });
 
 export type InsertSiteSettings = z.infer<typeof insertSiteSettingsSchema>;
