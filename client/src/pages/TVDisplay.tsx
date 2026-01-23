@@ -205,21 +205,14 @@ export default function TVDisplay() {
           pressTimerRef.current = setTimeout(() => {
             const count = pressCountRef.current;
             resetPressState();
-            if (count === 2) {
+            if (count === 1) {
+              goToNextSlide();
+            } else if (count === 2) {
               toggleFullscreen();
             }
           }, TRIPLE_PRESS_WINDOW);
         } else {
           pressCountRef.current += 1;
-          
-          if (pressCountRef.current >= 3) {
-            if (pressTimerRef.current) {
-              clearTimeout(pressTimerRef.current);
-              pressTimerRef.current = null;
-            }
-            goToNextSlide();
-            resetPressState();
-          }
         }
       } else if (e.key === "ArrowRight" || e.key === "ChannelUp") {
         goToNextSlide();
