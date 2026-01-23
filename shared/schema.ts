@@ -338,6 +338,11 @@ export const siteSettings = pgTable("site_settings", {
   loyaltyLevel4Discount: integer("loyalty_level4_discount").notNull().default(15),
   // XP multiplier (XP per 1 ruble spent)
   xpMultiplier: integer("xp_multiplier").notNull().default(1),
+  // Loyalty level perks (additional benefits descriptions)
+  loyaltyLevel1Perks: text("loyalty_level1_perks").array().notNull().default(sql`ARRAY['Доступ к базовому каталогу']::text[]`),
+  loyaltyLevel2Perks: text("loyalty_level2_perks").array().notNull().default(sql`ARRAY['Доступ к базовому каталогу']::text[]`),
+  loyaltyLevel3Perks: text("loyalty_level3_perks").array().notNull().default(sql`ARRAY['Персональный чат с консультациями', 'Приглашения на закрытые чайные вечеринки', 'Возможность запросить любой чай']::text[]`),
+  loyaltyLevel4Perks: text("loyalty_level4_perks").array().notNull().default(sql`ARRAY['Все привилегии уровня 3', 'Приоритетное обслуживание', 'Эксклюзивные предложения']::text[]`),
 });
 
 export const insertSiteSettingsSchema = createInsertSchema(siteSettings, {
@@ -353,6 +358,10 @@ export const insertSiteSettingsSchema = createInsertSchema(siteSettings, {
   loyaltyLevel4MinXP: z.number().int().min(0).default(15000),
   loyaltyLevel4Discount: z.number().int().min(0).max(100).default(15),
   xpMultiplier: z.number().int().min(1).max(10).default(1),
+  loyaltyLevel1Perks: z.array(z.string()).default(["Доступ к базовому каталогу"]),
+  loyaltyLevel2Perks: z.array(z.string()).default(["Доступ к базовому каталогу"]),
+  loyaltyLevel3Perks: z.array(z.string()).default(["Персональный чат с консультациями", "Приглашения на закрытые чайные вечеринки", "Возможность запросить любой чай"]),
+  loyaltyLevel4Perks: z.array(z.string()).default(["Все привилегии уровня 3", "Приоритетное обслуживание", "Эксклюзивные предложения"]),
 }).omit({ id: true });
 
 export const updateSiteSettingsSchema = z.object({
@@ -368,6 +377,10 @@ export const updateSiteSettingsSchema = z.object({
   loyaltyLevel4MinXP: z.number().int().min(0).optional(),
   loyaltyLevel4Discount: z.number().int().min(0).max(100).optional(),
   xpMultiplier: z.number().int().min(1).max(10).optional(),
+  loyaltyLevel1Perks: z.array(z.string()).optional(),
+  loyaltyLevel2Perks: z.array(z.string()).optional(),
+  loyaltyLevel3Perks: z.array(z.string()).optional(),
+  loyaltyLevel4Perks: z.array(z.string()).optional(),
 });
 
 export type InsertSiteSettings = z.infer<typeof insertSiteSettingsSchema>;
