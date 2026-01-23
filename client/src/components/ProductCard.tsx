@@ -274,13 +274,12 @@ export default function ProductCard({
               <div className="flex flex-col gap-1 w-full">
                 <div className="flex items-center gap-1.5 w-full">
                   <div 
-                    className="flex items-center flex-1 btn-gradient rounded-lg overflow-hidden"
+                    className="flex items-center flex-1 btn-gradient rounded-lg"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 rounded-none text-white no-default-hover-elevate no-default-active-elevate"
+                    <button
+                      type="button"
+                      className="h-8 w-8 shrink-0 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 transition-colors"
                       onClick={() => {
                         const step = isTeaware ? 1 : currentWeight;
                         const newQty = Math.max(0, cartQuantity - step);
@@ -289,16 +288,15 @@ export default function ProductCard({
                       data-testid={`button-decrease-${id}`}
                     >
                       <Minus className="w-3 h-3" />
-                    </Button>
+                    </button>
                     <div className="flex-1 text-center py-1 px-1 min-w-[45px]">
                       <span className="text-white font-bold text-[11px] whitespace-nowrap" data-testid={`text-product-price-${id}`}>
                         {Math.round((cartPricePerUnit ?? pricePerGram) * cartQuantity)}₽
                       </span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 shrink-0 rounded-none text-white no-default-hover-elevate no-default-active-elevate"
+                    <button
+                      type="button"
+                      className="h-8 w-8 shrink-0 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 transition-colors"
                       onClick={() => {
                         const step = isTeaware ? 1 : currentWeight;
                         onUpdateQuantity(id, cartQuantity + step);
@@ -306,7 +304,7 @@ export default function ProductCard({
                       data-testid={`button-increase-${id}`}
                     >
                       <Plus className="w-3 h-3" />
-                    </Button>
+                    </button>
                   </div>
                   <span className="text-muted-foreground text-xs whitespace-nowrap shrink-0" data-testid={`text-cart-count-${id}`}>
                     {isTeaware ? `x${cartQuantity}` : `${cartQuantity}г`}

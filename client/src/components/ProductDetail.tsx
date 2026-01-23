@@ -201,26 +201,46 @@ export default function ProductDetail({
                         <label className="text-sm text-muted-foreground">Своё количество (г)</label>
                         <Input
                           type="number"
-                          min="1"
-                          placeholder="Введите количество"
+                          min="5"
+                          max="2000"
+                          placeholder="от 5 до 2000"
                           value={customQuantity}
                           onChange={(e) => {
-                            setCustomQuantity(e.target.value);
-                            setSelectedQuantity("");
+                            const val = e.target.value;
+                            const num = parseInt(val, 10);
+                            if (val === "" || (!isNaN(num) && num >= 5 && num <= 2000)) {
+                              setCustomQuantity(val);
+                              setSelectedQuantity("");
+                            }
                           }}
                           data-testid="input-custom-quantity"
                         />
                       </div>
                     </div>
 
-                    {/* Total price */}
-                    {(selectedQuantity || customQuantity) && (
-                      <div className="text-right">
-                        <span className="text-lg font-semibold" data-testid="text-total-price">
-                          Итого: {pricePerGram * parseInt(customQuantity || selectedQuantity || "0", 10)} ₽
-                        </span>
-                      </div>
-                    )}
+                    {/* Total price with discount for manual input 100g+ */}
+                    {(selectedQuantity || customQuantity) && (() => {
+                      const qty = parseInt(customQuantity || selectedQuantity || "0", 10);
+                      const isManualInput = !!customQuantity;
+                      const hasDiscount = isManualInput && qty >= 100;
+                      const basePrice = pricePerGram * qty;
+                      const discountedPrice = hasDiscount ? Math.round(basePrice * 0.9) : basePrice;
+                      return (
+                        <div className="text-right">
+                          {hasDiscount && (
+                            <span className="text-sm text-muted-foreground line-through mr-2">
+                              {basePrice} ₽
+                            </span>
+                          )}
+                          <span className="text-lg font-semibold" data-testid="text-total-price">
+                            Итого: {discountedPrice} ₽
+                          </span>
+                          {hasDiscount && (
+                            <span className="text-xs text-green-600 ml-2">-10%</span>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </div>

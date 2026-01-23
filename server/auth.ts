@@ -9,6 +9,7 @@ import { User as SelectUser, updateUserSchema, insertUserSchema } from "@shared/
 import { z } from "zod";
 import { generateVerificationCode, sendSmsCode } from "./sms-ru";
 import { normalizePhone } from "./utils";
+import { sendVerificationCodeToTelegram } from "./services/telegramBot";
 
 declare global {
   namespace Express {
@@ -198,6 +199,13 @@ export function setupAuth(app: Express) {
 
       // Send SMS
       await sendSmsCode(normalizedPhone, code);
+
+      // Also try to send via Telegram if user has linked profile
+      try {
+        await sendVerificationCodeToTelegram(normalizedPhone, code, type);
+      } catch (telegramError) {
+        console.log("[SMS Verification] Telegram delivery failed (SMS was sent):", telegramError);
+      }
 
       // Clean up expired codes
       await storage.cleanupExpiredSmsVerifications();

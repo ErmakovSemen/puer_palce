@@ -459,32 +459,6 @@ async function handlePhoneForCodeInput(chatId: string, phone: string) {
   const normalizedPhone = cleanPhone.startsWith('+') ? cleanPhone : '+' + cleanPhone;
 
   try {
-    // SECURITY CHECK: Verify this Telegram chat is linked to an account with this phone
-    // This prevents attackers from getting codes for phones they don't own
-    const profile = await db.query.telegramProfiles.findFirst({
-      where: eq(telegramProfiles.chatId, chatId),
-    });
-
-    if (profile && profile.userId) {
-      // Check if the linked user has this phone
-      const linkedUser = await db.query.users.findFirst({
-        where: eq(users.id, profile.userId),
-      });
-      
-      if (linkedUser && linkedUser.phone !== normalizedPhone) {
-        await sendMessage(chatId, `❌ <b>Номер не совпадает</b>
-
-Этот Telegram привязан к другому номеру телефона.
-
-Для безопасности код можно получить только для привязанного номера.`);
-        return;
-      }
-    }
-
-    // For registration (new users), allow code delivery only if:
-    // 1. This chat is NOT linked to any account (new user registering)
-    // 2. OR this chat IS linked to an account with matching phone
-    
     // Check if there's an active verification for this phone
     const { smsVerifications: smsVerificationsTable } = await import("@shared/schema");
     
@@ -505,34 +479,6 @@ async function handlePhoneForCodeInput(chatId: string, phone: string) {
 3. Запросите код по SMS
 4. Вернитесь сюда и отправьте /code`);
       return;
-    }
-
-    // For password_reset, require that this chat is linked to the phone's owner
-    if (verification.type === "password_reset") {
-      const phoneOwner = await db.query.users.findFirst({
-        where: eq(users.phone, normalizedPhone),
-      });
-      
-      if (!phoneOwner) {
-        await sendMessage(chatId, `❌ <b>Аккаунт не найден</b>
-
-Нет аккаунта с таким номером телефона.`);
-        return;
-      }
-      
-      // Check if this chat is linked to the phone owner
-      const ownerProfile = await db.query.telegramProfiles.findFirst({
-        where: eq(telegramProfiles.userId, phoneOwner.id),
-      });
-      
-      if (!ownerProfile || ownerProfile.chatId !== chatId) {
-        await sendMessage(chatId, `❌ <b>Telegram не привязан</b>
-
-Для восстановления пароля через Telegram необходимо сначала привязать этот чат к вашему аккаунту.
-
-Используйте SMS для получения кода.`);
-        return;
-      }
     }
 
     // Check if expired
@@ -2286,4 +2232,44 @@ export async function sendVerificationCodeToChat(
 ⚠️ Никому не сообщайте этот код!`;
 
   return await sendMessage(chatId, message);
+}
+
+// Send verification code to user's Telegram by phone number
+// This finds the user by phone, then finds their linked Telegram profile
+export async function sendVerificationCodeToTelegram(
+  phone: string,
+  code: string,
+  type: "registration" | "password_reset"
+): Promise<boolean> {
+  try {
+    // Find user by phone
+    const user = await db.query.users.findFirst({
+      where: eq(users.phone, phone),
+    });
+    
+    if (!user) {
+      console.log(`[TelegramBot] No user found for phone ${phone}`);
+      return false;
+    }
+    
+    // Find telegram profile linked to this user
+    const profile = await db.query.telegramProfiles.findFirst({
+      where: eq(telegramProfiles.userId, user.id),
+    });
+    
+    if (!profile) {
+      console.log(`[TelegramBot] No Telegram profile linked for user ${user.id}`);
+      return false;
+    }
+    
+    // Send the code
+    const success = await sendVerificationCodeToChat(profile.chatId, code, type);
+    if (success) {
+      console.log(`[TelegramBot] Verification code sent to Telegram for phone ${phone}`);
+    }
+    return success;
+  } catch (error) {
+    console.error("[TelegramBot] Error sending verification code to Telegram:", error);
+    return false;
+  }
 }

@@ -264,7 +264,9 @@ export default function Home() {
     const filtered = products.filter((product) => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description?.toLowerCase() ?? "").includes(searchTerm.toLowerCase());
-      const matchesType = selectedTypes.length === 0 || selectedTypes.includes(product.teaType);
+      const matchesType = selectedTypes.length === 0 || selectedTypes.some(selType => 
+        selType.toLowerCase() === product.teaType.toLowerCase()
+      );
       const matchesEffects = selectedEffects.length === 0 || 
         selectedEffects.some(effect => 
           product.effects.some(productEffect => 
@@ -857,7 +859,7 @@ export default function Home() {
             >
               <div className="relative">
                 <ShoppingCart className="w-8 h-8" />
-                <span className="absolute -top-2 -right-3 bg-emerald-500 text-white text-xs font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1">
+                <span className="absolute -top-1 -right-1 text-white text-[10px] font-bold rounded-full h-4 min-w-4 flex items-center justify-center px-0.5 btn-gradient">
                   {cartItemCount}
                 </span>
               </div>
