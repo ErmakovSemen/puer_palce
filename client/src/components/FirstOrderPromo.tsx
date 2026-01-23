@@ -79,7 +79,7 @@ export function FirstOrderPromo() {
   return (
     <div 
       ref={containerRef}
-      className={`fixed top-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm transition-all duration-300 ${
+      className={`fixed top-20 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm transition-all duration-300 ${
         isExiting ? "opacity-0 -translate-y-4" : "opacity-100 translate-y-0"
       }`}
       onTouchStart={handleTouchStart}
