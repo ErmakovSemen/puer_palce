@@ -89,39 +89,38 @@ export function FirstOrderPromo() {
   return (
     <div 
       ref={containerRef}
-      className={`fixed bottom-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm transition-all duration-300 ${
-        isExiting ? "opacity-0 translate-y-4" : "opacity-100 translate-y-0"
+      className={`fixed top-4 left-4 right-4 z-50 md:left-auto md:right-4 md:max-w-sm transition-all duration-300 ${
+        isExiting ? "opacity-0 -translate-y-4" : "opacity-100 translate-y-0"
       }`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       data-testid="promo-first-order"
     >
       <div 
-        className="relative bg-primary text-primary-foreground rounded-lg shadow-lg p-4 cursor-pointer hover-elevate active-elevate-2"
+        className="relative bg-black text-white rounded-lg shadow-2xl p-3 cursor-pointer hover-elevate active-elevate-2 border border-white/20"
         onClick={handleClick}
         data-testid="card-promo-first-order"
       >
-        <Button
-          size="icon"
-          variant="ghost"
-          className="absolute top-1 right-1 h-7 w-7 text-primary-foreground"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleClose();
-          }}
-          data-testid="button-close-promo"
-        >
-          <X className="h-4 w-4" />
-        </Button>
-        
-        <div className="flex items-center gap-3 pr-6">
-          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary-foreground/20 flex items-center justify-center">
-            <Gift className="h-5 w-5" />
+        <div className="flex items-center gap-3">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+            <Gift className="h-5 w-5 text-amber-400" />
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm">Скидка {discountPercent}% на первый заказ!</p>
-            <p className="text-xs opacity-90">Зарегистрируйтесь и получите скидку</p>
+            <p className="text-xs text-white/70">Зарегистрируйтесь и получите скидку</p>
           </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="flex-shrink-0 h-8 w-8 text-white/60 hover:text-white"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClose();
+            }}
+            data-testid="button-close-promo"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </div>

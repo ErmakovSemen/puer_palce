@@ -272,15 +272,15 @@ export default function ProductCard({
             isInCart && onUpdateQuantity ? (
               /* In-cart controls: -/price/+ and count */
               <div className="flex flex-col gap-1 w-full">
-                <div className="flex items-center gap-1 w-full">
+                <div className="flex items-center gap-1.5 w-full">
                   <div 
-                    className="flex items-center flex-1 min-w-0 btn-gradient rounded-lg overflow-hidden"
+                    className="flex items-center flex-1 btn-gradient rounded-lg overflow-hidden"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 shrink-0 rounded-none text-white hover:bg-white/20 no-default-hover-elevate no-default-active-elevate"
+                      className="h-8 w-8 shrink-0 rounded-none text-white no-default-hover-elevate no-default-active-elevate"
                       onClick={() => {
                         const step = isTeaware ? 1 : currentWeight;
                         const newQty = Math.max(0, cartQuantity - step);
@@ -290,15 +290,15 @@ export default function ProductCard({
                     >
                       <Minus className="w-3 h-3" />
                     </Button>
-                    <div className="flex-1 text-center py-1 px-0.5 min-w-0">
-                      <span className="text-white font-bold text-sm truncate block" data-testid={`text-product-price-${id}`}>
-                        {Math.round((cartPricePerUnit ?? pricePerGram) * cartQuantity)} ₽
+                    <div className="flex-1 text-center py-1 px-1 min-w-[45px]">
+                      <span className="text-white font-bold text-[11px] whitespace-nowrap" data-testid={`text-product-price-${id}`}>
+                        {Math.round((cartPricePerUnit ?? pricePerGram) * cartQuantity)}₽
                       </span>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 shrink-0 rounded-none text-white hover:bg-white/20 no-default-hover-elevate no-default-active-elevate"
+                      className="h-8 w-8 shrink-0 rounded-none text-white no-default-hover-elevate no-default-active-elevate"
                       onClick={() => {
                         const step = isTeaware ? 1 : currentWeight;
                         onUpdateQuantity(id, cartQuantity + step);
@@ -326,8 +326,7 @@ export default function ProductCard({
                     )}
                   </span>
                 </div>
-                <button
-                  type="button"
+                <Button
                   onClick={(e) => {
                     e.stopPropagation();
                     const qty = isTeaware ? 1 : (
@@ -338,12 +337,12 @@ export default function ProductCard({
                     const effectivePrice = showDiscount ? pricePerGram * (1 - BULK_DISCOUNT) : pricePerGram;
                     onAddToCart(id, qty, effectivePrice);
                   }}
-                  className="flex items-center gap-1 bg-black text-white border-2 border-white rounded-md opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 shadow-lg transition-all duration-300 px-2 py-1.5 text-[11px] font-bold whitespace-nowrap hover-elevate active-elevate-2"
+                  size="icon"
+                  className="bg-black text-white border-2 border-white opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 shadow-lg transition-all duration-300"
                   data-testid={`button-add-to-cart-${id}`}
                 >
-                  <ShoppingCart className="w-3 h-3 shrink-0" />
-                  <span>{discountedPrice}₽</span>
-                </button>
+                  <ShoppingCart className="w-4 h-4" />
+                </Button>
               </div>
             )
           ) : (
