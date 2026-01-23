@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import type { SiteSettings, UpdateSiteSettings } from "@shared/schema";
-import { Save, Gift, Star, Award } from "lucide-react";
+import { Save, Gift, Star, Award, Plus, X } from "lucide-react";
 
 interface AdminSiteSettingsProps {
   adminFetch: (url: string, options?: RequestInit) => Promise<any>;
@@ -29,6 +29,10 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
     loyaltyLevel4MinXP: 15000,
     loyaltyLevel4Discount: 15,
     xpMultiplier: 1,
+    loyaltyLevel1Perks: ["Доступ к базовому каталогу"],
+    loyaltyLevel2Perks: ["Доступ к базовому каталогу"],
+    loyaltyLevel3Perks: ["Персональный чат с консультациями", "Приглашения на закрытые чайные вечеринки", "Возможность запросить любой чай"],
+    loyaltyLevel4Perks: ["Все привилегии уровня 3", "Приоритетное обслуживание", "Эксклюзивные предложения"],
   });
 
   const { data: settings, isLoading } = useQuery<SiteSettings>({
@@ -48,6 +52,10 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
         loyaltyLevel4MinXP: data.loyaltyLevel4MinXP ?? 15000,
         loyaltyLevel4Discount: data.loyaltyLevel4Discount ?? 15,
         xpMultiplier: data.xpMultiplier ?? 1,
+        loyaltyLevel1Perks: data.loyaltyLevel1Perks ?? ["Доступ к базовому каталогу"],
+        loyaltyLevel2Perks: data.loyaltyLevel2Perks ?? ["Доступ к базовому каталогу"],
+        loyaltyLevel3Perks: data.loyaltyLevel3Perks ?? ["Персональный чат с консультациями", "Приглашения на закрытые чайные вечеринки", "Возможность запросить любой чай"],
+        loyaltyLevel4Perks: data.loyaltyLevel4Perks ?? ["Все привилегии уровня 3", "Приоритетное обслуживание", "Эксклюзивные предложения"],
       });
       return data;
     },
@@ -79,11 +87,41 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateMutation.mutate(formData);
+    const cleanedData = {
+      ...formData,
+      loyaltyLevel1Perks: (formData.loyaltyLevel1Perks || []).filter(p => p.trim() !== ""),
+      loyaltyLevel2Perks: (formData.loyaltyLevel2Perks || []).filter(p => p.trim() !== ""),
+      loyaltyLevel3Perks: (formData.loyaltyLevel3Perks || []).filter(p => p.trim() !== ""),
+      loyaltyLevel4Perks: (formData.loyaltyLevel4Perks || []).filter(p => p.trim() !== ""),
+    };
+    updateMutation.mutate(cleanedData);
   };
 
   const handleChange = (field: keyof UpdateSiteSettings, value: string | number) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handlePerksChange = (field: "loyaltyLevel1Perks" | "loyaltyLevel2Perks" | "loyaltyLevel3Perks" | "loyaltyLevel4Perks", index: number, value: string) => {
+    setFormData((prev) => {
+      const perks = [...(prev[field] || [])];
+      perks[index] = value;
+      return { ...prev, [field]: perks };
+    });
+  };
+
+  const addPerk = (field: "loyaltyLevel1Perks" | "loyaltyLevel2Perks" | "loyaltyLevel3Perks" | "loyaltyLevel4Perks") => {
+    setFormData((prev) => {
+      const perks = [...(prev[field] || []), ""];
+      return { ...prev, [field]: perks };
+    });
+  };
+
+  const removePerk = (field: "loyaltyLevel1Perks" | "loyaltyLevel2Perks" | "loyaltyLevel3Perks" | "loyaltyLevel4Perks", index: number) => {
+    setFormData((prev) => {
+      const perks = [...(prev[field] || [])];
+      perks.splice(index, 1);
+      return { ...prev, [field]: perks };
+    });
   };
 
   if (isLoading) {
@@ -242,6 +280,45 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
 
           <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
             <h4 className="font-medium flex items-center gap-2">
+              <Star className="w-4 h-4 text-gray-400" />
+              Уровень 1: Новичок (0 XP)
+            </h4>
+            <div className="space-y-2">
+              <Label>Дополнительные бонусы</Label>
+              {(formData.loyaltyLevel1Perks || []).map((perk, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    value={perk}
+                    onChange={(e) => handlePerksChange("loyaltyLevel1Perks", index, e.target.value)}
+                    placeholder="Описание бонуса"
+                    data-testid={`input-level1-perk-${index}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePerk("loyaltyLevel1Perks", index)}
+                    data-testid={`button-remove-level1-perk-${index}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addPerk("loyaltyLevel1Perks")}
+                data-testid="button-add-level1-perk"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Добавить бонус
+              </Button>
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
+            <h4 className="font-medium flex items-center gap-2">
               <Star className="w-4 h-4 text-green-600" />
               Уровень 2: Ценитель
             </h4>
@@ -269,6 +346,38 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
                   data-testid="input-level2-discount"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Дополнительные бонусы</Label>
+              {(formData.loyaltyLevel2Perks || []).map((perk, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    value={perk}
+                    onChange={(e) => handlePerksChange("loyaltyLevel2Perks", index, e.target.value)}
+                    placeholder="Описание бонуса"
+                    data-testid={`input-level2-perk-${index}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePerk("loyaltyLevel2Perks", index)}
+                    data-testid={`button-remove-level2-perk-${index}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addPerk("loyaltyLevel2Perks")}
+                data-testid="button-add-level2-perk"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Добавить бонус
+              </Button>
             </div>
           </div>
 
@@ -302,6 +411,38 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
                 />
               </div>
             </div>
+            <div className="space-y-2">
+              <Label>Дополнительные бонусы</Label>
+              {(formData.loyaltyLevel3Perks || []).map((perk, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    value={perk}
+                    onChange={(e) => handlePerksChange("loyaltyLevel3Perks", index, e.target.value)}
+                    placeholder="Описание бонуса"
+                    data-testid={`input-level3-perk-${index}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePerk("loyaltyLevel3Perks", index)}
+                    data-testid={`button-remove-level3-perk-${index}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addPerk("loyaltyLevel3Perks")}
+                data-testid="button-add-level3-perk"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Добавить бонус
+              </Button>
+            </div>
           </div>
 
           <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
@@ -333,6 +474,38 @@ export default function AdminSiteSettings({ adminFetch }: AdminSiteSettingsProps
                   data-testid="input-level4-discount"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Дополнительные бонусы</Label>
+              {(formData.loyaltyLevel4Perks || []).map((perk, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    value={perk}
+                    onChange={(e) => handlePerksChange("loyaltyLevel4Perks", index, e.target.value)}
+                    placeholder="Описание бонуса"
+                    data-testid={`input-level4-perk-${index}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removePerk("loyaltyLevel4Perks", index)}
+                    data-testid={`button-remove-level4-perk-${index}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addPerk("loyaltyLevel4Perks")}
+                data-testid="button-add-level4-perk"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Добавить бонус
+              </Button>
             </div>
           </div>
 

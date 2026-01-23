@@ -1,4 +1,5 @@
-import { LOYALTY_LEVELS } from "@shared/loyalty";
+import { useQuery } from "@tanstack/react-query";
+import type { SiteSettings } from "@shared/schema";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,64 @@ interface LoyaltyLevelsModalProps {
 }
 
 export function LoyaltyLevelsModal({ open, onOpenChange, currentXP }: LoyaltyLevelsModalProps) {
+  const { data: settings } = useQuery<SiteSettings>({
+    queryKey: ["/api/site-settings"],
+    enabled: open,
+  });
+
+  const getLevels = () => {
+    const level2MinXP = settings?.loyaltyLevel2MinXP ?? 3000;
+    const level3MinXP = settings?.loyaltyLevel3MinXP ?? 7000;
+    const level4MinXP = settings?.loyaltyLevel4MinXP ?? 15000;
+    
+    const level2Discount = settings?.loyaltyLevel2Discount ?? 5;
+    const level3Discount = settings?.loyaltyLevel3Discount ?? 10;
+    const level4Discount = settings?.loyaltyLevel4Discount ?? 15;
+    
+    const level1Perks = settings?.loyaltyLevel1Perks ?? ["Доступ к базовому каталогу"];
+    const level2Perks = settings?.loyaltyLevel2Perks ?? ["Доступ к базовому каталогу"];
+    const level3Perks = settings?.loyaltyLevel3Perks ?? ["Персональный чат с консультациями", "Приглашения на закрытые чайные вечеринки", "Возможность запросить любой чай"];
+    const level4Perks = settings?.loyaltyLevel4Perks ?? ["Все привилегии уровня 3", "Приоритетное обслуживание", "Эксклюзивные предложения"];
+
+    return [
+      {
+        level: 1,
+        name: "Новичок",
+        minXP: 0,
+        maxXP: level2MinXP - 1,
+        discount: 0,
+        benefits: level1Perks,
+      },
+      {
+        level: 2,
+        name: "Ценитель",
+        minXP: level2MinXP,
+        maxXP: level3MinXP - 1,
+        discount: level2Discount,
+        benefits: [`Скидка ${level2Discount}% на все покупки`, ...level2Perks],
+      },
+      {
+        level: 3,
+        name: "Чайный мастер",
+        minXP: level3MinXP,
+        maxXP: level4MinXP - 1,
+        discount: level3Discount,
+        benefits: [`Скидка ${level3Discount}% на все покупки`, ...level3Perks],
+      },
+      {
+        level: 4,
+        name: "Чайный Гуру",
+        minXP: level4MinXP,
+        maxXP: null as number | null,
+        discount: level4Discount,
+        benefits: [`Скидка ${level4Discount}% на все покупки`, ...level4Perks],
+      },
+    ];
+  };
+
+  const levels = getLevels();
+  const xpMultiplier = settings?.xpMultiplier ?? 1;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl p-4 max-h-[90vh]" data-testid="modal-loyalty-levels">
@@ -23,7 +82,7 @@ export function LoyaltyLevelsModal({ open, onOpenChange, currentXP }: LoyaltyLev
         </DialogHeader>
         
         <div className="flex gap-3 overflow-x-auto overflow-y-hidden pb-2">
-          {LOYALTY_LEVELS.map((level, index) => {
+          {levels.map((level, index) => {
             const isUnlocked = currentXP >= level.minXP;
             const isCurrent = currentXP >= level.minXP && (level.maxXP === null || currentXP <= level.maxXP);
             
@@ -88,7 +147,7 @@ export function LoyaltyLevelsModal({ open, onOpenChange, currentXP }: LoyaltyLev
                   </ul>
                 </div>
                 
-                {index < LOYALTY_LEVELS.length - 1 && (
+                {index < levels.length - 1 && (
                   <Separator orientation="vertical" className="h-auto self-stretch mx-1" />
                 )}
               </div>
@@ -98,7 +157,7 @@ export function LoyaltyLevelsModal({ open, onOpenChange, currentXP }: LoyaltyLev
         
         <div className="mt-3 p-3 border border-border rounded">
           <p className="text-xs text-muted-foreground">
-            <strong>Как получить XP:</strong> За каждый рубль покупки вы получаете 1 XP. 
+            <strong>Как получить XP:</strong> За каждый рубль покупки вы получаете {xpMultiplier} XP. 
             Накапливайте опыт, повышайте уровень и получайте всё больше привилегий!
           </p>
         </div>
