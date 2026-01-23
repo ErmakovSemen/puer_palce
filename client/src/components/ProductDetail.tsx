@@ -18,6 +18,7 @@ interface ProductDetailProps {
   teaType: string;
   effects: string[];
   availableQuantities?: string[];
+  defaultQuantity?: string | null; // Default selected quantity
   fixedQuantityOnly?: boolean;
   fixedQuantity?: number | null;
   outOfStock?: boolean;
@@ -37,6 +38,7 @@ export default function ProductDetail({
   teaType,
   effects,
   availableQuantities = ["25", "50", "100"],
+  defaultQuantity = null,
   fixedQuantityOnly = false,
   fixedQuantity = null,
   outOfStock = false,
@@ -48,6 +50,7 @@ export default function ProductDetail({
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedQuantity, setSelectedQuantity] = useState<string>(() => {
     if (fixedQuantityOnly && fixedQuantity) return String(fixedQuantity);
+    if (defaultQuantity) return defaultQuantity;
     if (isSoldByPiece) return "1";
     return availableQuantities[0] || "100";
   });
