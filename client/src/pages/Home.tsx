@@ -852,19 +852,16 @@ export default function Home() {
             data-testid="form-cart-goal-mobile"
           >
             <input type="hidden" name="goal" value="cart" />
-            <button
-              type="submit"
-              className="h-20 w-20 rounded-full shadow-2xl bg-black text-white border-2 border-white flex flex-col items-center justify-center hover-elevate active-elevate-2"
-              data-testid="button-cart-mobile"
-            >
-              <div className="relative">
-                <ShoppingCart className="w-9 h-9" />
-                <span className="absolute -top-1 -right-2 text-white text-[11px] font-bold rounded-full h-[18px] min-w-[18px] flex items-center justify-center px-1 btn-gradient">
-                  {cartItemCount}
-                </span>
-              </div>
-              <span className="text-sm font-bold">{Math.round(cartTotal)}₽</span>
-            </button>
+            <div className="cart-fab-gradient-border rounded-full p-[3px] shadow-2xl">
+              <button
+                type="submit"
+                className="h-[74px] w-[74px] rounded-full bg-black text-white flex flex-col items-center justify-center hover-elevate active-elevate-2"
+                data-testid="button-cart-mobile"
+              >
+                <ShoppingCart className="w-8 h-8" />
+                <span className="text-sm font-bold">{Math.round(cartTotal)}₽</span>
+              </button>
+            </div>
           </form>
         </div>
       )}

@@ -478,6 +478,26 @@
   box-shadow: 0 5px 15px rgba(255, 105, 180, 0.5);
 }
 
+/* Cart FAB gradient border with sparkle animation */
+.cart-fab-gradient-border {
+  background: linear-gradient(90deg, #40E0D0 0%, #FF69B4 50%, #FFD700 100%);
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+  box-shadow: 0 4px 15px rgba(255, 105, 180, 0.4), 0 2px 8px rgba(64, 224, 208, 0.3);
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 /* TV Display Leaderboard Animations */
 @keyframes slideIn {
   0% {
