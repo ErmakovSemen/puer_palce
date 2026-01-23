@@ -21,7 +21,7 @@ function isAdmin(chatId: string): boolean {
 
 // User state tracking for multi-step interactions
 type UserState = {
-  action: "awaiting_address" | "awaiting_cart_quantity" | "awaiting_broadcast_message" | "awaiting_broadcast_confirm" | "awaiting_question" | "awaiting_admin_reply";
+  action: "awaiting_address" | "awaiting_cart_quantity" | "awaiting_broadcast_message" | "awaiting_broadcast_confirm" | "awaiting_question" | "awaiting_admin_reply" | "awaiting_phone_for_code";
   expiresAt: number;
   productId?: number; // For cart quantity input
   broadcastAudience?: "all" | "linked" | "unlinked"; // For broadcast targeting
@@ -313,6 +313,13 @@ async function handleStartCommand(chatId: string, username?: string, firstName?:
     return;
   }
 
+  // Handle "code" deep link - send verification code
+  if (payload === "code") {
+    await getOrCreateProfile(chatId, username, firstName);
+    await handleCodeCommand(chatId);
+    return;
+  }
+
   // Handle "ask" deep link - direct to question form
   if (payload === "ask") {
     await getOrCreateProfile(chatId, username, firstName);
@@ -390,6 +397,7 @@ async function handleHelpCommand(chatId: string) {
 
 /start - Главное меню
 /help - Справка
+/code - Получить код подтверждения
 /contacts - Контактная информация
 /menu - Каталог чая
 /profile - Ваш профиль и лояльность
@@ -400,10 +408,184 @@ async function handleHelpCommand(chatId: string) {
 • Контактная информация  
 • Программа лояльности
 • Заказ с доставкой
+• Получение кода подтверждения (если SMS не дошла)
 
 Для использования корзины и программы лояльности привяжите аккаунт с сайта.`;
 
   await sendMessage(chatId, helpText);
+}
+
+// Handle /code command - send verification code to user
+async function handleCodeCommand(chatId: string) {
+  // Set state to await phone number input
+  setUserState(chatId, {
+    action: "awaiting_phone_for_code",
+    expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
+  });
+
+  const message = `<b>Получение кода подтверждения</b>
+
+Если вам не пришла SMS с кодом при регистрации или восстановлении пароля, отправьте свой номер телефона в формате:
+
+<code>+79001234567</code>
+
+Мы отправим код подтверждения сюда.
+
+⚠️ Убедитесь, что вы уже запросили код на сайте!`;
+
+  const keyboard: InlineKeyboardMarkup = {
+    inline_keyboard: [[{ text: "❌ Отмена", callback_data: "main_menu" }]],
+  };
+
+  await sendMessage(chatId, message, keyboard);
+}
+
+// Handle phone number input for verification code
+async function handlePhoneForCodeInput(chatId: string, phone: string) {
+  clearUserState(chatId);
+  
+  // Normalize phone - basic validation
+  const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+  if (!cleanPhone.match(/^\+?7\d{10}$/)) {
+    await sendMessage(chatId, `❌ <b>Неверный формат номера</b>
+
+Введите номер в формате: <code>+79001234567</code>
+
+Попробуйте ещё раз, отправив команду /code`);
+    return;
+  }
+
+  // Normalize to +7XXXXXXXXXX format
+  const normalizedPhone = cleanPhone.startsWith('+') ? cleanPhone : '+' + cleanPhone;
+
+  try {
+    // SECURITY CHECK: Verify this Telegram chat is linked to an account with this phone
+    // This prevents attackers from getting codes for phones they don't own
+    const profile = await db.query.telegramProfiles.findFirst({
+      where: eq(telegramProfiles.chatId, chatId),
+    });
+
+    if (profile && profile.userId) {
+      // Check if the linked user has this phone
+      const linkedUser = await db.query.users.findFirst({
+        where: eq(users.id, profile.userId),
+      });
+      
+      if (linkedUser && linkedUser.phone !== normalizedPhone) {
+        await sendMessage(chatId, `❌ <b>Номер не совпадает</b>
+
+Этот Telegram привязан к другому номеру телефона.
+
+Для безопасности код можно получить только для привязанного номера.`);
+        return;
+      }
+    }
+
+    // For registration (new users), allow code delivery only if:
+    // 1. This chat is NOT linked to any account (new user registering)
+    // 2. OR this chat IS linked to an account with matching phone
+    
+    // Check if there's an active verification for this phone
+    const { smsVerifications: smsVerificationsTable } = await import("@shared/schema");
+    
+    const [verification] = await db
+      .select()
+      .from(smsVerificationsTable)
+      .where(eq(smsVerificationsTable.phone, normalizedPhone))
+      .orderBy(desc(smsVerificationsTable.createdAt))
+      .limit(1);
+
+    if (!verification) {
+      await sendMessage(chatId, `❌ <b>Код не найден</b>
+
+Для этого номера нет активного запроса на верификацию.
+
+1. Перейдите на сайт
+2. Начните регистрацию или восстановление пароля
+3. Запросите код по SMS
+4. Вернитесь сюда и отправьте /code`);
+      return;
+    }
+
+    // For password_reset, require that this chat is linked to the phone's owner
+    if (verification.type === "password_reset") {
+      const phoneOwner = await db.query.users.findFirst({
+        where: eq(users.phone, normalizedPhone),
+      });
+      
+      if (!phoneOwner) {
+        await sendMessage(chatId, `❌ <b>Аккаунт не найден</b>
+
+Нет аккаунта с таким номером телефона.`);
+        return;
+      }
+      
+      // Check if this chat is linked to the phone owner
+      const ownerProfile = await db.query.telegramProfiles.findFirst({
+        where: eq(telegramProfiles.userId, phoneOwner.id),
+      });
+      
+      if (!ownerProfile || ownerProfile.chatId !== chatId) {
+        await sendMessage(chatId, `❌ <b>Telegram не привязан</b>
+
+Для восстановления пароля через Telegram необходимо сначала привязать этот чат к вашему аккаунту.
+
+Используйте SMS для получения кода.`);
+        return;
+      }
+    }
+
+    // Check if expired
+    if (new Date(verification.expiresAt) < new Date()) {
+      await sendMessage(chatId, `❌ <b>Код истёк</b>
+
+Запросите новый код на сайте и попробуйте снова.`);
+      return;
+    }
+
+    // Generate new code and update
+    const { generateVerificationCode } = await import("../sms-ru");
+    const { scrypt, randomBytes } = await import("crypto");
+    const { promisify } = await import("util");
+    
+    const scryptAsync = promisify(scrypt);
+    const newCode = generateVerificationCode();
+    const salt = randomBytes(16).toString("hex");
+    const buf = (await scryptAsync(newCode, salt, 64)) as Buffer;
+    const hashedCode = `${buf.toString("hex")}.${salt}`;
+    
+    // Update the verification record with new code
+    await db
+      .update(smsVerificationsTable)
+      .set({ 
+        code: hashedCode, 
+        attempts: 0,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString()
+      })
+      .where(eq(smsVerificationsTable.id, verification.id));
+
+    // Send the code via Telegram
+    const typeText = verification.type === "registration" ? "регистрации" : "восстановления пароля";
+    const message = `<b>Код подтверждения</b>
+
+Ваш код для ${typeText}:
+
+<code>${newCode}</code>
+
+Код действителен 5 минут.
+
+⚠️ Никому не сообщайте этот код!`;
+
+    await sendMessage(chatId, message);
+    
+    console.log(`[TelegramBot] Verification code sent to chat ${chatId} for phone ${normalizedPhone}`);
+
+  } catch (error) {
+    console.error("[TelegramBot] Error sending verification code:", error);
+    await sendMessage(chatId, `❌ <b>Произошла ошибка</b>
+
+Попробуйте позже или запросите код по SMS на сайте.`);
+  }
 }
 
 // ============ ASK QUESTION ============
@@ -1996,6 +2178,12 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
       await handleAdminReplySubmit(chatId, text);
       return;
     }
+    
+    if (userState.action === "awaiting_phone_for_code") {
+      // User entering phone number to receive verification code
+      await handlePhoneForCodeInput(chatId, text);
+      return;
+    }
   }
 
   switch (command) {
@@ -2004,6 +2192,9 @@ export async function handleWebhookUpdate(update: TelegramUpdate): Promise<void>
       break;
     case "/help":
       await handleHelpCommand(chatId);
+      break;
+    case "/code":
+      await handleCodeCommand(chatId);
       break;
     case "/contacts":
       await handleContactsCommand(chatId);
@@ -2075,4 +2266,24 @@ export async function getWebhookInfo(): Promise<any> {
     console.error("[TelegramBot] Get webhook info error:", error);
     return null;
   }
+}
+
+// Send verification code to a Telegram chat
+export async function sendVerificationCodeToChat(
+  chatId: string,
+  code: string,
+  type: "registration" | "password_reset"
+): Promise<boolean> {
+  const typeText = type === "registration" ? "регистрации" : "восстановления пароля";
+  const message = `<b>Код подтверждения</b>
+
+Ваш код для ${typeText}:
+
+<code>${code}</code>
+
+Код действителен 5 минут.
+
+⚠️ Никому не сообщайте этот код!`;
+
+  return await sendMessage(chatId, message);
 }

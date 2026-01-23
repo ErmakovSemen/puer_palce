@@ -361,6 +361,20 @@ export default function Auth() {
                         ? `Отправить повторно (${resendTimer}с)` 
                         : "Отправить код повторно"}
                     </Button>
+                    <div className="text-center pt-2">
+                      <p className="text-xs text-muted-foreground">
+                        Не пришёл код?{" "}
+                        <a
+                          href="https://t.me/PuerPabbot?start=code"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline"
+                          data-testid="link-telegram-code-forgot"
+                        >
+                          Получить через Telegram
+                        </a>
+                      </p>
+                    </div>
                   </form>
                 )}
 
@@ -714,6 +728,20 @@ export default function Auth() {
                         >
                           Изменить номер телефона
                         </Button>
+                        <div className="text-center pt-2">
+                          <p className="text-xs text-muted-foreground">
+                            Не пришёл код?{" "}
+                            <a
+                              href="https://t.me/PuerPabbot?start=code"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-primary hover:underline"
+                              data-testid="link-telegram-code"
+                            >
+                              Получить через Telegram
+                            </a>
+                          </p>
+                        </div>
                       </div>
                     )}
                   </CardContent>
