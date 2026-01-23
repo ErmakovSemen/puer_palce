@@ -67,9 +67,11 @@ interface ProductGridWithBannersProps {
   onAddToCart: (productId: number, quantity: number) => void;
   onUpdateQuantity: (productId: number, quantity: number) => void;
   onProductClick: (productId: number) => void;
+  onFilterByType: (type: string) => void;
+  onFilterByEffect: (effect: string) => void;
 }
 
-function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onUpdateQuantity, onProductClick }: ProductGridWithBannersProps) {
+function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onUpdateQuantity, onProductClick, onFilterByType, onFilterByEffect }: ProductGridWithBannersProps) {
   const DESKTOP_COLS = 4;
   const MOBILE_COLS = 2;
 
@@ -112,6 +114,8 @@ function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onU
                       onAddToCart={onAddToCart}
                       onUpdateQuantity={onUpdateQuantity}
                       onClick={onProductClick}
+                      onFilterByType={onFilterByType}
+                      onFilterByEffect={onFilterByEffect}
                     />
                   </div>
                 );
@@ -147,6 +151,8 @@ function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onU
                       onAddToCart={onAddToCart}
                       onUpdateQuantity={onUpdateQuantity}
                       onClick={onProductClick}
+                      onFilterByType={onFilterByType}
+                      onFilterByEffect={onFilterByEffect}
                     />
                   </div>
                 );
@@ -180,6 +186,22 @@ export default function Home() {
   const [recommendedProductIds, setRecommendedProductIds] = useState<number[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
+  // Handle URL params for tag-based filtering (runs on initial mount only)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const type = params.get('type');
+    const effect = params.get('effect');
+    
+    if (type) {
+      setSelectedTypes([type]);
+      setSelectedEffects([]);
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (effect) {
+      setSelectedEffects([effect]);
+      setSelectedTypes([]);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   // Guest cart (localStorage for unauthenticated users)
   // Migrate legacy cart items that may not have originalPrice
@@ -653,6 +675,8 @@ export default function Home() {
                   onAddToCart={addToCart}
                   onUpdateQuantity={updateQuantity}
                   onProductClick={setSelectedProductId}
+                  onFilterByType={(type) => { setSelectedTypes([type]); setSelectedEffects([]); }}
+                  onFilterByEffect={(effect) => { setSelectedEffects([effect]); setSelectedTypes([]); }}
                 />
               </div>
             )}
@@ -680,6 +704,8 @@ export default function Home() {
                           onAddToCart={addToCart}
                           onUpdateQuantity={updateQuantity}
                           onClick={setSelectedProductId}
+                          onFilterByType={(type) => { setSelectedTypes([type]); setSelectedEffects([]); }}
+                          onFilterByEffect={(effect) => { setSelectedEffects([effect]); setSelectedTypes([]); }}
                         />
                       </div>
                     );

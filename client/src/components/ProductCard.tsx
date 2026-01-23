@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ShoppingCart, ChevronLeft, ChevronRight, Minus, Plus } from "lucide-react";
 import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { useState, useEffect, useMemo } from "react";
+import { useLocation } from "wouter";
 import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
 import { useTeaTypes } from "@/hooks/use-tea-types";
 
@@ -28,6 +29,8 @@ interface ProductCardProps {
   onAddToCart: (id: number, quantity: number, pricePerUnit: number) => void;
   onUpdateQuantity?: (id: number, quantity: number) => void;
   onClick: (id: number) => void;
+  onFilterByType?: (type: string) => void;
+  onFilterByEffect?: (effect: string) => void;
 }
 
 export default function ProductCard({ 
@@ -50,12 +53,29 @@ export default function ProductCard({
   cartOriginalPrice,
   onAddToCart,
   onUpdateQuantity,
-  onClick 
+  onClick,
+  onFilterByType,
+  onFilterByEffect
 }: ProductCardProps) {
   const isTeaware = category === "teaware";
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   const { data: teaTypes } = useTeaTypes();
+  const [, setLocation] = useLocation();
+  
+  // Handle tag click - filter by type or effect
+  const handleTagClick = (e: React.MouseEvent, filterType: 'teaType' | 'effect', value: string) => {
+    e.stopPropagation();
+    if (filterType === 'teaType' && onFilterByType) {
+      onFilterByType(value);
+    } else if (filterType === 'effect' && onFilterByEffect) {
+      onFilterByEffect(value);
+    } else {
+      // Fallback to URL navigation if callbacks not provided
+      const param = filterType === 'teaType' ? 'type' : 'effect';
+      setLocation(`/?${param}=${encodeURIComponent(value)}`);
+    }
+  };
   
   // Parse available quantities and get min/max for tea products
   const parsedQuantities = useMemo(() => {
@@ -173,8 +193,9 @@ export default function ProductCard({
           </h3>
           <div className="flex flex-wrap gap-1">
             <Badge 
-              className="text-xs transition-all duration-300"
+              className="text-xs transition-all duration-300 cursor-pointer"
               style={getTeaTypeBadgeStyleDynamic(teaType, teaTypes)}
+              onClick={(e) => handleTagClick(e, 'teaType', teaType)}
               data-testid={`badge-tea-type-${id}`}
             >
               {teaType}
@@ -192,12 +213,13 @@ export default function ProductCard({
               <Badge 
                 key={index} 
                 variant="outline" 
-                className="text-xs transition-all duration-300"
+                className="text-xs transition-all duration-300 cursor-pointer"
                 style={{ 
                   backgroundColor: 'white',
                   color: 'black',
                   border: '3px double black'
                 }}
+                onClick={(e) => handleTagClick(e, 'effect', effect)}
                 data-testid={`badge-effect-${id}-${index}`}
               >
                 {effect}
@@ -217,7 +239,7 @@ export default function ProductCard({
               onClick={() => setSelectedWeight('min')}
               className={`flex-1 py-1.5 px-2 text-sm font-medium rounded-md transition-all ${
                 selectedWeight === 'min'
-                  ? 'bg-foreground text-background'
+                  ? 'bg-stone-100 text-foreground border border-stone-300'
                   : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
               data-testid={`button-weight-min-${id}`}
@@ -229,7 +251,7 @@ export default function ProductCard({
               onClick={() => setSelectedWeight('max')}
               className={`flex-1 py-1.5 px-2 text-sm font-medium rounded-md transition-all relative ${
                 selectedWeight === 'max'
-                  ? 'bg-foreground text-background'
+                  ? 'bg-stone-100 text-foreground border border-stone-300'
                   : 'bg-muted text-muted-foreground hover:bg-muted/80'
               }`}
               data-testid={`button-weight-max-${id}`}
