@@ -43,6 +43,7 @@ const productSchema = z.object({
   teaType: z.string().min(1, "Выберите тип"),
   effects: z.array(z.string()).min(0, "Укажите эффекты или оставьте пустым"),
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
+  defaultQuantity: z.string().regex(/^\d+$/, "Количество должно быть числом").optional().nullable(),
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
   outOfStock: z.boolean(),
@@ -99,6 +100,7 @@ export default function AdminProductForm({
       teaType: defaultValues?.teaType || "",
       effects: defaultValues?.effects || [],
       availableQuantities: defaultValues?.availableQuantities || ["25", "50", "100"],
+      defaultQuantity: (defaultValues as any)?.defaultQuantity || null,
       fixedQuantityOnly: defaultValues?.fixedQuantityOnly || false,
       fixedQuantity: defaultValues?.fixedQuantity || null,
       outOfStock: (defaultValues as any)?.outOfStock || false,
@@ -527,6 +529,38 @@ export default function AdminProductForm({
                 </Button>
               )}
 
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="defaultQuantity"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Количество по умолчанию</FormLabel>
+              <FormDescription className="text-sm text-muted-foreground">
+                Выберите количество, которое будет выбрано по умолчанию при открытии карточки товара
+              </FormDescription>
+              <Select
+                onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                value={field.value || "none"}
+              >
+                <FormControl>
+                  <SelectTrigger data-testid="select-default-quantity">
+                    <SelectValue placeholder="Первое из списка" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">Первое из списка</SelectItem>
+                  {form.watch("availableQuantities").sort((a, b) => parseInt(a) - parseInt(b)).map((qty) => (
+                    <SelectItem key={qty} value={qty}>
+                      {qty}{form.watch("pricingUnit") === "piece" ? " шт" : "г"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
