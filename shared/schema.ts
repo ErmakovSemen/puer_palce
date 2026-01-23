@@ -111,14 +111,15 @@ export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   category: text("category").notNull().default("tea"), // "tea" or "teaware"
-  pricePerGram: real("price_per_gram").notNull(), // For teaware, this is price per piece
+  pricingUnit: text("pricing_unit").notNull().default("gram"), // "gram" or "piece" - how the product is sold
+  pricePerGram: real("price_per_gram").notNull(), // For piece pricing, this is price per piece
   description: text("description").notNull(),
   images: text("images").array().notNull().default(sql`ARRAY[]::text[]`),
   teaType: text("tea_type").notNull(),
   effects: text("effects").array().notNull().default(sql`ARRAY[]::text[]`),
-  availableQuantities: text("available_quantities").array().notNull().default(sql`ARRAY['25', '50', '100']::text[]`), // Available quantities in grams
+  availableQuantities: text("available_quantities").array().notNull().default(sql`ARRAY['25', '50', '100']::text[]`), // Available quantities in grams or pieces
   fixedQuantityOnly: boolean("fixed_quantity_only").notNull().default(false), // If true, only sell in fixed quantity
-  fixedQuantity: integer("fixed_quantity"), // Fixed quantity in grams (e.g., 357g for tea cake) or 1 for teaware
+  fixedQuantity: integer("fixed_quantity"), // Fixed quantity in grams (e.g., 357g for tea cake) or pieces
   outOfStock: boolean("out_of_stock").notNull().default(false), // If true, product is out of stock and cannot be ordered
 });
 
@@ -126,6 +127,9 @@ export const insertProductSchema = createInsertSchema(products, {
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
   category: z.enum(["tea", "teaware"], {
     errorMap: () => ({ message: "Выберите категорию: чай или посуда" })
+  }),
+  pricingUnit: z.enum(["gram", "piece"], {
+    errorMap: () => ({ message: "Выберите единицу измерения: граммы или штуки" })
   }),
   pricePerGram: z.number().min(0, "Цена должна быть положительной"),
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),

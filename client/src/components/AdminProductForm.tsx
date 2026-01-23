@@ -34,6 +34,9 @@ const productSchema = z.object({
   category: z.enum(["tea", "teaware"], {
     errorMap: () => ({ message: "Выберите категорию: чай или посуда" })
   }),
+  pricingUnit: z.enum(["gram", "piece"], {
+    errorMap: () => ({ message: "Выберите единицу измерения: граммы или штуки" })
+  }),
   pricePerGram: z.number().min(0, "Цена должна быть положительной"),
   description: z.string().min(10, "Описание должно содержать минимум 10 символов"),
   images: z.array(z.string().min(1)).min(1, "Добавьте хотя бы одно изображение"),
@@ -89,6 +92,7 @@ export default function AdminProductForm({
     defaultValues: {
       name: defaultValues?.name || "",
       category: (defaultValues as any)?.category || "tea",
+      pricingUnit: (defaultValues as any)?.pricingUnit || "gram",
       pricePerGram: defaultValues?.pricePerGram || 0,
       description: defaultValues?.description || "",
       images: defaultValues?.images || [],
@@ -190,8 +194,32 @@ export default function AdminProductForm({
                   <SelectItem value="teaware">Чайная посуда</SelectItem>
                 </SelectContent>
               </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="pricingUnit"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Единица измерения</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value} data-testid="select-pricing-unit">
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Выберите единицу" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="gram">Граммы (чай россыпью)</SelectItem>
+                  <SelectItem value="piece">Штуки (блин, посуда)</SelectItem>
+                </SelectContent>
+              </Select>
               <FormDescription>
-                Для посуды цена указывается за штуку
+                {field.value === "piece" 
+                  ? "Товар будет продаваться поштучно" 
+                  : "Товар будет продаваться по весу в граммах"}
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -204,7 +232,7 @@ export default function AdminProductForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>
-                {form.watch("category") === "teaware" ? "Цена за штуку (₽)" : "Цена за грамм (₽/г)"}
+                {form.watch("pricingUnit") === "piece" ? "Цена за штуку (₽)" : "Цена за грамм (₽/г)"}
               </FormLabel>
               <FormControl>
                 <Input 

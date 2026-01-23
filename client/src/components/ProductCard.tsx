@@ -12,6 +12,7 @@ interface ProductCardProps {
   id: number;
   name: string;
   category?: string;
+  pricingUnit?: string; // "gram" or "piece"
   pricePerGram: number;
   description: string;
   image?: string;  // Keep for backwards compatibility
@@ -37,6 +38,7 @@ export default function ProductCard({
   id, 
   name, 
   category = "tea",
+  pricingUnit = "gram",
   pricePerGram, 
   description, 
   image,
@@ -57,7 +59,8 @@ export default function ProductCard({
   onFilterByType,
   onFilterByEffect
 }: ProductCardProps) {
-  const isTeaware = category === "teaware";
+  // Product is sold by piece if pricingUnit is "piece" or category is "teaware"
+  const isSoldByPiece = pricingUnit === "piece" || category === "teaware";
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [imageError, setImageError] = useState(false);
   const { data: teaTypes } = useTeaTypes();
@@ -77,18 +80,18 @@ export default function ProductCard({
     }
   };
   
-  // Parse available quantities and get min/max for tea products
+  // Parse available quantities and get min/max for tea products (only for gram-based)
   const parsedQuantities = useMemo(() => {
-    if (isTeaware || fixedQuantityOnly) return [];
+    if (isSoldByPiece || fixedQuantityOnly) return [];
     return availableQuantities
       .map(q => parseInt(q, 10))
       .filter(q => !isNaN(q))
       .sort((a, b) => a - b);
-  }, [availableQuantities, isTeaware, fixedQuantityOnly]);
+  }, [availableQuantities, isSoldByPiece, fixedQuantityOnly]);
   
   const minWeight = parsedQuantities.length > 0 ? parsedQuantities[0] : 100;
   const maxWeight = parsedQuantities.length > 1 ? parsedQuantities[parsedQuantities.length - 1] : minWeight;
-  const hasWeightOptions = !isTeaware && !fixedQuantityOnly && minWeight !== maxWeight;
+  const hasWeightOptions = !isSoldByPiece && !fixedQuantityOnly && minWeight !== maxWeight;
   
   // State for selected weight (default to min)
   const [selectedWeight, setSelectedWeight] = useState<'min' | 'max'>('min');
@@ -96,8 +99,8 @@ export default function ProductCard({
   // Calculate prices
   const currentWeight = selectedWeight === 'min' ? minWeight : maxWeight;
   const basePrice = pricePerGram * currentWeight;
-  const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
-  const showDiscount = !isTeaware && currentWeight >= 100;
+  const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g (only for gram-based)
+  const showDiscount = !isSoldByPiece && currentWeight >= 100;
   const discountedPrice = showDiscount ? Math.round(basePrice * (1 - BULK_DISCOUNT)) : basePrice;
   
   // Use images array if available, otherwise fallback to single image or default
@@ -281,7 +284,7 @@ export default function ProductCard({
                       type="button"
                       className="h-8 w-8 shrink-0 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 transition-colors"
                       onClick={() => {
-                        const step = isTeaware ? 1 : currentWeight;
+                        const step = isSoldByPiece ? 1 : currentWeight;
                         const newQty = Math.max(0, cartQuantity - step);
                         onUpdateQuantity(id, newQty);
                       }}
@@ -298,7 +301,7 @@ export default function ProductCard({
                       type="button"
                       className="h-8 w-8 shrink-0 flex items-center justify-center text-white hover:bg-white/10 active:bg-white/20 transition-colors"
                       onClick={() => {
-                        const step = isTeaware ? 1 : currentWeight;
+                        const step = isSoldByPiece ? 1 : currentWeight;
                         onUpdateQuantity(id, cartQuantity + step);
                       }}
                       data-testid={`button-increase-${id}`}
@@ -307,7 +310,7 @@ export default function ProductCard({
                     </button>
                   </div>
                   <span className="text-muted-foreground text-xs whitespace-nowrap shrink-0" data-testid={`text-cart-count-${id}`}>
-                    {isTeaware ? `x${cartQuantity}` : `${cartQuantity}г`}
+                    {isSoldByPiece ? `x${cartQuantity}` : `${cartQuantity}г`}
                   </span>
                 </div>
               </div>
@@ -319,7 +322,7 @@ export default function ProductCard({
                     <span className="text-xs text-muted-foreground line-through">{basePrice} ₽</span>
                   )}
                   <span className="text-lg sm:text-xl font-semibold transition-colors duration-300 text-foreground group-hover/card:text-primary">
-                    {isTeaware ? `${pricePerGram} ₽` : (
+                    {isSoldByPiece ? `${pricePerGram} ₽` : (
                       hasWeightOptions || fixedQuantityOnly ? `${discountedPrice} ₽` : `${pricePerGram} ₽/г`
                     )}
                   </span>
@@ -327,7 +330,7 @@ export default function ProductCard({
                 <Button
                   onClick={(e) => {
                     e.stopPropagation();
-                    const qty = isTeaware ? 1 : (
+                    const qty = isSoldByPiece ? 1 : (
                       fixedQuantityOnly && fixedQuantity 
                         ? fixedQuantity 
                         : currentWeight
@@ -346,7 +349,7 @@ export default function ProductCard({
           ) : (
             /* Out of stock */
             <span className="text-lg sm:text-xl font-semibold text-muted-foreground" data-testid={`text-product-price-${id}`}>
-              {isTeaware ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
+              {isSoldByPiece ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
             </span>
           )}
         </div>

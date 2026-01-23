@@ -10,6 +10,7 @@ interface ProductDetailProps {
   id: number;
   name: string;
   category?: string;
+  pricingUnit?: string; // "gram" or "piece"
   pricePerGram: number;
   description: string;
   image?: string;  // Keep for backwards compatibility
@@ -28,6 +29,7 @@ export default function ProductDetail({
   id,
   name,
   category = "tea",
+  pricingUnit = "gram",
   pricePerGram,
   description,
   image,
@@ -41,7 +43,8 @@ export default function ProductDetail({
   onAddToCart,
   onClose,
 }: ProductDetailProps) {
-  const isTeaware = category === "teaware";
+  // Product is sold by piece if pricingUnit is "piece" or category is "teaware"
+  const isSoldByPiece = pricingUnit === "piece" || category === "teaware";
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedQuantity, setSelectedQuantity] = useState<string>(
     fixedQuantityOnly && fixedQuantity ? String(fixedQuantity) : (availableQuantities[0] || "100")
@@ -141,17 +144,29 @@ export default function ProductDetail({
           <div className="pt-4 space-y-4">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-primary" data-testid={`text-detail-price-${id}`}>
-                {isTeaware ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
+                {isSoldByPiece ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
               </span>
-              {!isTeaware && (
+              {!isSoldByPiece && (
                 <span className="text-sm text-muted-foreground">
                   (100 г = {pricePerGram * 100} ₽)
                 </span>
               )}
             </div>
 
-            {/* Quantity Selection - not shown for teaware */}
-            {!isTeaware && (
+            {/* For piece-based products - show simple piece selector */}
+            {isSoldByPiece && !outOfStock && (
+              <div className="p-4 bg-muted rounded-md">
+                <p className="text-sm text-muted-foreground mb-1">
+                  Продаётся поштучно
+                </p>
+                <p className="text-lg font-semibold" data-testid="text-piece-price">
+                  {pricePerGram} ₽ / шт
+                </p>
+              </div>
+            )}
+
+            {/* Quantity Selection - only for gram-based products */}
+            {!isSoldByPiece && (
               <div className="space-y-3">
                 <label className="text-sm font-medium">Количество</label>
                 
@@ -250,7 +265,7 @@ export default function ProductDetail({
               onClick={() => {
                 if (outOfStock) return;
                 // For teaware, always add 1 piece
-                const quantity = isTeaware ? 1 : (
+                const quantity = isSoldByPiece ? 1 : (
                   fixedQuantityOnly && fixedQuantity 
                     ? fixedQuantity 
                     : parseInt(customQuantity || selectedQuantity || "0", 10)
@@ -260,7 +275,7 @@ export default function ProductDetail({
                   onClose();
                 }
               }}
-              disabled={outOfStock || (!isTeaware && !fixedQuantityOnly && !selectedQuantity && !customQuantity)}
+              disabled={outOfStock || (!isSoldByPiece && !fixedQuantityOnly && !selectedQuantity && !customQuantity)}
               className="w-full bg-primary text-primary-foreground border border-primary-border"
               size="lg"
               data-testid={`button-detail-add-to-cart-${id}`}
