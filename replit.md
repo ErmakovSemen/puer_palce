@@ -8,6 +8,10 @@ Puer Pub is an e-commerce platform for premium Chinese Puer tea, offering a publ
 
 Preferred communication style: Simple, everyday language.
 
+## Database Guidelines
+
+-   **Cascading Deletes**: All foreign key relationships referencing `users` table MUST use `onDelete: "cascade"` in Drizzle schema. When adding new tables with user references, always include `{ onDelete: "cascade" }` in the `.references()` call. This ensures user deletion properly cleans up all related data (orders, cart items, XP transactions, wallet transactions, saved addresses, telegram profiles, etc.).
+
 ## System Architecture
 
 ### Frontend
