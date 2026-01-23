@@ -15,6 +15,7 @@ import Leaderboard from "@/pages/Leaderboard";
 import TVDisplay from "@/pages/TVDisplay";
 import { useDesignMode } from "@/hooks/use-design-mode";
 import { AuthProvider } from "@/hooks/use-auth";
+import { FirstOrderPromo } from "@/components/FirstOrderPromo";
 
 function Router() {
   return (
@@ -40,6 +41,7 @@ function AppContent() {
   return (
     <>
       <Toaster />
+      <FirstOrderPromo />
       <Router />
     </>
   );
