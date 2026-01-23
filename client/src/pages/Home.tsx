@@ -854,16 +854,14 @@ export default function Home() {
             <input type="hidden" name="goal" value="cart" />
             <button
               type="submit"
-              className="h-20 w-20 rounded-full shadow-2xl bg-black text-white border-2 border-white flex flex-col items-center justify-center hover-elevate active-elevate-2"
+              className="relative h-20 w-20 rounded-full shadow-2xl bg-black text-white border-2 border-white flex flex-col items-center justify-center hover-elevate active-elevate-2"
               data-testid="button-cart-mobile"
             >
-              <div className="relative">
-                <ShoppingCart className="w-8 h-8" />
-                <span className="absolute -top-1 -right-1 text-white text-[10px] font-bold rounded-full h-4 min-w-4 flex items-center justify-center px-0.5 btn-gradient">
-                  {cartItemCount}
-                </span>
-              </div>
-              <span className="text-[10px] font-bold mt-0.5">{Math.round(cartTotal)}₽</span>
+              <span className="absolute -top-1 -right-1 text-white text-xs font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1 btn-gradient">
+                {cartItemCount}
+              </span>
+              <ShoppingCart className="w-10 h-10" />
+              <span className="text-xs font-bold mt-1">{Math.round(cartTotal)}₽</span>
             </button>
           </form>
         </div>

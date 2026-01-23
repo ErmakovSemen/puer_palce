@@ -46,9 +46,11 @@ export default function ProductDetail({
   // Product is sold by piece if pricingUnit is "piece" or category is "teaware"
   const isSoldByPiece = pricingUnit === "piece" || category === "teaware";
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [selectedQuantity, setSelectedQuantity] = useState<string>(
-    fixedQuantityOnly && fixedQuantity ? String(fixedQuantity) : (availableQuantities[0] || "100")
-  );
+  const [selectedQuantity, setSelectedQuantity] = useState<string>(() => {
+    if (fixedQuantityOnly && fixedQuantity) return String(fixedQuantity);
+    if (isSoldByPiece) return "1";
+    return availableQuantities[0] || "100";
+  });
   const [customQuantity, setCustomQuantity] = useState<string>("");
   const { data: teaTypes } = useTeaTypes();
   
@@ -144,7 +146,7 @@ export default function ProductDetail({
           <div className="pt-4 space-y-4">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-primary" data-testid={`text-detail-price-${id}`}>
-                {isSoldByPiece ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
+                {isSoldByPiece ? `${pricePerGram} ₽ / шт` : `${pricePerGram} ₽/г`}
               </span>
               {!isSoldByPiece && (
                 <span className="text-sm text-muted-foreground">
@@ -153,15 +155,65 @@ export default function ProductDetail({
               )}
             </div>
 
-            {/* For piece-based products - show simple piece selector */}
+            {/* Quantity Selection for piece-based products */}
             {isSoldByPiece && !outOfStock && (
-              <div className="p-4 bg-muted rounded-md">
-                <p className="text-sm text-muted-foreground mb-1">
-                  Продаётся поштучно
-                </p>
-                <p className="text-lg font-semibold" data-testid="text-piece-price">
-                  {pricePerGram} ₽ / шт
-                </p>
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Количество</label>
+                
+                {/* Preset quantities */}
+                <div className="flex flex-wrap gap-2">
+                  {["1", "5", "10"].map((qty) => (
+                    <Button
+                      key={qty}
+                      type="button"
+                      variant={selectedQuantity === qty && !customQuantity ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => {
+                        setSelectedQuantity(qty);
+                        setCustomQuantity("");
+                      }}
+                      data-testid={`button-piece-quantity-${qty}`}
+                    >
+                      {qty} шт
+                    </Button>
+                  ))}
+                </div>
+
+                {/* Custom quantity input */}
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label className="text-sm text-muted-foreground">Своё количество</label>
+                    <Input
+                      type="number"
+                      min="1"
+                      max="100"
+                      placeholder="от 1 до 100"
+                      value={customQuantity}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const num = parseInt(val, 10);
+                        if (val === "" || (!isNaN(num) && num >= 1 && num <= 100)) {
+                          setCustomQuantity(val);
+                          setSelectedQuantity("");
+                        }
+                      }}
+                      data-testid="input-custom-piece-quantity"
+                    />
+                  </div>
+                </div>
+
+                {/* Total price */}
+                {(selectedQuantity || customQuantity) && (() => {
+                  const qty = parseInt(customQuantity || selectedQuantity || "0", 10);
+                  const totalPrice = pricePerGram * qty;
+                  return (
+                    <div className="text-right">
+                      <span className="text-lg font-semibold" data-testid="text-piece-total-price">
+                        Итого: {totalPrice} ₽
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -264,18 +316,15 @@ export default function ProductDetail({
             <Button
               onClick={() => {
                 if (outOfStock) return;
-                // For teaware, always add 1 piece
-                const quantity = isSoldByPiece ? 1 : (
-                  fixedQuantityOnly && fixedQuantity 
-                    ? fixedQuantity 
-                    : parseInt(customQuantity || selectedQuantity || "0", 10)
-                );
+                const quantity = fixedQuantityOnly && fixedQuantity 
+                  ? fixedQuantity 
+                  : parseInt(customQuantity || selectedQuantity || "0", 10);
                 if (quantity > 0) {
                   onAddToCart(id, quantity);
                   onClose();
                 }
               }}
-              disabled={outOfStock || (!isSoldByPiece && !fixedQuantityOnly && !selectedQuantity && !customQuantity)}
+              disabled={outOfStock || (!fixedQuantityOnly && !selectedQuantity && !customQuantity)}
               className="w-full bg-primary text-primary-foreground border border-primary-border"
               size="lg"
               data-testid={`button-detail-add-to-cart-${id}`}
