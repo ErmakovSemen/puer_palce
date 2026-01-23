@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Minus, Trophy, Copy, Check } from "lucide-react";
+import { Search, Plus, Minus, Trophy, Copy, Check, Trash2 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { format } from "date-fns";
@@ -200,6 +200,47 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     },
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch(getApiUrl(`/api/admin/users/${userId}`), {
+        method: 'DELETE',
+        headers: { 
+          'X-Admin-Password': adminPassword,
+        },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Не удалось удалить пользователя');
+      }
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users/search'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users/recent'] });
+      setSelectedUserId(null);
+      setSearchPhone("");
+      toast({
+        title: "Успешно",
+        description: "Пользователь удален",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Ошибка",
+        description: error.message || "Не удалось удалить пользователя",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDeleteUser = () => {
+    if (!user) return;
+    if (window.confirm(`Вы уверены, что хотите удалить пользователя ${user.phone || user.email}? Это действие нельзя отменить.`)) {
+      deleteUserMutation.mutate(user.id);
+    }
+  };
+
   const handleSearch = () => {
     if (searchPhone.trim()) {
       refetchUser();
@@ -357,8 +398,18 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
       {user && loyaltyProgress && (
         <>
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
               <CardTitle>Профиль пользователя</CardTitle>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteUser}
+                disabled={deleteUserMutation.isPending}
+                data-testid="button-delete-user"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {deleteUserMutation.isPending ? "Удаление..." : "Удалить"}
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">

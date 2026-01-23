@@ -1002,6 +1002,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/admin/users/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const userId = req.params.id;
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      
+      await db.delete(usersTable).where(eq(usersTable.id, userId));
+      
+      console.log(`[Admin] User deleted: ${userId} (${user.phone})`);
+      res.json({ success: true, message: "User deleted successfully" });
+    } catch (error) {
+      console.error("[Admin] Delete user error:", error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
   app.get("/api/admin/users/recent", requireAdminAuth, async (req, res) => {
     try {
       const recentUsers = await db
