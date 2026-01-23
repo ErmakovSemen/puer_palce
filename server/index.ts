@@ -94,10 +94,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Run database migrations for missing columns
+  // Run database migrations for missing columns and data fixes
   try {
     await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS default_quantity TEXT`);
     log('Database migration: default_quantity column ensured');
+    
+    // Fix inconsistent tea type names
+    await pool.query(`UPDATE products SET tea_type = 'Красный чай' WHERE tea_type = 'красный'`);
+    log('Database migration: tea types normalized');
   } catch (err) {
     log(`Database migration warning: ${err}`);
   }
