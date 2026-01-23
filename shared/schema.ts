@@ -118,6 +118,7 @@ export const products = pgTable("products", {
   teaType: text("tea_type").notNull(),
   effects: text("effects").array().notNull().default(sql`ARRAY[]::text[]`),
   availableQuantities: text("available_quantities").array().notNull().default(sql`ARRAY['25', '50', '100']::text[]`), // Available quantities in grams or pieces
+  defaultQuantity: text("default_quantity"), // Default selected quantity (e.g., "50" for 50g or "1" for 1 piece)
   fixedQuantityOnly: boolean("fixed_quantity_only").notNull().default(false), // If true, only sell in fixed quantity
   fixedQuantity: integer("fixed_quantity"), // Fixed quantity in grams (e.g., 357g for tea cake) or pieces
   outOfStock: boolean("out_of_stock").notNull().default(false), // If true, product is out of stock and cannot be ordered
@@ -137,6 +138,7 @@ export const insertProductSchema = createInsertSchema(products, {
   teaType: z.string().min(1, "Выберите тип"),
   effects: z.array(z.string()).min(0, "Укажите эффекты или оставьте пустым"),
   availableQuantities: z.array(z.string().regex(/^\d+$/, "Количество должно быть числом")).min(1, "Добавьте хотя бы одно доступное количество"),
+  defaultQuantity: z.string().regex(/^\d+$/, "Количество должно быть числом").optional().nullable(),
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
   outOfStock: z.boolean(),
