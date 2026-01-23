@@ -838,7 +838,7 @@ export default function Home() {
 
       {/* Floating cart button for mobile - visible only on small screens */}
       {cartItemCount > 0 && (
-        <div className="fixed bottom-6 right-4 left-4 z-50 sm:hidden">
+        <div className="fixed bottom-6 right-4 z-50 sm:hidden">
           <form
             id="goal-cart-form-mobile"
             action="/goal/cart"
@@ -850,17 +850,19 @@ export default function Home() {
             data-testid="form-cart-goal-mobile"
           >
             <input type="hidden" name="goal" value="cart" />
-            <Button
+            <button
               type="submit"
-              size="lg"
-              className="w-full rounded-full shadow-xl bg-black text-white border-2 border-white gap-2"
+              className="h-16 w-16 rounded-full shadow-2xl bg-black text-white border-2 border-white flex flex-col items-center justify-center hover-elevate active-elevate-2"
               data-testid="button-cart-mobile"
             >
-              <ShoppingCart className="w-5 h-5" />
-              <span>{cartItemCount}</span>
-              <span className="text-white/60">|</span>
-              <span className="font-bold">{Math.round(cartTotal)} ₽</span>
-            </Button>
+              <div className="relative">
+                <ShoppingCart className="w-6 h-6" />
+                <span className="absolute -top-2 -right-3 bg-primary text-primary-foreground text-xs font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1">
+                  {cartItemCount}
+                </span>
+              </div>
+              <span className="text-[10px] font-bold mt-0.5">{Math.round(cartTotal)}₽</span>
+            </button>
           </form>
         </div>
       )}

@@ -326,7 +326,8 @@ export default function ProductCard({
                     )}
                   </span>
                 </div>
-                <Button
+                <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     const qty = isTeaware ? 1 : (
@@ -337,12 +338,12 @@ export default function ProductCard({
                     const effectivePrice = showDiscount ? pricePerGram * (1 - BULK_DISCOUNT) : pricePerGram;
                     onAddToCart(id, qty, effectivePrice);
                   }}
-                  size="icon"
-                  className="bg-black text-white hover:bg-black/90 border-2 border-white opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 shadow-lg transition-all duration-300 h-9 w-9 sm:h-8 sm:w-8"
+                  className="flex items-center gap-1 bg-black text-white border-2 border-white rounded-md opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 shadow-lg transition-all duration-300 px-2 py-1.5 text-[11px] font-bold whitespace-nowrap hover-elevate active-elevate-2"
                   data-testid={`button-add-to-cart-${id}`}
                 >
-                  <ShoppingCart className="w-4 h-4" />
-                </Button>
+                  <ShoppingCart className="w-3 h-3 shrink-0" />
+                  <span>{discountedPrice}₽</span>
+                </button>
               </div>
             )
           ) : (
