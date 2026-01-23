@@ -19,7 +19,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Sparkles } from "lucide-react";
+import { Sparkles, ShoppingCart } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -808,6 +809,38 @@ export default function Home() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Floating cart button for mobile - visible only on small screens */}
+      <div className="fixed bottom-6 right-6 z-50 sm:hidden">
+        <form
+          id="goal-cart-form-mobile"
+          action="/goal/cart"
+          method="POST"
+          target="goal-cart-iframe"
+          onSubmit={() => {
+            setTimeout(() => setIsCartOpen(true), 0);
+          }}
+          data-testid="form-cart-goal-mobile"
+        >
+          <input type="hidden" name="goal" value="cart" />
+          <Button
+            type="submit"
+            size="icon"
+            className="h-14 w-14 rounded-full shadow-lg bg-primary text-primary-foreground border-2 border-primary-border"
+            data-testid="button-cart-mobile"
+          >
+            <ShoppingCart className="w-6 h-6" />
+            {cartItemCount > 0 && (
+              <Badge 
+                className="absolute -top-1 -right-1 h-6 w-6 flex items-center justify-center p-0 bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold"
+                data-testid="badge-cart-count-mobile"
+              >
+                {cartItemCount}
+              </Badge>
+            )}
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

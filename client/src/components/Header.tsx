@@ -180,7 +180,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
               </>
             )}
             
-            {/* Cart button wrapped in visible form for Yandex Metrica goal tracking */}
+            {/* Cart button in header - hidden on mobile, shown on desktop */}
             {!isAdmin && (
               <form
                 ref={cartFormRef}
@@ -193,6 +193,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                   setTimeout(() => onCartClick(), 0);
                 }}
                 data-testid="form-cart-goal"
+                className="hidden sm:block"
               >
                 <input type="hidden" name="goal" value="cart" />
                 <Button

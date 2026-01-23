@@ -143,13 +143,13 @@ const defaultQuizConfig: QuizConfig = {
   ],
   rules: [
     { conditions: ["energize", "earthy"], teaType: "Шу Пуэр", priority: 10 },
-    { conditions: ["energize", "fresh"], teaType: "Шен Пуэр", priority: 10 },
+    { conditions: ["energize", "fresh"], teaType: "Шэн Пуэр", priority: 10 },
     { conditions: ["focus", "earthy"], teaType: "Шу Пуэр", priority: 9 },
-    { conditions: ["focus", "fresh"], teaType: "Шен Пуэр", priority: 9 },
-    { conditions: ["calm", "fresh"], teaType: "Шен Пуэр", priority: 8 },
+    { conditions: ["focus", "fresh"], teaType: "Шэн Пуэр", priority: 9 },
+    { conditions: ["calm", "fresh"], teaType: "Шэн Пуэр", priority: 8 },
     { conditions: ["calm"], teaType: "Габа", priority: 7 },
-    { conditions: ["energize"], teaType: "Красный", priority: 5 },
-    { conditions: [], teaType: "Шу Пуэр", priority: 1 }, // дефолт
+    { conditions: ["energize"], teaType: "Красный чай", priority: 5 },
+    { conditions: [], teaType: "Шу Пуэр", priority: 1 },
   ],
 };
 

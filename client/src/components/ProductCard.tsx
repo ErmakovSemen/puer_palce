@@ -249,50 +249,50 @@ export default function ProductCard({
           {!outOfStock ? (
             isInCart && onUpdateQuantity ? (
               /* In-cart controls: -/price/+ and count */
-              <div className="flex items-center gap-2 w-full">
-                <div 
-                  className="flex items-center flex-1 btn-gradient rounded-lg overflow-hidden"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 rounded-none text-white hover:bg-white/20 no-default-hover-elevate no-default-active-elevate"
-                    onClick={() => {
-                      const step = isTeaware ? 1 : currentWeight;
-                      const newQty = Math.max(0, cartQuantity - step);
-                      onUpdateQuantity(id, newQty);
-                    }}
-                    data-testid={`button-decrease-${id}`}
+              <div className="flex flex-col gap-1 w-full">
+                <div className="flex items-center gap-1 w-full">
+                  <div 
+                    className="flex items-center flex-1 min-w-0 btn-gradient rounded-lg overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Minus className="w-4 h-4" />
-                  </Button>
-                  <div className="flex-1 text-center py-2 px-1">
-                    <span className="text-white font-semibold text-sm sm:text-base" data-testid={`text-product-price-${id}`}>
-                      {/* Show crossed-out original price if discount was applied */}
-                      {cartPricePerUnit && cartOriginalPrice && cartPricePerUnit < cartOriginalPrice && (
-                        <span className="line-through opacity-60 mr-1 text-xs">{Math.round(cartOriginalPrice * cartQuantity)}</span>
-                      )}
-                      {/* Calculate total from cartQuantity × pricePerUnit */}
-                      {Math.round((cartPricePerUnit ?? pricePerGram) * cartQuantity)} ₽
-                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 rounded-none text-white hover:bg-white/20 no-default-hover-elevate no-default-active-elevate"
+                      onClick={() => {
+                        const step = isTeaware ? 1 : currentWeight;
+                        const newQty = Math.max(0, cartQuantity - step);
+                        onUpdateQuantity(id, newQty);
+                      }}
+                      data-testid={`button-decrease-${id}`}
+                    >
+                      <Minus className="w-3 h-3" />
+                    </Button>
+                    <div className="flex-1 text-center py-1.5 px-0.5 min-w-0">
+                      <span className="text-white font-semibold text-xs sm:text-sm truncate block" data-testid={`text-product-price-${id}`}>
+                        {cartPricePerUnit && cartOriginalPrice && cartPricePerUnit < cartOriginalPrice && (
+                          <span className="line-through opacity-60 mr-0.5 text-[10px]">{Math.round(cartOriginalPrice * cartQuantity)}</span>
+                        )}
+                        {Math.round((cartPricePerUnit ?? pricePerGram) * cartQuantity)} ₽
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 rounded-none text-white hover:bg-white/20 no-default-hover-elevate no-default-active-elevate"
+                      onClick={() => {
+                        const step = isTeaware ? 1 : currentWeight;
+                        onUpdateQuantity(id, cartQuantity + step);
+                      }}
+                      data-testid={`button-increase-${id}`}
+                    >
+                      <Plus className="w-3 h-3" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 rounded-none text-white hover:bg-white/20 no-default-hover-elevate no-default-active-elevate"
-                    onClick={() => {
-                      const step = isTeaware ? 1 : currentWeight;
-                      onUpdateQuantity(id, cartQuantity + step);
-                    }}
-                    data-testid={`button-increase-${id}`}
-                  >
-                    <Plus className="w-4 h-4" />
-                  </Button>
+                  <span className="text-muted-foreground text-xs whitespace-nowrap shrink-0" data-testid={`text-cart-count-${id}`}>
+                    {isTeaware ? `x${cartQuantity}` : `${cartQuantity}г`}
+                  </span>
                 </div>
-                <span className="text-muted-foreground text-sm whitespace-nowrap" data-testid={`text-cart-count-${id}`}>
-                  {isTeaware ? `x ${cartQuantity}` : `${cartQuantity} г`}
-                </span>
               </div>
             ) : (
               /* Not in cart: show price and add button */
