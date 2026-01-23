@@ -836,8 +836,8 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      {/* Floating cart button for mobile - visible only on small screens */}
-      {cartItemCount > 0 && (
+      {/* Floating cart button for mobile - visible only on small screens and when cart is closed */}
+      {cartItemCount > 0 && !isCartOpen && (
         <div className="fixed bottom-6 right-4 z-50 sm:hidden">
           <form
             id="goal-cart-form-mobile"
@@ -852,12 +852,12 @@ export default function Home() {
             <input type="hidden" name="goal" value="cart" />
             <button
               type="submit"
-              className="h-16 w-16 rounded-full shadow-2xl bg-black text-white border-2 border-white flex flex-col items-center justify-center hover-elevate active-elevate-2"
+              className="h-20 w-20 rounded-full shadow-2xl bg-black text-white border-2 border-white flex flex-col items-center justify-center hover-elevate active-elevate-2"
               data-testid="button-cart-mobile"
             >
               <div className="relative">
-                <ShoppingCart className="w-6 h-6" />
-                <span className="absolute -top-2 -right-3 bg-primary text-primary-foreground text-xs font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1">
+                <ShoppingCart className="w-8 h-8" />
+                <span className="absolute -top-2 -right-3 bg-emerald-500 text-white text-xs font-bold rounded-full h-5 min-w-5 flex items-center justify-center px-1">
                   {cartItemCount}
                 </span>
               </div>

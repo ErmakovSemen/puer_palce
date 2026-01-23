@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import type { SiteSettings } from "@shared/schema";
 
-const STORAGE_KEY = "first_order_promo_shown";
-
 export function FirstOrderPromo() {
   const [visible, setVisible] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
@@ -30,16 +28,8 @@ export function FirstOrderPromo() {
       return;
     }
 
-    if (typeof window === "undefined") return;
-
-    const alreadyShown = localStorage.getItem(STORAGE_KEY);
-    if (alreadyShown) {
-      return;
-    }
-
     const showTimer = setTimeout(() => {
       setVisible(true);
-      localStorage.setItem(STORAGE_KEY, "true");
     }, 1500);
 
     return () => clearTimeout(showTimer);
