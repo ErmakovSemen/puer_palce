@@ -268,11 +268,8 @@ export default function ProductCard({
                     >
                       <Minus className="w-3 h-3" />
                     </Button>
-                    <div className="flex-1 text-center py-1.5 px-0.5 min-w-0">
-                      <span className="text-white font-semibold text-xs sm:text-sm truncate block" data-testid={`text-product-price-${id}`}>
-                        {cartPricePerUnit && cartOriginalPrice && cartPricePerUnit < cartOriginalPrice && (
-                          <span className="line-through opacity-60 mr-0.5 text-[10px]">{Math.round(cartOriginalPrice * cartQuantity)}</span>
-                        )}
+                    <div className="flex-1 text-center py-1 px-0.5 min-w-0">
+                      <span className="text-white font-bold text-sm truncate block" data-testid={`text-product-price-${id}`}>
                         {Math.round((cartPricePerUnit ?? pricePerGram) * cartQuantity)} ₽
                       </span>
                     </div>
