@@ -3,6 +3,7 @@ import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
+import { pool } from "./db";
 
 const app = express();
 
@@ -93,6 +94,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Run database migrations for missing columns
+  try {
+    await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS default_quantity TEXT`);
+    log('Database migration: default_quantity column ensured');
+  } catch (err) {
+    log(`Database migration warning: ${err}`);
+  }
+
   // Initialize settings and seed initial products if database is empty
   if ('seedInitialSettings' in storage) {
     await storage.seedInitialSettings();
