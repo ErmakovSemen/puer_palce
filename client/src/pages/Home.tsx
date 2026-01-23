@@ -264,9 +264,11 @@ export default function Home() {
     const filtered = products.filter((product) => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (product.description?.toLowerCase() ?? "").includes(searchTerm.toLowerCase());
-      const matchesType = selectedTypes.length === 0 || selectedTypes.some(selType => 
-        selType.toLowerCase() === product.teaType.toLowerCase()
-      );
+      const matchesType = selectedTypes.length === 0 || selectedTypes.some(selType => {
+        const selLower = selType.toLowerCase().replace(' чай', '').replace(' tea', '');
+        const prodLower = product.teaType.toLowerCase().replace(' чай', '').replace(' tea', '');
+        return selLower.includes(prodLower) || prodLower.includes(selLower);
+      });
       const matchesEffects = selectedEffects.length === 0 || 
         selectedEffects.some(effect => 
           product.effects.some(productEffect => 
