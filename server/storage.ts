@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress, type XpTransaction, type InsertXpTransaction, type TvSlide, type InsertTvSlide, type UpdateTvSlide } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress, type XpTransaction, type InsertXpTransaction, type TvSlide, type InsertTvSlide, type UpdateTvSlide, type Experiment, type InsertExperiment, type UpdateExperiment, type AbEvent, type InsertAbEvent, type DeviceUserMapping, type InsertDeviceUserMapping } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { normalizePhone } from "./utils";
 
@@ -106,6 +106,23 @@ export interface IStorage {
   updateTvSlide(id: number, slide: UpdateTvSlide): Promise<TvSlide | undefined>;
   deleteTvSlide(id: number): Promise<boolean>;
   reorderTvSlides(orders: { id: number; orderIndex: number }[]): Promise<void>;
+  
+  // A/B Testing - Experiments
+  getExperiments(): Promise<import("@shared/schema").Experiment[]>;
+  getActiveExperiments(): Promise<import("@shared/schema").Experiment[]>;
+  getExperiment(id: number): Promise<import("@shared/schema").Experiment | undefined>;
+  getExperimentByTestId(testId: string): Promise<import("@shared/schema").Experiment | undefined>;
+  createExperiment(experiment: import("@shared/schema").InsertExperiment): Promise<import("@shared/schema").Experiment>;
+  updateExperiment(id: number, experiment: import("@shared/schema").UpdateExperiment): Promise<import("@shared/schema").Experiment | undefined>;
+  deleteExperiment(id: number): Promise<boolean>;
+  
+  // A/B Testing - Events
+  createAbEvent(event: import("@shared/schema").InsertAbEvent): Promise<import("@shared/schema").AbEvent>;
+  getAbEvents(limit?: number, offset?: number): Promise<import("@shared/schema").AbEvent[]>;
+  
+  // A/B Testing - Device/User Mapping
+  createDeviceUserMapping(deviceId: string, userId: string): Promise<import("@shared/schema").DeviceUserMapping>;
+  getDeviceUserMapping(deviceId: string): Promise<import("@shared/schema").DeviceUserMapping | undefined>;
   
   // Session store for auth
   sessionStore: any;
@@ -596,7 +613,7 @@ export class MemStorage implements IStorage {
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable, siteSettings as siteSettingsTable, savedAddresses as savedAddressesTable, tvSlides as tvSlidesTable } from "@shared/schema";
+import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable, siteSettings as siteSettingsTable, savedAddresses as savedAddressesTable, tvSlides as tvSlidesTable, experiments as experimentsTable, abEvents as abEventsTable, deviceUserMappings as deviceUserMappingsTable } from "@shared/schema";
 import { eq, desc, and, sql, asc } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
@@ -1436,6 +1453,83 @@ export class DbStorage implements IStorage {
     for (const { id, orderIndex } of orders) {
       await db.update(tvSlidesTable).set({ orderIndex }).where(eq(tvSlidesTable.id, id));
     }
+  }
+
+  // A/B Testing - Experiments
+  async getExperiments(): Promise<Experiment[]> {
+    return db.select().from(experimentsTable).orderBy(desc(experimentsTable.id));
+  }
+
+  async getActiveExperiments(): Promise<Experiment[]> {
+    return db.select().from(experimentsTable).where(eq(experimentsTable.status, "active")).orderBy(desc(experimentsTable.id));
+  }
+
+  async getExperiment(id: number): Promise<Experiment | undefined> {
+    const [experiment] = await db.select().from(experimentsTable).where(eq(experimentsTable.id, id));
+    return experiment;
+  }
+
+  async getExperimentByTestId(testId: string): Promise<Experiment | undefined> {
+    const [experiment] = await db.select().from(experimentsTable).where(eq(experimentsTable.testId, testId));
+    return experiment;
+  }
+
+  async createExperiment(experiment: InsertExperiment): Promise<Experiment> {
+    const [newExperiment] = await db.insert(experimentsTable).values({
+      testId: experiment.testId,
+      name: experiment.name,
+      description: experiment.description,
+      status: experiment.status || "inactive",
+      variants: experiment.variants,
+    }).returning();
+    return newExperiment;
+  }
+
+  async updateExperiment(id: number, experiment: UpdateExperiment): Promise<Experiment | undefined> {
+    const updateData: any = { ...experiment, updatedAt: new Date().toISOString() };
+    const [updated] = await db.update(experimentsTable).set(updateData).where(eq(experimentsTable.id, id)).returning();
+    return updated;
+  }
+
+  async deleteExperiment(id: number): Promise<boolean> {
+    const result = await db.delete(experimentsTable).where(eq(experimentsTable.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // A/B Testing - Events
+  async createAbEvent(event: InsertAbEvent): Promise<AbEvent> {
+    const [newEvent] = await db.insert(abEventsTable).values({
+      eventType: event.eventType,
+      userIdentifier: event.userIdentifier,
+      userId: event.userId,
+      deviceId: event.deviceId,
+      testAssignments: event.testAssignments,
+      eventData: event.eventData,
+    }).returning();
+    return newEvent;
+  }
+
+  async getAbEvents(limit: number = 100, offset: number = 0): Promise<AbEvent[]> {
+    return db.select().from(abEventsTable).orderBy(desc(abEventsTable.id)).limit(limit).offset(offset);
+  }
+
+  // A/B Testing - Device/User Mapping
+  async createDeviceUserMapping(deviceId: string, userId: string): Promise<DeviceUserMapping> {
+    // Upsert - update if exists, insert if not
+    const existing = await this.getDeviceUserMapping(deviceId);
+    if (existing) {
+      return existing;
+    }
+    const [mapping] = await db.insert(deviceUserMappingsTable).values({
+      deviceId,
+      userId,
+    }).returning();
+    return mapping;
+  }
+
+  async getDeviceUserMapping(deviceId: string): Promise<DeviceUserMapping | undefined> {
+    const [mapping] = await db.select().from(deviceUserMappingsTable).where(eq(deviceUserMappingsTable.deviceId, deviceId));
+    return mapping;
   }
 }
 

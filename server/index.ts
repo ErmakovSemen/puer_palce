@@ -102,6 +102,45 @@ app.use((req, res, next) => {
     // Fix inconsistent tea type names
     await pool.query(`UPDATE products SET tea_type = 'Красный чай' WHERE tea_type = 'красный'`);
     log('Database migration: tea types normalized');
+    
+    // A/B Testing tables
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS experiments (
+        id SERIAL PRIMARY KEY,
+        test_id TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'inactive',
+        variants TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    log('Database migration: experiments table ensured');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ab_events (
+        id SERIAL PRIMARY KEY,
+        event_type TEXT NOT NULL,
+        timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        user_identifier TEXT NOT NULL,
+        user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+        device_id TEXT,
+        test_assignments TEXT,
+        event_data TEXT
+      )
+    `);
+    log('Database migration: ab_events table ensured');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS device_user_mappings (
+        id SERIAL PRIMARY KEY,
+        device_id TEXT NOT NULL UNIQUE,
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    log('Database migration: device_user_mappings table ensured');
   } catch (err) {
     log(`Database migration warning: ${err}`);
   }

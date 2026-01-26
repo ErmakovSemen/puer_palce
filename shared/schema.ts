@@ -664,3 +664,82 @@ export const updateTvSlideSchema = z.object({
 export type InsertTvSlide = z.infer<typeof insertTvSlideSchema>;
 export type UpdateTvSlide = z.infer<typeof updateTvSlideSchema>;
 export type TvSlide = typeof tvSlides.$inferSelect;
+
+// A/B Testing - Experiments table
+export const experiments = pgTable("experiments", {
+  id: serial("id").primaryKey(),
+  testId: text("test_id").notNull().unique(), // kebab-case unique identifier
+  name: text("name").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("inactive"), // "active" or "inactive"
+  variants: text("variants").notNull(), // JSON string of variants array
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const experimentVariantSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  weight: z.number().min(0).max(100),
+  config: z.record(z.any()),
+});
+
+export const insertExperimentSchema = createInsertSchema(experiments, {
+  testId: z.string().min(1).regex(/^[a-z0-9_-]+$/, "Только латиница, цифры, _ и -"),
+  name: z.string().min(1),
+  description: z.string().optional().nullable(),
+  status: z.enum(["active", "inactive"]).default("inactive"),
+  variants: z.string(), // JSON string
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const updateExperimentSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  status: z.enum(["active", "inactive"]).optional(),
+  variants: z.string().optional(),
+});
+
+export type InsertExperiment = z.infer<typeof insertExperimentSchema>;
+export type UpdateExperiment = z.infer<typeof updateExperimentSchema>;
+export type Experiment = typeof experiments.$inferSelect;
+export type ExperimentVariant = z.infer<typeof experimentVariantSchema>;
+
+// A/B Testing - Events table for analytics
+export const abEvents = pgTable("ab_events", {
+  id: serial("id").primaryKey(),
+  eventType: text("event_type").notNull(), // page_view, add_to_cart, order_placed, etc.
+  timestamp: text("timestamp").notNull().default(sql`CURRENT_TIMESTAMP`),
+  userIdentifier: text("user_identifier").notNull(), // userId or deviceId
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  deviceId: text("device_id"),
+  testAssignments: text("test_assignments"), // JSON string of test assignments
+  eventData: text("event_data"), // JSON string of event-specific data
+});
+
+export const insertAbEventSchema = createInsertSchema(abEvents, {
+  eventType: z.string().min(1),
+  userIdentifier: z.string().min(1),
+  userId: z.string().optional().nullable(),
+  deviceId: z.string().optional().nullable(),
+  testAssignments: z.string().optional().nullable(),
+  eventData: z.string().optional().nullable(),
+}).omit({ id: true, timestamp: true });
+
+export type InsertAbEvent = z.infer<typeof insertAbEventSchema>;
+export type AbEvent = typeof abEvents.$inferSelect;
+
+// Device to User mapping for A/B test continuity
+export const deviceUserMappings = pgTable("device_user_mappings", {
+  id: serial("id").primaryKey(),
+  deviceId: text("device_id").notNull().unique(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertDeviceUserMappingSchema = createInsertSchema(deviceUserMappings, {
+  deviceId: z.string().min(1),
+  userId: z.string().min(1),
+}).omit({ id: true, createdAt: true });
+
+export type InsertDeviceUserMapping = z.infer<typeof insertDeviceUserMappingSchema>;
+export type DeviceUserMapping = typeof deviceUserMappings.$inferSelect;

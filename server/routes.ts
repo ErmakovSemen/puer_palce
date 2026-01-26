@@ -2285,6 +2285,197 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ==================== A/B Testing - Experiments ====================
+  
+  // Get all experiments (admin)
+  app.get("/api/admin/experiments", requireAdminAuth, async (_req, res) => {
+    try {
+      const experiments = await storage.getExperiments();
+      res.json(experiments);
+    } catch (error) {
+      console.error("[Admin Experiments] Error fetching experiments:", error);
+      res.status(500).json({ error: "Failed to fetch experiments" });
+    }
+  });
+
+  // Get active experiments (public - for frontend)
+  app.get("/api/experiments/active", async (_req, res) => {
+    try {
+      const experiments = await storage.getActiveExperiments();
+      res.set("Cache-Control", "public, max-age=60"); // Cache for 1 minute
+      res.json(experiments);
+    } catch (error) {
+      console.error("[Experiments] Error fetching active experiments:", error);
+      res.status(500).json({ error: "Failed to fetch experiments" });
+    }
+  });
+
+  // Get single experiment by ID (admin)
+  app.get("/api/admin/experiments/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const experiment = await storage.getExperiment(id);
+      if (!experiment) {
+        res.status(404).json({ error: "Experiment not found" });
+        return;
+      }
+      res.json(experiment);
+    } catch (error) {
+      console.error("[Admin Experiments] Error fetching experiment:", error);
+      res.status(500).json({ error: "Failed to fetch experiment" });
+    }
+  });
+
+  // Create experiment (admin)
+  app.post("/api/admin/experiments", requireAdminAuth, async (req, res) => {
+    try {
+      const { testId, name, description, status, variants } = req.body;
+      
+      if (!testId || !name || !variants) {
+        res.status(400).json({ error: "testId, name, and variants are required" });
+        return;
+      }
+
+      // Validate variants is valid JSON
+      try {
+        const parsedVariants = typeof variants === "string" ? JSON.parse(variants) : variants;
+        if (!Array.isArray(parsedVariants) || parsedVariants.length < 2) {
+          res.status(400).json({ error: "Variants must be an array with at least 2 items" });
+          return;
+        }
+        // Validate weights sum
+        const totalWeight = parsedVariants.reduce((sum: number, v: any) => sum + (v.weight || 0), 0);
+        if (totalWeight !== 100) {
+          res.status(400).json({ error: `Weights must sum to 100, got ${totalWeight}` });
+          return;
+        }
+      } catch (e) {
+        res.status(400).json({ error: "Invalid variants JSON" });
+        return;
+      }
+
+      const experiment = await storage.createExperiment({
+        testId,
+        name,
+        description: description || null,
+        status: status || "inactive",
+        variants: typeof variants === "string" ? variants : JSON.stringify(variants),
+      });
+      res.json(experiment);
+    } catch (error: any) {
+      if (error.code === "23505") { // Unique violation
+        res.status(400).json({ error: "Experiment with this test_id already exists" });
+        return;
+      }
+      console.error("[Admin Experiments] Error creating experiment:", error);
+      res.status(500).json({ error: "Failed to create experiment" });
+    }
+  });
+
+  // Update experiment (admin)
+  app.patch("/api/admin/experiments/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { name, description, status, variants } = req.body;
+
+      // Validate variants if provided
+      if (variants !== undefined) {
+        try {
+          const parsedVariants = typeof variants === "string" ? JSON.parse(variants) : variants;
+          if (!Array.isArray(parsedVariants) || parsedVariants.length < 2) {
+            res.status(400).json({ error: "Variants must be an array with at least 2 items" });
+            return;
+          }
+          const totalWeight = parsedVariants.reduce((sum: number, v: any) => sum + (v.weight || 0), 0);
+          if (totalWeight !== 100) {
+            res.status(400).json({ error: `Weights must sum to 100, got ${totalWeight}` });
+            return;
+          }
+        } catch (e) {
+          res.status(400).json({ error: "Invalid variants JSON" });
+          return;
+        }
+      }
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (status !== undefined) updateData.status = status;
+      if (variants !== undefined) {
+        updateData.variants = typeof variants === "string" ? variants : JSON.stringify(variants);
+      }
+
+      const updated = await storage.updateExperiment(id, updateData);
+      if (!updated) {
+        res.status(404).json({ error: "Experiment not found" });
+        return;
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("[Admin Experiments] Error updating experiment:", error);
+      res.status(500).json({ error: "Failed to update experiment" });
+    }
+  });
+
+  // Delete experiment (admin)
+  app.delete("/api/admin/experiments/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteExperiment(id);
+      if (!deleted) {
+        res.status(404).json({ error: "Experiment not found" });
+        return;
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Admin Experiments] Error deleting experiment:", error);
+      res.status(500).json({ error: "Failed to delete experiment" });
+    }
+  });
+
+  // Log A/B test event
+  app.post("/api/events/log", async (req, res) => {
+    try {
+      const { eventType, userIdentifier, userId, deviceId, testAssignments, eventData } = req.body;
+      
+      if (!eventType || !userIdentifier) {
+        res.status(400).json({ error: "eventType and userIdentifier are required" });
+        return;
+      }
+
+      const event = await storage.createAbEvent({
+        eventType,
+        userIdentifier,
+        userId: userId || null,
+        deviceId: deviceId || null,
+        testAssignments: testAssignments ? JSON.stringify(testAssignments) : null,
+        eventData: eventData ? JSON.stringify(eventData) : null,
+      });
+      res.json({ success: true, eventId: event.id });
+    } catch (error) {
+      console.error("[Events] Error logging event:", error);
+      res.status(500).json({ error: "Failed to log event" });
+    }
+  });
+
+  // Save device-user mapping (called after registration)
+  app.post("/api/device-user-mapping", async (req, res) => {
+    try {
+      const { deviceId, userId } = req.body;
+      
+      if (!deviceId || !userId) {
+        res.status(400).json({ error: "deviceId and userId are required" });
+        return;
+      }
+
+      const mapping = await storage.createDeviceUserMapping(deviceId, userId);
+      res.json(mapping);
+    } catch (error) {
+      console.error("[Device-User Mapping] Error saving mapping:", error);
+      res.status(500).json({ error: "Failed to save mapping" });
+    }
+  });
+
   // Payment routes
   // Initialize payment for an order
   app.post("/api/payments/init", async (req, res) => {
