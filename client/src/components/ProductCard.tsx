@@ -7,6 +7,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
 import { useTeaTypes } from "@/hooks/use-tea-types";
+import { useAbTesting } from "@/hooks/use-ab-testing";
 
 interface ProductCardProps {
   id: number;
@@ -66,6 +67,11 @@ export default function ProductCard({
   const { data: teaTypes } = useTeaTypes();
   const [, setLocation] = useLocation();
   
+  // A/B Testing price multiplier
+  const { getPriceMultiplier } = useAbTesting();
+  const priceMultiplier = getPriceMultiplier();
+  const adjustedPricePerGram = Math.round(pricePerGram * priceMultiplier);
+  
   // Handle tag click - filter by type or effect
   const handleTagClick = (e: React.MouseEvent, filterType: 'teaType' | 'effect', value: string) => {
     e.stopPropagation();
@@ -96,9 +102,9 @@ export default function ProductCard({
   // State for selected weight (default to min)
   const [selectedWeight, setSelectedWeight] = useState<'min' | 'max'>('min');
   
-  // Calculate prices
+  // Calculate prices (using A/B adjusted price)
   const currentWeight = selectedWeight === 'min' ? minWeight : maxWeight;
-  const basePrice = pricePerGram * currentWeight;
+  const basePrice = adjustedPricePerGram * currentWeight;
   const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g (only for gram-based)
   const showDiscount = !isSoldByPiece && currentWeight >= 100;
   const discountedPrice = showDiscount ? Math.round(basePrice * (1 - BULK_DISCOUNT)) : basePrice;
@@ -294,7 +300,7 @@ export default function ProductCard({
                     </button>
                     <div className="flex-1 text-center py-1 px-1 min-w-[45px]">
                       <span className="text-white font-bold text-[11px] whitespace-nowrap" data-testid={`text-product-price-${id}`}>
-                        {Math.round((cartPricePerUnit ?? pricePerGram) * cartQuantity)}₽
+                        {Math.round((cartPricePerUnit ?? adjustedPricePerGram) * cartQuantity)}₽
                       </span>
                     </div>
                     <button
@@ -322,8 +328,8 @@ export default function ProductCard({
                     <span className="text-xs text-muted-foreground line-through">{basePrice} ₽</span>
                   )}
                   <span className="text-lg sm:text-xl font-semibold transition-colors duration-300 text-foreground group-hover/card:text-primary">
-                    {isSoldByPiece ? `${pricePerGram} ₽` : (
-                      hasWeightOptions || fixedQuantityOnly ? `${discountedPrice} ₽` : `${pricePerGram} ₽/г`
+                    {isSoldByPiece ? `${adjustedPricePerGram} ₽` : (
+                      hasWeightOptions || fixedQuantityOnly ? `${discountedPrice} ₽` : `${adjustedPricePerGram} ₽/г`
                     )}
                   </span>
                 </div>
@@ -335,7 +341,7 @@ export default function ProductCard({
                         ? fixedQuantity 
                         : currentWeight
                     );
-                    const effectivePrice = showDiscount ? pricePerGram * (1 - BULK_DISCOUNT) : pricePerGram;
+                    const effectivePrice = showDiscount ? adjustedPricePerGram * (1 - BULK_DISCOUNT) : adjustedPricePerGram;
                     onAddToCart(id, qty, effectivePrice);
                   }}
                   size="icon"
@@ -349,7 +355,7 @@ export default function ProductCard({
           ) : (
             /* Out of stock */
             <span className="text-lg sm:text-xl font-semibold text-muted-foreground" data-testid={`text-product-price-${id}`}>
-              {isSoldByPiece ? `${pricePerGram} ₽` : `${pricePerGram} ₽/г`}
+              {isSoldByPiece ? `${adjustedPricePerGram} ₽` : `${adjustedPricePerGram} ₽/г`}
             </span>
           )}
         </div>

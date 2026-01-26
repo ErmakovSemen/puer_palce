@@ -121,16 +121,34 @@ export function useAbTesting() {
   }, [experiments, getTestVariant]);
 
   const getPriceMultiplier = useCallback((testId?: string): number => {
-    const targetTestId = testId || experiments.find(e => 
-      e.status === "active" && e.variants.includes("price_multy")
-    )?.testId;
+    // If testId provided, use that specific experiment
+    if (testId) {
+      const assignment = getTestVariant(testId);
+      if (!assignment) return 1;
+      return assignment.config.price_multy ?? 1;
+    }
     
-    if (!targetTestId) return 1;
+    // Otherwise, find the first active experiment with price_multy in config
+    for (const experiment of experiments) {
+      if (experiment.status !== "active") continue;
+      
+      try {
+        const variants: ExperimentVariant[] = JSON.parse(experiment.variants);
+        const hasPriceMultiplier = variants.some(v => 
+          v.config && typeof v.config.price_multy === "number"
+        );
+        if (hasPriceMultiplier) {
+          const assignment = getTestVariant(experiment.testId);
+          if (assignment && typeof assignment.config.price_multy === "number") {
+            return assignment.config.price_multy;
+          }
+        }
+      } catch (e) {
+        continue;
+      }
+    }
     
-    const assignment = getTestVariant(targetTestId);
-    if (!assignment) return 1;
-    
-    return assignment.config.price_multy ?? 1;
+    return 1;
   }, [experiments, getTestVariant]);
 
   const applyPriceMultiplier = useCallback((basePrice: number, testId?: string): number => {

@@ -5,6 +5,7 @@ import { ShoppingCart } from "lucide-react";
 import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { useState } from "react";
 import { useTeaTypes } from "@/hooks/use-tea-types";
+import { useAbTesting } from "@/hooks/use-ab-testing";
 
 interface ProductDetailProps {
   id: number;
@@ -22,7 +23,7 @@ interface ProductDetailProps {
   fixedQuantityOnly?: boolean;
   fixedQuantity?: number | null;
   outOfStock?: boolean;
-  onAddToCart: (id: number, quantity: number) => void;
+  onAddToCart: (id: number, quantity: number, pricePerUnit?: number) => void;
   onClose: () => void;
 }
 
@@ -56,6 +57,11 @@ export default function ProductDetail({
   });
   const [customQuantity, setCustomQuantity] = useState<string>("");
   const { data: teaTypes } = useTeaTypes();
+  
+  // A/B Testing price multiplier
+  const { getPriceMultiplier } = useAbTesting();
+  const priceMultiplier = getPriceMultiplier();
+  const adjustedPricePerGram = Math.round(pricePerGram * priceMultiplier);
   
   // Use images array if available, otherwise fallback to single image
   const imageList = images && images.length > 0 ? images : (image ? [image] : []);
@@ -149,11 +155,11 @@ export default function ProductDetail({
           <div className="pt-4 space-y-4">
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-primary" data-testid={`text-detail-price-${id}`}>
-                {isSoldByPiece ? `${pricePerGram} ₽ / шт` : `${pricePerGram} ₽/г`}
+                {isSoldByPiece ? `${adjustedPricePerGram} ₽ / шт` : `${adjustedPricePerGram} ₽/г`}
               </span>
               {!isSoldByPiece && (
                 <span className="text-sm text-muted-foreground">
-                  (100 г = {pricePerGram * 100} ₽)
+                  (100 г = {adjustedPricePerGram * 100} ₽)
                 </span>
               )}
             </div>
@@ -208,7 +214,7 @@ export default function ProductDetail({
                 {/* Total price */}
                 {(selectedQuantity || customQuantity) && (() => {
                   const qty = parseInt(customQuantity || selectedQuantity || "0", 10);
-                  const totalPrice = pricePerGram * qty;
+                  const totalPrice = adjustedPricePerGram * qty;
                   return (
                     <div className="text-right">
                       <span className="text-lg font-semibold" data-testid="text-piece-total-price">
@@ -240,7 +246,7 @@ export default function ProductDetail({
                     {/* Total price */}
                     <div className="text-right">
                       <span className="text-lg font-semibold" data-testid="text-total-price">
-                        Итого: {pricePerGram * fixedQuantity} ₽
+                        Итого: {adjustedPricePerGram * fixedQuantity} ₽
                       </span>
                     </div>
                   </>
@@ -293,7 +299,7 @@ export default function ProductDetail({
                       const qty = parseInt(customQuantity || selectedQuantity || "0", 10);
                       const isManualInput = !!customQuantity;
                       const hasDiscount = isManualInput && qty >= 100;
-                      const basePrice = pricePerGram * qty;
+                      const basePrice = adjustedPricePerGram * qty;
                       const discountedPrice = hasDiscount ? Math.round(basePrice * 0.9) : basePrice;
                       return (
                         <div className="text-right">
@@ -323,7 +329,13 @@ export default function ProductDetail({
                   ? fixedQuantity 
                   : parseInt(customQuantity || selectedQuantity || "0", 10);
                 if (quantity > 0) {
-                  onAddToCart(id, quantity);
+                  // Pass the adjusted price to ensure A/B test multiplier is applied
+                  const isManualInput = !!customQuantity && !isSoldByPiece;
+                  const hasDiscount = isManualInput && quantity >= 100;
+                  const effectivePrice = hasDiscount 
+                    ? adjustedPricePerGram * 0.9 
+                    : adjustedPricePerGram;
+                  onAddToCart(id, quantity, effectivePrice);
                   onClose();
                 }
               }}

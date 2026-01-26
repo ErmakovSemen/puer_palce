@@ -27,6 +27,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Link } from "wouter";
 import type { Product } from "@shared/schema";
+import { useAbEvent, useAbTesting } from "@/hooks/use-ab-testing";
 
 // Fallback image for products without images
 import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
@@ -186,6 +187,19 @@ export default function Home() {
   const [recommendedProductIds, setRecommendedProductIds] = useState<number[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // A/B Testing event logging
+  const { logEvent } = useAbEvent();
+  const { getPriceMultiplier } = useAbTesting();
+  const hasLoggedPageView = useRef(false);
+  
+  // Log page_view event on initial page load
+  useEffect(() => {
+    if (!hasLoggedPageView.current) {
+      hasLoggedPageView.current = true;
+      logEvent("page_view", { url: window.location.pathname });
+    }
+  }, [logEvent]);
   // Handle URL params for tag-based filtering (runs on initial mount only)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -380,6 +394,17 @@ export default function Home() {
 
     const isTeaware = product.category === "teaware";
     const effectivePrice = pricePerUnit ?? product.pricePerGram;
+    
+    // Log add_to_cart event for A/B testing
+    const priceMultiplier = getPriceMultiplier();
+    logEvent("add_to_cart", {
+      productId,
+      productName: product.name,
+      basePrice: product.pricePerGram,
+      priceMultiplier,
+      finalPrice: effectivePrice,
+      quantity: quantityInGrams,
+    });
 
     if (user) {
       // Authenticated: save to DB with effective price
@@ -494,6 +519,15 @@ export default function Home() {
       return data;
     },
     onSuccess: async (data: any) => {
+      // Log order_placed event for A/B testing
+      const priceMultiplier = getPriceMultiplier();
+      logEvent("order_placed", {
+        orderId: data.orderId,
+        orderTotal: data.total || cartTotal,
+        itemCount: cartItems.length,
+        priceMultiplier,
+      });
+      
       if (user) {
         // Authenticated: cart cleared on server, invalidate queries
         queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
