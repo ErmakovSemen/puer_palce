@@ -118,6 +118,10 @@ app.use((req, res, next) => {
     `);
     log('Database migration: experiments table ensured');
     
+    // Add target_user_ids column for experiment targeting
+    await pool.query(`ALTER TABLE experiments ADD COLUMN IF NOT EXISTS target_user_ids TEXT`);
+    log('Database migration: experiments.target_user_ids column ensured');
+    
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ab_events (
         id SERIAL PRIMARY KEY,

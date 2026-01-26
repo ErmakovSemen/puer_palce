@@ -673,6 +673,7 @@ export const experiments = pgTable("experiments", {
   description: text("description"),
   status: text("status").notNull().default("inactive"), // "active" or "inactive"
   variants: text("variants").notNull(), // JSON string of variants array
+  targetUserIds: text("target_user_ids"), // JSON array of user IDs to target (null = all users)
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -690,6 +691,7 @@ export const insertExperimentSchema = createInsertSchema(experiments, {
   description: z.string().optional().nullable(),
   status: z.enum(["active", "inactive"]).default("inactive"),
   variants: z.string(), // JSON string
+  targetUserIds: z.string().optional().nullable(), // JSON array of user IDs
 }).omit({ id: true, createdAt: true, updatedAt: true });
 
 export const updateExperimentSchema = z.object({
@@ -697,6 +699,7 @@ export const updateExperimentSchema = z.object({
   description: z.string().optional().nullable(),
   status: z.enum(["active", "inactive"]).optional(),
   variants: z.string().optional(),
+  targetUserIds: z.string().optional().nullable(), // JSON array of user IDs
 });
 
 export type InsertExperiment = z.infer<typeof insertExperimentSchema>;

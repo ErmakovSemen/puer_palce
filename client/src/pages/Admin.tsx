@@ -381,7 +381,7 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="products">
-          <TabsList className="w-full max-w-5xl mb-8 flex overflow-x-auto md:grid md:grid-cols-10">
+          <TabsList className="w-full max-w-5xl mb-8 flex flex-wrap gap-1 h-auto justify-start">
             <TabsTrigger value="products" data-testid="tab-products" className="min-w-max">Товары</TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders" className="min-w-max">Заказы</TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users" className="min-w-max">Пользователи</TabsTrigger>

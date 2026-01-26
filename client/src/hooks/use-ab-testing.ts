@@ -84,6 +84,21 @@ export function useAbTesting() {
       return null;
     }
 
+    // Check targeting: if targetUserIds is set, only apply to those users
+    if (experiment.targetUserIds) {
+      try {
+        const targetIds: string[] = JSON.parse(experiment.targetUserIds);
+        if (Array.isArray(targetIds) && targetIds.length > 0) {
+          // If user is not in target list, don't apply experiment
+          if (!user?.id || !targetIds.includes(user.id)) {
+            return null;
+          }
+        }
+      } catch (e) {
+        console.error("[A/B Testing] Failed to parse targetUserIds:", e);
+      }
+    }
+
     let variants: ExperimentVariant[] = [];
     try {
       variants = JSON.parse(experiment.variants);
@@ -103,7 +118,7 @@ export function useAbTesting() {
       variantId: variant.id,
       config: variant.config,
     };
-  }, [experiments, identifier]);
+  }, [experiments, identifier, user?.id]);
 
   const getAllTestAssignments = useCallback((): Record<string, TestAssignment> => {
     const assignments: Record<string, TestAssignment> = {};

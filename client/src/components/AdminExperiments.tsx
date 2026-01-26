@@ -59,6 +59,7 @@ export default function AdminExperiments({ adminPassword }: AdminExperimentsProp
     description: "",
     status: "inactive" as "active" | "inactive",
     variants: defaultVariants,
+    targetUserIds: "", // Comma-separated user IDs for targeting
   });
 
   const { data: experiments = [], isLoading } = useQuery<Experiment[]>({
@@ -86,6 +87,9 @@ export default function AdminExperiments({ adminPassword }: AdminExperimentsProp
           description: data.description || null,
           status: data.status,
           variants: JSON.stringify(data.variants),
+          targetUserIds: data.targetUserIds.trim() 
+            ? JSON.stringify(data.targetUserIds.split(",").map(s => s.trim()).filter(Boolean))
+            : null,
         }),
       });
       if (!res.ok) {
@@ -118,6 +122,9 @@ export default function AdminExperiments({ adminPassword }: AdminExperimentsProp
           description: data.description || null,
           status: data.status,
           variants: JSON.stringify(data.variants),
+          targetUserIds: data.targetUserIds.trim() 
+            ? JSON.stringify(data.targetUserIds.split(",").map(s => s.trim()).filter(Boolean))
+            : null,
         }),
       });
       if (!res.ok) {
@@ -185,6 +192,7 @@ export default function AdminExperiments({ adminPassword }: AdminExperimentsProp
       description: "",
       status: "inactive",
       variants: defaultVariants,
+      targetUserIds: "",
     });
   };
 
@@ -202,12 +210,26 @@ export default function AdminExperiments({ adminPassword }: AdminExperimentsProp
       console.error("Failed to parse variants:", e);
     }
 
+    // Parse targetUserIds from JSON array to comma-separated string
+    let targetUserIdsStr = "";
+    if (experiment.targetUserIds) {
+      try {
+        const ids = JSON.parse(experiment.targetUserIds);
+        if (Array.isArray(ids)) {
+          targetUserIdsStr = ids.join(", ");
+        }
+      } catch (e) {
+        console.error("Failed to parse targetUserIds:", e);
+      }
+    }
+
     setFormData({
       testId: experiment.testId,
       name: experiment.name,
       description: experiment.description || "",
       status: experiment.status as "active" | "inactive",
       variants,
+      targetUserIds: targetUserIdsStr,
     });
     setEditingExperiment(experiment);
     setIsFormOpen(true);
@@ -325,6 +347,19 @@ export default function AdminExperiments({ adminPassword }: AdminExperimentsProp
                       {experiment.description && (
                         <p className="text-sm text-muted-foreground">{experiment.description}</p>
                       )}
+                      {experiment.targetUserIds && (() => {
+                        try {
+                          const ids = JSON.parse(experiment.targetUserIds);
+                          if (Array.isArray(ids) && ids.length > 0) {
+                            return (
+                              <p className="text-xs text-amber-600 dark:text-amber-400">
+                                Таргетинг: {ids.length} польз.
+                              </p>
+                            );
+                          }
+                        } catch { return null; }
+                        return null;
+                      })()}
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
@@ -430,6 +465,20 @@ export default function AdminExperiments({ adminPassword }: AdminExperimentsProp
                 rows={2}
                 data-testid="input-description"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="targetUserIds">Целевые пользователи (ID через запятую)</Label>
+              <Input
+                id="targetUserIds"
+                value={formData.targetUserIds}
+                onChange={(e) => setFormData({ ...formData, targetUserIds: e.target.value })}
+                placeholder="id1, id2, id3... (пусто = все пользователи)"
+                data-testid="input-target-user-ids"
+              />
+              <p className="text-xs text-muted-foreground">
+                Оставьте пустым для всех пользователей, или укажите ID для таргетинга (например, сотрудники)
+              </p>
             </div>
 
             <div className="flex items-center gap-2">
