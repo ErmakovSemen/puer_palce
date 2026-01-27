@@ -10,6 +10,7 @@ import TeaQuiz from "@/components/TeaQuiz";
 import RecommendedProducts from "@/components/RecommendedProducts";
 import VideoCard from "@/components/VideoCard";
 import MediaViewer from "@/components/MediaViewer";
+import MediaProductCard from "@/components/MediaProductCard";
 import { BannerSlot } from "@/components/InfoBanner";
 import type { InfoBanner, Media } from "@shared/schema";
 import { getLoyaltyDiscount } from "@shared/loyalty";
@@ -90,50 +91,18 @@ function ProductGridWithBanners({ products, banners, cartItems, mediaByProduct, 
     if (product.cardType === "media") {
       const thumbnailSrc = productMedia?.thumbnail || (productMedia?.type === "image" ? productMedia.source : null);
       const hasMedia = !!productMedia;
+      const isVideo = productMedia?.type === "video";
       
       return (
-        <div
-          className="group cursor-pointer h-full"
-          onClick={() => hasMedia ? onMediaProductClick(product.id) : onProductClick(product.id)}
-          data-testid={`media-product-card-${product.id}`}
-        >
-          <div className="relative aspect-[9/16] bg-muted rounded-lg overflow-hidden">
-            {thumbnailSrc ? (
-              <img
-                src={thumbnailSrc}
-                alt={product.name}
-                className="w-full h-full object-cover transition-transform group-hover:scale-105"
-              />
-            ) : product.images?.[0] ? (
-              <img
-                src={product.images[0]}
-                alt={product.name}
-                className="w-full h-full object-cover transition-transform group-hover:scale-105"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
-                <Play className="w-12 h-12 text-white/60" />
-              </div>
-            )}
-            
-            {(productMedia?.type === "video" || !hasMedia) && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center transition-transform group-hover:scale-110">
-                  <Play className="w-6 h-6 text-white fill-white ml-1" />
-                </div>
-              </div>
-            )}
-
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3">
-              <p className="font-serif font-medium text-white text-sm line-clamp-2">
-                {product.name}
-              </p>
-              <p className="text-white/80 text-xs mt-1">
-                {product.pricePerGram}₽/{product.pricingUnit === "piece" ? "шт" : "г"}
-              </p>
-            </div>
-          </div>
-        </div>
+        <MediaProductCard
+          product={product}
+          media={productMedia}
+          thumbnailSrc={thumbnailSrc}
+          hasMedia={hasMedia}
+          isVideo={isVideo}
+          onMediaClick={() => hasMedia ? onMediaProductClick(product.id) : onProductClick(product.id)}
+          onProductClick={() => onProductClick(product.id)}
+        />
       );
     }
     

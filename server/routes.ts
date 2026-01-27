@@ -3544,13 +3544,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       fileKeys: req.files ? Object.keys(req.files as any) : []
     });
     try {
+      console.log("[Media] Received media upload request");
+      console.log("[Media] Request body:", req.body);
+      console.log("[Media] Request files:", req.files);
+      
       const { productId, type, title, description, sourceUrl, featured } = req.body;
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       
       console.log("[Media Upload] Parsed:", { productId, type, hasFile: !!files?.file?.[0] });
       
       if (!productId || !type) {
-        console.log("[Media Upload] Missing required fields");
+        console.error("[Media] Missing required fields:", { productId, type });
         return res.status(400).json({ error: "productId and type are required" });
       }
 
@@ -3562,49 +3566,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Handle file upload or URL
       if (files?.file?.[0]) {
         const file = files.file[0];
+        console.log("[Media] Processing file upload:", {
+          filename: file.originalname,
+          mimetype: file.mimetype,
+          size: file.size,
+          type
+        });
         
         // Validate MIME type matches declared type
         const isVideo = file.mimetype.startsWith("video/");
         const isImage = file.mimetype.startsWith("image/");
         
         if (type === "video" && !isVideo) {
+          console.error("[Media] MIME type mismatch for video:", file.mimetype);
           return res.status(400).json({ error: "File must be a video for type 'video'" });
         }
         if (type === "image" && !isImage) {
+          console.error("[Media] MIME type mismatch for image:", file.mimetype);
           return res.status(400).json({ error: "File must be an image for type 'image'" });
         }
         
         const ext = type === "video" ? ".mp4" : ".webp";
         const filename = `media/${randomUUID()}${ext}`;
         
-        if (type === "image") {
-          // Convert image to WebP
-          const sharp = (await import("sharp")).default;
-          const webpBuffer = await sharp(file.buffer).webp({ quality: 85 }).toBuffer();
-          sourceValue = await objectStorageService.uploadPublicObject(webpBuffer, filename.replace(ext, ".webp"));
-        } else {
-          // Upload video as-is
-          sourceValue = await objectStorageService.uploadPublicObject(file.buffer, filename);
+        try {
+          if (type === "image") {
+            // Convert image to WebP
+            const sharp = (await import("sharp")).default;
+            const webpBuffer = await sharp(file.buffer).webp({ quality: 85 }).toBuffer();
+            sourceValue = await objectStorageService.uploadPublicObject(webpBuffer, filename.replace(ext, ".webp"));
+            console.log("[Media] Image uploaded to:", sourceValue);
+          } else {
+            // Upload video as-is
+            sourceValue = await objectStorageService.uploadPublicObject(file.buffer, filename);
+            console.log("[Media] Video uploaded to:", sourceValue);
+          }
+          sourceType = "file";
+        } catch (uploadError) {
+          console.error("[Media] Error uploading file to storage:", uploadError);
+          return res.status(500).json({ error: "Failed to upload file to storage" });
         }
-        sourceType = "file";
       } else if (sourceUrl) {
+        console.log("[Media] Using source URL:", sourceUrl);
         sourceValue = sourceUrl;
         sourceType = "url";
       } else {
+        console.error("[Media] No file or sourceUrl provided");
         return res.status(400).json({ error: "Either file or sourceUrl is required" });
       }
 
       // Handle thumbnail upload
       if (files?.thumbnail?.[0]) {
         const thumbnailFile = files.thumbnail[0];
-        const sharp = (await import("sharp")).default;
-        const webpBuffer = await sharp(thumbnailFile.buffer).webp({ quality: 80 }).toBuffer();
-        const thumbnailFilename = `media/thumb_${randomUUID()}.webp`;
-        thumbnailUrl = await objectStorageService.uploadPublicObject(webpBuffer, thumbnailFilename);
+        console.log("[Media] Processing thumbnail:", {
+          filename: thumbnailFile.originalname,
+          mimetype: thumbnailFile.mimetype,
+          size: thumbnailFile.size
+        });
+        try {
+          const sharp = (await import("sharp")).default;
+          const webpBuffer = await sharp(thumbnailFile.buffer).webp({ quality: 80 }).toBuffer();
+          const thumbnailFilename = `media/thumb_${randomUUID()}.webp`;
+          thumbnailUrl = await objectStorageService.uploadPublicObject(webpBuffer, thumbnailFilename);
+          console.log("[Media] Thumbnail uploaded to:", thumbnailUrl);
+        } catch (thumbnailError) {
+          console.error("[Media] Error uploading thumbnail:", thumbnailError);
+          // Don't fail the whole request if thumbnail fails
+        }
       }
 
-      console.log("[Media Upload] Creating media in DB:", { productId, type, sourceValue, sourceType });
-      
+      console.log("[Media] Creating media record:", {
+        productId: parseInt(productId),
+        type,
+        source: sourceValue,
+        sourceType,
+        thumbnail: thumbnailUrl,
+        featured: featured === "true" || featured === true
+      });
+
       const newMedia = await storage.createMedia({
         productId: parseInt(productId),
         type: type as "video" | "image",
@@ -3617,11 +3656,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         displayOrder: 0,
       });
 
-      console.log("[Media Upload] SUCCESS - Created media:", newMedia);
+      console.log("[Media] Media created successfully:", newMedia.id);
       res.json(newMedia);
     } catch (error) {
-      console.error("[Media Upload] ERROR:", error);
-      res.status(500).json({ error: "Failed to create media" });
+      console.error("[Media] Error creating media:", error);
+      if (error instanceof Error) {
+        console.error("[Media] Error stack:", error.stack);
+      }
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to create media" });
     }
   });
 

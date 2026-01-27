@@ -117,26 +117,45 @@ export default function AdminProductForm({
 
   const createMediaMutation = useMutation({
     mutationFn: async (data: FormData) => {
+      console.log("[MediaMutation] Sending request to /api/admin/media");
       const response = await fetch("/api/admin/media", {
         method: "POST",
-        headers: { "X-Admin-Password": adminPassword },
+        headers: { 
+          "X-Admin-Password": adminPassword,
+          // Не устанавливаем Content-Type - браузер сделает это автоматически с boundary для FormData
+        },
         body: data,
       });
+      
+      console.log("[MediaMutation] Response status:", response.status);
+      
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to upload media");
+        let errorMessage = "Failed to upload media";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorMessage;
+          console.error("[MediaMutation] Error response:", errorData);
+        } catch (e) {
+          const text = await response.text();
+          console.error("[MediaMutation] Error response text:", text);
+          errorMessage = text || `HTTP ${response.status}: ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
-      return response.json();
+      
+      const result = await response.json();
+      console.log("[MediaMutation] Success:", result);
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/media", productId] });
       queryClient.invalidateQueries({ queryKey: ["/api/media/featured"] });
-      toast({ title: "Добавлено в истории" });
       setMediaFile(null);
       setMediaThumbnail(null);
     },
     onError: (error: Error) => {
-      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+      console.error("[MediaMutation] Mutation error:", error);
+      // Ошибка уже обработана в handleMediaUpload
     },
   });
 
@@ -159,7 +178,14 @@ export default function AdminProductForm({
   });
 
   const handleMediaUpload = async () => {
-    console.log("[MediaUpload] Starting upload:", { productId, mediaFile: mediaFile?.name, adminPassword: !!adminPassword });
+    console.log("[MediaUpload] Starting upload:", { 
+      productId, 
+      mediaFile: mediaFile?.name, 
+      mediaFileSize: mediaFile?.size,
+      mediaType,
+      hasThumbnail: !!mediaThumbnail,
+      adminPassword: !!adminPassword 
+    });
     
     if (!productId) {
       toast({ title: "Ошибка", description: "ID товара не найден", variant: "destructive" });
@@ -170,21 +196,44 @@ export default function AdminProductForm({
       return;
     }
     
+    // Проверка размера файла (100MB лимит)
+    const maxSize = 100 * 1024 * 1024; // 100MB
+    if (mediaFile.size > maxSize) {
+      toast({ 
+        title: "Ошибка", 
+        description: `Файл слишком большой. Максимальный размер: ${(maxSize / 1024 / 1024).toFixed(0)}MB`, 
+        variant: "destructive" 
+      });
+      return;
+    }
+    
     setIsMediaUploading(true);
     const data = new FormData();
     data.append("productId", String(productId));
     data.append("type", mediaType);
     data.append("featured", "true");
     data.append("file", mediaFile);
-    if (mediaThumbnail) data.append("thumbnail", mediaThumbnail);
+    if (mediaThumbnail) {
+      data.append("thumbnail", mediaThumbnail);
+    }
     
-    console.log("[MediaUpload] Sending request with FormData");
+    console.log("[MediaUpload] Sending request with FormData, file count:", data.getAll("file").length);
     
     try {
-      await createMediaMutation.mutateAsync(data);
-      console.log("[MediaUpload] Upload successful");
+      const result = await createMediaMutation.mutateAsync(data);
+      console.log("[MediaUpload] Upload successful:", result);
+      toast({ 
+        title: "Успешно", 
+        description: mediaType === "video" ? "Видео загружено" : "Изображение загружено"
+      });
     } catch (error) {
       console.error("[MediaUpload] Upload failed:", error);
+      const errorMessage = error instanceof Error ? error.message : "Не удалось загрузить файл";
+      toast({ 
+        title: "Ошибка загрузки", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
     } finally {
       setIsMediaUploading(false);
     }
