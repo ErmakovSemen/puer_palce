@@ -149,6 +149,25 @@ app.use((req, res, next) => {
     // Add analytics column to users for A/B test assignment persistence
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics TEXT`);
     log('Database migration: users.analytics column ensured');
+    
+    // Media table for Video Gallery feature
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS media (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        title TEXT,
+        description TEXT,
+        source TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'file',
+        thumbnail TEXT,
+        featured BOOLEAN NOT NULL DEFAULT true,
+        display_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    log('Database migration: media table ensured');
   } catch (err) {
     log(`Database migration warning: ${err}`);
   }

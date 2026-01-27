@@ -747,3 +747,45 @@ export const insertDeviceUserMappingSchema = createInsertSchema(deviceUserMappin
 
 export type InsertDeviceUserMapping = z.infer<typeof insertDeviceUserMappingSchema>;
 export type DeviceUserMapping = typeof deviceUserMappings.$inferSelect;
+
+// Media table for videos and additional photos (Video Gallery feature)
+export const media = pgTable("media", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  type: text("type").notNull(), // "video" | "image"
+  title: text("title"), // optional title (defaults to product name)
+  description: text("description"), // optional description
+  source: text("source").notNull(), // URL or file path
+  sourceType: text("source_type").notNull().default("file"), // "url" | "file"
+  thumbnail: text("thumbnail"), // thumbnail URL for video preview
+  featured: boolean("featured").notNull().default(true), // show on homepage?
+  displayOrder: integer("display_order").notNull().default(0), // order in product media gallery
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertMediaSchema = createInsertSchema(media, {
+  productId: z.number().int().positive("Выберите товар"),
+  type: z.enum(["video", "image"], {
+    errorMap: () => ({ message: "Выберите тип: видео или изображение" })
+  }),
+  title: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  source: z.string().min(1, "Укажите источник медиа"),
+  sourceType: z.enum(["url", "file"]),
+  thumbnail: z.string().optional().nullable(),
+  featured: z.boolean(),
+  displayOrder: z.number().int().default(0),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const updateMediaSchema = z.object({
+  title: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  thumbnail: z.string().optional().nullable(),
+  featured: z.boolean().optional(),
+  displayOrder: z.number().int().optional(),
+});
+
+export type InsertMedia = z.infer<typeof insertMediaSchema>;
+export type UpdateMedia = z.infer<typeof updateMediaSchema>;
+export type Media = typeof media.$inferSelect;
