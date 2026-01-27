@@ -218,12 +218,26 @@ export function useAbTesting() {
     }
   }, [user?.id, deviceId, experiments, mappingSent]);
 
+  // Get a simple snapshot of current assignments: { testId: variantId }
+  const getAssignmentSnapshot = useCallback((): Record<string, string> => {
+    const snapshot: Record<string, string> = {};
+    for (const exp of experiments) {
+      if (exp.status !== "active") continue;
+      const assignment = getTestVariant(exp.testId);
+      if (assignment) {
+        snapshot[exp.testId] = assignment.variantId;
+      }
+    }
+    return snapshot;
+  }, [experiments, getTestVariant]);
+
   return {
     deviceId,
     userId: user?.id || null,
     experiments,
     getTestVariant,
     getAllTestAssignments,
+    getAssignmentSnapshot,
     getPriceMultiplier,
     applyPriceMultiplier,
   };

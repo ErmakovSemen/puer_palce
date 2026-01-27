@@ -12,6 +12,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { migrateGuestCart } from "@/lib/migrateCart";
+import { useAbTesting, useAbEvent } from "@/hooks/use-ab-testing";
 
 type VerificationStep = "register" | "verify-phone";
 type ForgotStep = "phone" | "verify-code" | "new-password";
@@ -21,6 +22,11 @@ export default function Auth() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const registrationFormRef = useRef<HTMLFormElement>(null);
+  const { getAssignmentSnapshot } = useAbTesting();
+  const { logEvent } = useAbEvent();
+  
+  // A/B testing snapshot before registration
+  const [abSnapshotBefore, setAbSnapshotBefore] = useState<Record<string, string> | null>(null);
   
   // Login state
   const [loginData, setLoginData] = useState({ phone: "+7", password: "" });
@@ -81,6 +87,25 @@ export default function Auth() {
           title: "Телефон подтверждён",
           description: "Добро пожаловать!",
         });
+        
+        // Log registration event with A/B test assignments
+        const snapshotAfter = getAssignmentSnapshot();
+        const testAssignments: Record<string, { before: string; after: string }> = {};
+        
+        // Combine all test IDs from before and after
+        const allTestIds = Array.from(new Set([
+          ...Object.keys(abSnapshotBefore || {}),
+          ...Object.keys(snapshotAfter)
+        ]));
+        
+        for (const testId of allTestIds) {
+          testAssignments[testId] = {
+            before: abSnapshotBefore?.[testId] || "none",
+            after: snapshotAfter[testId] || "none"
+          };
+        }
+        
+        logEvent("registration", { test_assignments: testAssignments });
         
         // Goal form submission happens automatically via form action/target
         // No need to manually submit - the form with action="/goal/registration" already submitted
@@ -176,6 +201,10 @@ export default function Auth() {
   };
 
   const handleRegister = async () => {
+    // Capture A/B test snapshot before registration
+    const snapshotBefore = getAssignmentSnapshot();
+    setAbSnapshotBefore(snapshotBefore);
+    
     // Build registration data
     const registrationData: any = {
       phone: registerData.phone,
