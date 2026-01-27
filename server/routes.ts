@@ -3538,11 +3538,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     { name: "file", maxCount: 1 },
     { name: "thumbnail", maxCount: 1 }
   ]), async (req, res) => {
+    console.log("[Media Upload] Request received:", { 
+      body: req.body, 
+      hasFiles: !!req.files,
+      fileKeys: req.files ? Object.keys(req.files as any) : []
+    });
     try {
       const { productId, type, title, description, sourceUrl, featured } = req.body;
       const files = req.files as { [fieldname: string]: Express.Multer.File[] };
       
+      console.log("[Media Upload] Parsed:", { productId, type, hasFile: !!files?.file?.[0] });
+      
       if (!productId || !type) {
+        console.log("[Media Upload] Missing required fields");
         return res.status(400).json({ error: "productId and type are required" });
       }
 
@@ -3595,6 +3603,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         thumbnailUrl = await objectStorageService.uploadPublicObject(webpBuffer, thumbnailFilename);
       }
 
+      console.log("[Media Upload] Creating media in DB:", { productId, type, sourceValue, sourceType });
+      
       const newMedia = await storage.createMedia({
         productId: parseInt(productId),
         type: type as "video" | "image",
@@ -3607,9 +3617,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         displayOrder: 0,
       });
 
+      console.log("[Media Upload] SUCCESS - Created media:", newMedia);
       res.json(newMedia);
     } catch (error) {
-      console.error("[Media] Error creating media:", error);
+      console.error("[Media Upload] ERROR:", error);
       res.status(500).json({ error: "Failed to create media" });
     }
   });
