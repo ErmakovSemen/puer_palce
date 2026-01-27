@@ -23,11 +23,14 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { Upload, X, Plus } from "lucide-react";
+import { Upload, X, Plus, Video, Image, Trash2, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
 import { useTeaTypes } from "@/hooks/use-tea-types";
+import { useToast } from "@/hooks/use-toast";
+import type { Media } from "@shared/schema";
 
 const productSchema = z.object({
   name: z.string().min(2, "Название должно содержать минимум 2 символа"),
@@ -67,21 +70,30 @@ interface AdminProductFormProps {
   onCancel: () => void;
   defaultValues?: Partial<ProductFormValues>;
   isSubmitting?: boolean;
+  productId?: number;
+  adminPassword?: string;
 }
 
 export default function AdminProductForm({ 
   onSubmit, 
   onCancel, 
   defaultValues,
-  isSubmitting = false 
+  isSubmitting = false,
+  productId,
+  adminPassword = ""
 }: AdminProductFormProps) {
+  const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [isMediaUploading, setIsMediaUploading] = useState(false);
   const [showNewTypeInput, setShowNewTypeInput] = useState(false);
   const [newType, setNewType] = useState("");
   const [showNewEffectInput, setShowNewEffectInput] = useState(false);
   const [newEffect, setNewEffect] = useState("");
   const [showNewQuantityInput, setShowNewQuantityInput] = useState(false);
   const [newQuantity, setNewQuantity] = useState("");
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaThumbnail, setMediaThumbnail] = useState<File | null>(null);
+  const [mediaType, setMediaType] = useState<"video" | "image">("video");
 
   // Fetch available tea types from API
   const { data: teaTypes } = useTeaTypes();
@@ -90,6 +102,79 @@ export default function AdminProductForm({
   const { data: tags, isLoading: isLoadingTags } = useQuery<{ types: string[], effects: string[] }>({
     queryKey: ['/api/tags'],
   });
+
+  // Fetch media for this product
+  const { data: productMediaItems = [] } = useQuery<Media[]>({
+    queryKey: ['/api/media', productId],
+    queryFn: async () => {
+      if (!productId) return [];
+      const res = await fetch(`/api/media?productId=${productId}`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!productId,
+  });
+
+  const createMediaMutation = useMutation({
+    mutationFn: async (data: FormData) => {
+      const response = await fetch("/api/admin/media", {
+        method: "POST",
+        headers: { "X-Admin-Password": adminPassword },
+        body: data,
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to upload media");
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/media", productId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/media/featured"] });
+      toast({ title: "Добавлено в истории" });
+      setMediaFile(null);
+      setMediaThumbnail(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMediaMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const response = await fetch(`/api/admin/media/${id}`, {
+        method: "DELETE",
+        headers: { "X-Admin-Password": adminPassword },
+      });
+      if (!response.ok) throw new Error("Failed to delete media");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/media", productId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/media/featured"] });
+      toast({ title: "Удалено из историй" });
+    },
+    onError: () => {
+      toast({ title: "Ошибка удаления", variant: "destructive" });
+    },
+  });
+
+  const handleMediaUpload = async () => {
+    if (!productId || !mediaFile) return;
+    
+    setIsMediaUploading(true);
+    const data = new FormData();
+    data.append("productId", String(productId));
+    data.append("type", mediaType);
+    data.append("featured", "true");
+    data.append("file", mediaFile);
+    if (mediaThumbnail) data.append("thumbnail", mediaThumbnail);
+    
+    try {
+      await createMediaMutation.mutateAsync(data);
+    } finally {
+      setIsMediaUploading(false);
+    }
+  };
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -662,12 +747,123 @@ export default function AdminProductForm({
                 </SelectContent>
               </Select>
               <FormDescription>
-                Медиа-карточка показывает видео вместо обычной карточки товара. Требуется загрузить медиа для этого товара во вкладке "Медиа".
+                Медиа-карточка показывает видео вместо обычной карточки товара.
               </FormDescription>
               <FormMessage />
             </FormItem>
           )}
         />
+
+        {form.watch("cardType") === "media" && (
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <Video className="w-5 h-5 text-muted-foreground" />
+              <h4 className="font-medium">Истории товара</h4>
+            </div>
+            
+            {productMediaItems.length > 0 && (
+              <div className="grid grid-cols-2 gap-3">
+                {productMediaItems.map((media) => (
+                  <Card key={media.id} className="relative overflow-hidden">
+                    <div className="aspect-video bg-muted flex items-center justify-center">
+                      {media.type === "video" ? (
+                        media.thumbnail ? (
+                          <img src={media.thumbnail} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <Video className="w-8 h-8 text-muted-foreground" />
+                        )
+                      ) : (
+                        <img src={media.source} alt="" className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                    <div className="p-2 flex items-center justify-between">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        {media.type === "video" ? <Video className="w-3 h-3" /> : <Image className="w-3 h-3" />}
+                        <span>{media.type === "video" ? "Видео" : "Фото"}</span>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={() => deleteMediaMutation.mutate(media.id)}
+                        data-testid={`button-delete-media-${media.id}`}
+                      >
+                        <Trash2 className="w-3 h-3 text-destructive" />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {productId ? (
+              <div className="space-y-3 border-t pt-3">
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={mediaType === "video" ? "default" : "outline"}
+                    onClick={() => setMediaType("video")}
+                    data-testid="button-media-type-video"
+                  >
+                    <Video className="w-4 h-4 mr-1" /> Видео
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={mediaType === "image" ? "default" : "outline"}
+                    onClick={() => setMediaType("image")}
+                    data-testid="button-media-type-image"
+                  >
+                    <Image className="w-4 h-4 mr-1" /> Фото
+                  </Button>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>{mediaType === "video" ? "Видео файл" : "Изображение"}</Label>
+                  <Input
+                    type="file"
+                    accept={mediaType === "video" ? "video/*" : "image/*"}
+                    onChange={(e) => setMediaFile(e.target.files?.[0] || null)}
+                    data-testid="input-media-file"
+                  />
+                </div>
+                
+                {mediaType === "video" && (
+                  <div className="space-y-2">
+                    <Label>Превью (необязательно)</Label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setMediaThumbnail(e.target.files?.[0] || null)}
+                      data-testid="input-media-thumbnail"
+                    />
+                  </div>
+                )}
+                
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleMediaUpload}
+                  disabled={!mediaFile || isMediaUploading}
+                  data-testid="button-upload-media"
+                >
+                  {isMediaUploading ? (
+                    <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Загрузка...</>
+                  ) : (
+                    <><Upload className="w-4 h-4 mr-1" /> Загрузить</>
+                  )}
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Сохраните товар, чтобы добавить истории
+              </p>
+            )}
+          </div>
+        )}
 
         <FormField
           control={form.control}

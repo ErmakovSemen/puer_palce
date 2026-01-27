@@ -57,7 +57,7 @@ export default function AdminMedia({ adminPassword }: AdminMediaProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/media"] });
-      toast({ title: "Медиа загружено" });
+      toast({ title: "Добавлено в истории" });
       resetForm();
     },
     onError: (error: Error) => {
@@ -77,7 +77,7 @@ export default function AdminMedia({ adminPassword }: AdminMediaProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/media"] });
-      toast({ title: "Медиа удалено" });
+      toast({ title: "Удалено из историй" });
     },
     onError: () => {
       toast({ title: "Ошибка удаления", variant: "destructive" });
@@ -147,7 +147,7 @@ export default function AdminMedia({ adminPassword }: AdminMediaProps) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="font-serif text-xl sm:text-2xl font-semibold">Медиа контент</h2>
+        <h2 className="font-serif text-xl sm:text-2xl font-semibold">Истории</h2>
         <Button onClick={() => setShowForm(!showForm)} data-testid="button-add-media">
           <Plus className="w-4 h-4 mr-2" />
           Добавить
@@ -371,7 +371,7 @@ export default function AdminMedia({ adminPassword }: AdminMediaProps) {
         {mediaItems.length === 0 && (
           <div className="col-span-full text-center py-12 text-muted-foreground">
             <Video className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Медиа контент пока не добавлен</p>
+            <p>Истории пока не добавлены</p>
             <p className="text-sm">Нажмите "Добавить" чтобы загрузить видео или фото</p>
           </div>
         )}

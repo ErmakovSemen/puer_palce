@@ -390,7 +390,7 @@ export default function Admin() {
             <TabsTrigger value="banners" data-testid="tab-banners" className="min-w-max">Баннеры</TabsTrigger>
             <TabsTrigger value="experiments" data-testid="tab-experiments" className="min-w-max">Эксперименты</TabsTrigger>
             <TabsTrigger value="tv-display" data-testid="tab-tv-display" className="min-w-max">ТВ-дисплей</TabsTrigger>
-            <TabsTrigger value="media" data-testid="tab-media" className="min-w-max">Медиа</TabsTrigger>
+            <TabsTrigger value="media" data-testid="tab-media" className="min-w-max">Истории</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings" className="min-w-max">Настройки</TabsTrigger>
             <TabsTrigger value="tea-types" data-testid="tab-tea-types" className="min-w-max">Типы чая</TabsTrigger>
             <TabsTrigger value="quiz" data-testid="tab-quiz" className="min-w-max">Квиз подбора</TabsTrigger>
@@ -642,16 +642,22 @@ export default function Admin() {
             defaultValues={editingProduct ? {
               name: editingProduct.name,
               category: editingProduct.category as "tea" | "teaware",
+              pricingUnit: editingProduct.pricingUnit as "gram" | "piece",
               pricePerGram: editingProduct.pricePerGram,
               description: editingProduct.description,
               images: editingProduct.images,
               teaType: editingProduct.teaType,
               effects: editingProduct.effects,
               availableQuantities: editingProduct.availableQuantities,
+              defaultQuantity: editingProduct.defaultQuantity,
               fixedQuantityOnly: editingProduct.fixedQuantityOnly,
               fixedQuantity: editingProduct.fixedQuantity,
+              outOfStock: editingProduct.outOfStock,
+              cardType: editingProduct.cardType as "classic" | "media",
             } : undefined}
             isSubmitting={createProductMutation.isPending || updateProductMutation.isPending}
+            productId={editingProduct?.id}
+            adminPassword={adminPassword}
           />
         </DialogContent>
       </Dialog>
