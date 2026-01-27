@@ -87,12 +87,14 @@ function ProductGridWithBanners({ products, banners, cartItems, mediaByProduct, 
   const renderProductCard = (product: Product, cartInfo: CartItemInfo | undefined) => {
     const productMedia = mediaByProduct.get(product.id);
     
-    if (product.cardType === "media" && productMedia) {
-      const thumbnailSrc = productMedia.thumbnail || (productMedia.type === "image" ? productMedia.source : null);
+    if (product.cardType === "media") {
+      const thumbnailSrc = productMedia?.thumbnail || (productMedia?.type === "image" ? productMedia.source : null);
+      const hasMedia = !!productMedia;
+      
       return (
         <div
           className="group cursor-pointer h-full"
-          onClick={() => onMediaProductClick(product.id)}
+          onClick={() => hasMedia ? onMediaProductClick(product.id) : onProductClick(product.id)}
           data-testid={`media-product-card-${product.id}`}
         >
           <div className="relative aspect-[9/16] bg-muted rounded-lg overflow-hidden">
@@ -102,13 +104,19 @@ function ProductGridWithBanners({ products, banners, cartItems, mediaByProduct, 
                 alt={product.name}
                 className="w-full h-full object-cover transition-transform group-hover:scale-105"
               />
+            ) : product.images?.[0] ? (
+              <img
+                src={product.images[0]}
+                alt={product.name}
+                className="w-full h-full object-cover transition-transform group-hover:scale-105"
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
                 <Play className="w-12 h-12 text-white/60" />
               </div>
             )}
             
-            {productMedia.type === "video" && (
+            {(productMedia?.type === "video" || !hasMedia) && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center transition-transform group-hover:scale-110">
                   <Play className="w-6 h-6 text-white fill-white ml-1" />
