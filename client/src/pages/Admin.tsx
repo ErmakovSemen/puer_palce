@@ -148,14 +148,24 @@ export default function Admin() {
         body: JSON.stringify(product),
       });
     },
-    onSuccess: () => {
+    onSuccess: (createdProduct: Product) => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tags"] });
-      toast({
-        title: "Товар добавлен",
-        description: "Новый товар добавлен в каталог",
-      });
-      setIsFormOpen(false);
+      
+      // If media card type was selected, keep form open for media upload
+      if (createdProduct.cardType === "media") {
+        toast({
+          title: "Товар создан",
+          description: "Теперь вы можете добавить медиа-истории",
+        });
+        setEditingProduct(createdProduct);
+      } else {
+        toast({
+          title: "Товар добавлен",
+          description: "Новый товар добавлен в каталог",
+        });
+        setIsFormOpen(false);
+      }
     },
     onError: (error: Error) => {
       toast({
