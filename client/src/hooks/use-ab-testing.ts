@@ -58,6 +58,15 @@ export function useAbTesting() {
   const user = authContext?.user || null;
   const [deviceId] = useState(() => getOrCreateDeviceId());
   const [mappingSent, setMappingSent] = useState(false);
+  const [lastUserId, setLastUserId] = useState<string | null>(null);
+  
+  // Reset mappingSent when user changes (logout/login different user)
+  useEffect(() => {
+    if (user?.id !== lastUserId) {
+      setLastUserId(user?.id || null);
+      setMappingSent(false);
+    }
+  }, [user?.id, lastUserId]);
   
   // Parse saved assignments from user.analytics
   const savedAssignments = useMemo((): Record<string, string> => {
