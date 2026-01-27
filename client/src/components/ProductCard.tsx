@@ -200,9 +200,9 @@ export default function ProductCard({
           <h3 className="font-serif text-base sm:text-xl font-semibold text-foreground line-clamp-2" data-testid={`text-product-name-${id}`}>
             {name}
           </h3>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1.5">
             <Badge 
-              className="text-xs transition-all duration-300 cursor-pointer"
+              className="text-xs transition-all duration-200 cursor-pointer hover:opacity-90 px-2 py-0.5 font-medium"
               style={getTeaTypeBadgeStyleDynamic(teaType, teaTypes)}
               onClick={(e) => handleTagClick(e, 'teaType', teaType)}
               data-testid={`badge-tea-type-${id}`}
@@ -222,11 +222,12 @@ export default function ProductCard({
               <Badge 
                 key={index} 
                 variant="outline" 
-                className="text-xs transition-all duration-300 cursor-pointer"
+                className="text-xs transition-all duration-200 cursor-pointer hover:bg-gray-100 px-2 py-0.5 font-medium"
                 style={{ 
-                  backgroundColor: 'white',
-                  color: 'black',
-                  border: '3px double black'
+                  backgroundColor: '#fafafa',
+                  color: '#374151',
+                  border: '1px solid #e5e7eb',
+                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
                 }}
                 onClick={(e) => handleTagClick(e, 'effect', effect)}
                 data-testid={`badge-effect-${id}-${index}`}

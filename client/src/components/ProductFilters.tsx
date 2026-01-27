@@ -204,7 +204,7 @@ export default function ProductFilters({
                     onCheckedChange={() => toggleType(type.id)}
                   />
                   <Badge 
-                    className="text-xs"
+                    className="text-xs px-2 py-0.5 font-medium"
                     style={getTeaTypeBadgeStyleDynamic(type.label, teaTypesFromAPI)}
                   >
                     {type.label}

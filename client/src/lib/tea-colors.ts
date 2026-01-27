@@ -74,7 +74,8 @@ export function getTeaTypeBadgeStyle(teaType: string): React.CSSProperties {
   return {
     backgroundColor: colorData.bg,
     color: colorData.text,
-    border: '3px double black'
+    border: '1px solid rgba(0, 0, 0, 0.1)',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
   };
 }
 
@@ -91,7 +92,8 @@ export function getTeaTypeBadgeStyleDynamic(
     return {
       backgroundColor: foundType.backgroundColor,
       color: foundType.textColor,
-      border: '3px double black'
+      border: '1px solid rgba(0, 0, 0, 0.1)',
+      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
     };
   }
   

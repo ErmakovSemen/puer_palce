@@ -120,7 +120,7 @@ export default function ProductDetail({
             </h2>
             <div className="flex flex-wrap gap-2 mb-4">
               <Badge 
-                className="text-sm"
+                className="text-sm px-2 py-0.5 font-medium"
                 style={getTeaTypeBadgeStyleDynamic(teaType, teaTypes)}
                 data-testid={`badge-detail-tea-type-${id}`}
               >
@@ -139,7 +139,13 @@ export default function ProductDetail({
                 <Badge 
                   key={index} 
                   variant="outline"
-                  className="text-sm"
+                  className="text-sm px-2 py-0.5 font-medium hover:bg-gray-100 transition-all duration-200"
+                  style={{ 
+                    backgroundColor: '#fafafa',
+                    color: '#374151',
+                    border: '1px solid #e5e7eb',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}
                   data-testid={`badge-detail-effect-${id}-${index}`}
                 >
                   {effect}
