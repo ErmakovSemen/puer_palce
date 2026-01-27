@@ -123,6 +123,7 @@ export const products = pgTable("products", {
   fixedQuantityOnly: boolean("fixed_quantity_only").notNull().default(false), // If true, only sell in fixed quantity
   fixedQuantity: integer("fixed_quantity"), // Fixed quantity in grams (e.g., 357g for tea cake) or pieces
   outOfStock: boolean("out_of_stock").notNull().default(false), // If true, product is out of stock and cannot be ordered
+  cardType: text("card_type").notNull().default("classic"), // "classic" or "media" - card display type on homepage
 });
 
 export const insertProductSchema = createInsertSchema(products, {
@@ -143,6 +144,9 @@ export const insertProductSchema = createInsertSchema(products, {
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
   outOfStock: z.boolean(),
+  cardType: z.enum(["classic", "media"], {
+    errorMap: () => ({ message: "Выберите тип карточки" })
+  }),
 }).omit({ id: true }).refine((data) => {
   if (data.fixedQuantityOnly && !data.fixedQuantity) {
     return false;

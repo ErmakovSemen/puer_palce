@@ -47,6 +47,9 @@ const productSchema = z.object({
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
   outOfStock: z.boolean(),
+  cardType: z.enum(["classic", "media"], {
+    errorMap: () => ({ message: "Выберите тип карточки" })
+  }),
 }).refine((data) => {
   if (data.fixedQuantityOnly && !data.fixedQuantity) {
     return false;
@@ -104,6 +107,7 @@ export default function AdminProductForm({
       fixedQuantityOnly: defaultValues?.fixedQuantityOnly || false,
       fixedQuantity: defaultValues?.fixedQuantity || null,
       outOfStock: (defaultValues as any)?.outOfStock || false,
+      cardType: (defaultValues as any)?.cardType || "classic",
     },
   });
 
@@ -636,6 +640,31 @@ export default function AdminProductForm({
                   Включите эту опцию, если товара нет в наличии. Он будет виден на сайте, но его нельзя будет добавить в корзину.
                 </FormDescription>
               </div>
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="cardType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Тип карточки на главной</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger data-testid="select-card-type">
+                    <SelectValue placeholder="Выберите тип карточки" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="classic" data-testid="select-card-type-classic">Классическая</SelectItem>
+                  <SelectItem value="media" data-testid="select-card-type-media">Медиа (видео)</SelectItem>
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Медиа-карточка показывает видео вместо обычной карточки товара. Требуется загрузить медиа для этого товара во вкладке "Медиа".
+              </FormDescription>
+              <FormMessage />
             </FormItem>
           )}
         />
