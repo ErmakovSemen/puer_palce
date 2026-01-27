@@ -2458,10 +2458,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Save device-user mapping (called after registration)
+  // Save device-user mapping and persist A/B test assignments (called after login)
   app.post("/api/device-user-mapping", async (req, res) => {
     try {
-      const { deviceId, userId } = req.body;
+      const { deviceId, userId, testAssignments } = req.body;
       
       if (!deviceId || !userId) {
         res.status(400).json({ error: "deviceId and userId are required" });
@@ -2469,6 +2469,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const mapping = await storage.createDeviceUserMapping(deviceId, userId);
+      
+      // Save A/B test assignments to user.analytics if provided
+      if (testAssignments && Object.keys(testAssignments).length > 0) {
+        const user = await storage.getUser(userId);
+        if (user) {
+          let existingAnalytics: Record<string, any> = {};
+          if (user.analytics) {
+            try {
+              existingAnalytics = JSON.parse(user.analytics);
+            } catch { existingAnalytics = {}; }
+          }
+          
+          // Merge: keep existing assignments, add new ones only if not present
+          const abAssignments = existingAnalytics.abAssignments || {};
+          let updated = false;
+          for (const [testId, variantId] of Object.entries(testAssignments)) {
+            if (!abAssignments[testId]) {
+              abAssignments[testId] = variantId;
+              updated = true;
+            }
+          }
+          
+          if (updated) {
+            existingAnalytics.abAssignments = abAssignments;
+            await db.update(usersTable).set({ 
+              analytics: JSON.stringify(existingAnalytics) 
+            }).where(eq(usersTable.id, userId));
+          }
+        }
+      }
+      
       res.json(mapping);
     } catch (error) {
       console.error("[Device-User Mapping] Error saving mapping:", error);

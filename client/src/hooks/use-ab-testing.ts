@@ -57,25 +57,23 @@ export function useAbTesting() {
   const authContext = useContext(AuthContext);
   const user = authContext?.user || null;
   const [deviceId] = useState(() => getOrCreateDeviceId());
+  const [mappingSent, setMappingSent] = useState(false);
   
-  const identifier = useMemo(() => {
-    return user?.id || deviceId;
-  }, [user?.id, deviceId]);
+  // Parse saved assignments from user.analytics
+  const savedAssignments = useMemo((): Record<string, string> => {
+    if (!user?.analytics) return {};
+    try {
+      const analytics = JSON.parse(user.analytics);
+      return analytics.abAssignments || {};
+    } catch {
+      return {};
+    }
+  }, [user?.analytics]);
 
   const { data: experiments = [] } = useQuery<Experiment[]>({
     queryKey: ["/api/experiments/active"],
     staleTime: 60000,
   });
-
-  useEffect(() => {
-    if (user?.id && deviceId && deviceId.startsWith("dev_")) {
-      fetch("/api/device-user-mapping", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deviceId, userId: user.id }),
-      }).catch(console.error);
-    }
-  }, [user?.id, deviceId]);
 
   const getTestVariant = useCallback((testId: string): TestAssignment | null => {
     const experiment = experiments.find(e => e.testId === testId && e.status === "active");
@@ -111,14 +109,28 @@ export function useAbTesting() {
       return null;
     }
 
-    const variant = determineVariant(identifier, testId, variants);
+    // Priority 1: Use saved assignment from user.analytics (for logged-in users)
+    if (user?.id && savedAssignments[testId]) {
+      const savedVariantId = savedAssignments[testId];
+      const savedVariant = variants.find(v => v.id === savedVariantId);
+      if (savedVariant) {
+        return {
+          testId,
+          variantId: savedVariant.id,
+          config: savedVariant.config,
+        };
+      }
+    }
+
+    // Priority 2: Always use deviceId for hash (consistent across login states)
+    const variant = determineVariant(deviceId, testId, variants);
     
     return {
       testId,
       variantId: variant.id,
       config: variant.config,
     };
-  }, [experiments, identifier, user?.id]);
+  }, [experiments, deviceId, user?.id, savedAssignments]);
 
   const getAllTestAssignments = useCallback((): Record<string, TestAssignment> => {
     const assignments: Record<string, TestAssignment> = {};
@@ -171,8 +183,33 @@ export function useAbTesting() {
     return Math.round(basePrice * multiplier);
   }, [getPriceMultiplier]);
 
+  // Send device-user mapping with test assignments when user logs in
+  useEffect(() => {
+    if (user?.id && deviceId && deviceId.startsWith("dev_") && !mappingSent && experiments.length > 0) {
+      // Get current assignments based on deviceId hash
+      const currentAssignments: Record<string, string> = {};
+      for (const exp of experiments) {
+        if (exp.status !== "active") continue;
+        try {
+          const variants: ExperimentVariant[] = JSON.parse(exp.variants);
+          const variant = determineVariant(deviceId, exp.testId, variants);
+          currentAssignments[exp.testId] = variant.id;
+        } catch { /* skip */ }
+      }
+      
+      fetch("/api/device-user-mapping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          deviceId, 
+          userId: user.id,
+          testAssignments: currentAssignments 
+        }),
+      }).then(() => setMappingSent(true)).catch(console.error);
+    }
+  }, [user?.id, deviceId, experiments, mappingSent]);
+
   return {
-    identifier,
     deviceId,
     userId: user?.id || null,
     experiments,
@@ -184,7 +221,7 @@ export function useAbTesting() {
 }
 
 export function useAbEvent() {
-  const { identifier, userId, deviceId, getAllTestAssignments } = useAbTesting();
+  const { userId, deviceId, getAllTestAssignments } = useAbTesting();
 
   const logEvent = useCallback(async (
     eventType: string,
@@ -198,7 +235,7 @@ export function useAbEvent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           eventType,
-          userIdentifier: identifier,
+          userIdentifier: userId || deviceId,
           userId: userId || null,
           deviceId: deviceId.startsWith("dev_") ? deviceId : null,
           testAssignments,
@@ -208,7 +245,7 @@ export function useAbEvent() {
     } catch (error) {
       console.error("[A/B Event] Failed to log event:", error);
     }
-  }, [identifier, userId, deviceId, getAllTestAssignments]);
+  }, [userId, deviceId, getAllTestAssignments]);
 
   return { logEvent };
 }

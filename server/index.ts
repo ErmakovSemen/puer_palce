@@ -145,6 +145,10 @@ app.use((req, res, next) => {
       )
     `);
     log('Database migration: device_user_mappings table ensured');
+    
+    // Add analytics column to users for A/B test assignment persistence
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics TEXT`);
+    log('Database migration: users.analytics column ensured');
   } catch (err) {
     log(`Database migration warning: ${err}`);
   }

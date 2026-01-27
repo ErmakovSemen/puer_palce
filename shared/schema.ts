@@ -15,6 +15,7 @@ export const users = pgTable("users", {
   firstOrderDiscountUsed: boolean("first_order_discount_used").notNull().default(false),
   customDiscount: integer("custom_discount"), // Индивидуальная скидка в процентах (nullable)
   walletBalance: integer("wallet_balance").notNull().default(0), // Баланс кошелька в копейках
+  analytics: text("analytics"), // JSON: A/B test assignments {testId: variantId}
 });
 
 export const insertUserSchema = createInsertSchema(users, {
