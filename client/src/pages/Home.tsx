@@ -63,20 +63,87 @@ interface CartItemInfo {
   originalPrice: number; // Original price per unit (without discount)
 }
 
+interface FeaturedMedia extends Media {
+  product: Product;
+}
+
 interface ProductGridWithBannersProps {
   products: Product[];
   banners: InfoBanner[];
   cartItems: Map<number, CartItemInfo>;
+  mediaByProduct: Map<number, FeaturedMedia>;
   onAddToCart: (productId: number, quantity: number) => void;
   onUpdateQuantity: (productId: number, quantity: number) => void;
   onProductClick: (productId: number) => void;
+  onMediaProductClick: (productId: number) => void;
   onFilterByType: (type: string) => void;
   onFilterByEffect: (effect: string) => void;
 }
 
-function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onUpdateQuantity, onProductClick, onFilterByType, onFilterByEffect }: ProductGridWithBannersProps) {
+function ProductGridWithBanners({ products, banners, cartItems, mediaByProduct, onAddToCart, onUpdateQuantity, onProductClick, onMediaProductClick, onFilterByType, onFilterByEffect }: ProductGridWithBannersProps) {
   const DESKTOP_COLS = 4;
   const MOBILE_COLS = 2;
+  
+  const renderProductCard = (product: Product, cartInfo: CartItemInfo | undefined) => {
+    const productMedia = mediaByProduct.get(product.id);
+    
+    if (product.cardType === "media" && productMedia) {
+      const thumbnailSrc = productMedia.thumbnail || (productMedia.type === "image" ? productMedia.source : null);
+      return (
+        <div
+          className="group cursor-pointer h-full"
+          onClick={() => onMediaProductClick(product.id)}
+          data-testid={`media-product-card-${product.id}`}
+        >
+          <div className="relative aspect-[9/16] bg-muted rounded-lg overflow-hidden">
+            {thumbnailSrc ? (
+              <img
+                src={thumbnailSrc}
+                alt={product.name}
+                className="w-full h-full object-cover transition-transform group-hover:scale-105"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+                <Play className="w-12 h-12 text-white/60" />
+              </div>
+            )}
+            
+            {productMedia.type === "video" && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center transition-transform group-hover:scale-110">
+                  <Play className="w-6 h-6 text-white fill-white ml-1" />
+                </div>
+              </div>
+            )}
+
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3">
+              <p className="font-serif font-medium text-white text-sm line-clamp-2">
+                {product.name}
+              </p>
+              <p className="text-white/80 text-xs mt-1">
+                {product.pricePerGram}₽/{product.pricingUnit === "piece" ? "шт" : "г"}
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    return (
+      <ProductCard
+        {...product}
+        isInCart={!!cartInfo}
+        cartQuantity={cartInfo?.quantity || 0}
+        cartPricePerUnit={cartInfo?.pricePerUnit}
+        cartOriginalPrice={cartInfo?.originalPrice}
+        onAddToCart={onAddToCart}
+        onUpdateQuantity={onUpdateQuantity}
+        onClick={onProductClick}
+        onFilterByType={onFilterByType}
+        onFilterByEffect={onFilterByEffect}
+      />
+    );
+  };
 
   const desktopRows: Product[][] = [];
   const mobileRows: Product[][] = [];
@@ -108,18 +175,7 @@ function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onU
                 const cartInfo = cartItems.get(product.id);
                 return (
                   <div key={product.id} className="h-full">
-                    <ProductCard
-                      {...product}
-                      isInCart={!!cartInfo}
-                      cartQuantity={cartInfo?.quantity || 0}
-                      cartPricePerUnit={cartInfo?.pricePerUnit}
-                      cartOriginalPrice={cartInfo?.originalPrice}
-                      onAddToCart={onAddToCart}
-                      onUpdateQuantity={onUpdateQuantity}
-                      onClick={onProductClick}
-                      onFilterByType={onFilterByType}
-                      onFilterByEffect={onFilterByEffect}
-                    />
+                    {renderProductCard(product, cartInfo)}
                   </div>
                 );
               })}
@@ -145,18 +201,7 @@ function ProductGridWithBanners({ products, banners, cartItems, onAddToCart, onU
                 const cartInfo = cartItems.get(product.id);
                 return (
                   <div key={product.id} className="h-full">
-                    <ProductCard
-                      {...product}
-                      isInCart={!!cartInfo}
-                      cartQuantity={cartInfo?.quantity || 0}
-                      cartPricePerUnit={cartInfo?.pricePerUnit}
-                      cartOriginalPrice={cartInfo?.originalPrice}
-                      onAddToCart={onAddToCart}
-                      onUpdateQuantity={onUpdateQuantity}
-                      onClick={onProductClick}
-                      onFilterByType={onFilterByType}
-                      onFilterByEffect={onFilterByEffect}
-                    />
+                    {renderProductCard(product, cartInfo)}
                   </div>
                 );
               })}
@@ -285,6 +330,23 @@ export default function Home() {
   });
 
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
+
+  const mediaByProduct = useMemo(() => {
+    const map = new Map<number, FeaturedMedia>();
+    for (const media of featuredMedia) {
+      if (!map.has(media.productId)) {
+        map.set(media.productId, media as FeaturedMedia);
+      }
+    }
+    return map;
+  }, [featuredMedia]);
+
+  const handleMediaProductClick = (productId: number) => {
+    const media = mediaByProduct.get(productId);
+    if (media) {
+      setSelectedMediaId(media.id);
+    }
+  };
 
   const handleMediaAddToCart = (productId: number, quantity: number) => {
     const product = products.find(p => p.id === productId);
@@ -718,28 +780,6 @@ export default function Home() {
               />
             )}
 
-            {/* Video Gallery Section */}
-            {featuredMedia.length > 0 && (
-              <div className="mb-12">
-                <div className="flex items-center gap-2 mb-4">
-                  <Play className="w-5 h-5 text-primary" />
-                  <h2 className="font-serif text-2xl font-semibold" data-testid="heading-gallery-section">
-                    Видео о чае
-                  </h2>
-                </div>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
-                  {featuredMedia.slice(0, 6).map((media) => (
-                    <VideoCard
-                      key={media.id}
-                      media={media}
-                      product={media.product}
-                      onClick={() => setSelectedMediaId(media.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Tea Products with between-rows banners */}
             {teaProducts.length > 0 && (
               <div className="mb-12">
@@ -750,9 +790,11 @@ export default function Home() {
                   products={teaProducts}
                   banners={banners}
                   cartItems={cartItemsMap}
+                  mediaByProduct={mediaByProduct}
                   onAddToCart={addToCart}
                   onUpdateQuantity={updateQuantity}
                   onProductClick={setSelectedProductId}
+                  onMediaProductClick={handleMediaProductClick}
                   onFilterByType={(type) => { setSelectedTypes([type]); setSelectedEffects([]); }}
                   onFilterByEffect={(effect) => { setSelectedEffects([effect]); setSelectedTypes([]); }}
                 />

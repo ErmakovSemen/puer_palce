@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { X, ShoppingCart, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -22,8 +22,37 @@ export default function MediaViewer({
   onAddToCart 
 }: MediaViewerProps) {
   const { toast } = useToast();
-  const [currentIndex, setCurrentIndex] = useState(() => {
-    const idx = allMedia.findIndex(m => m.id === initialMediaId);
+  
+  const productMediaGroups = useMemo(() => {
+    const groups: { productId: number; media: FeaturedMedia[] }[] = [];
+    const productOrder: number[] = [];
+    
+    for (const media of allMedia) {
+      if (!productOrder.includes(media.productId)) {
+        productOrder.push(media.productId);
+        groups.push({ productId: media.productId, media: [] });
+      }
+      const group = groups.find(g => g.productId === media.productId);
+      if (group) {
+        group.media.push(media);
+      }
+    }
+    return groups;
+  }, [allMedia]);
+
+  const [currentProductIndex, setCurrentProductIndex] = useState(() => {
+    const initialMedia = allMedia.find(m => m.id === initialMediaId);
+    if (!initialMedia) return 0;
+    const idx = productMediaGroups.findIndex(g => g.productId === initialMedia.productId);
+    return idx >= 0 ? idx : 0;
+  });
+
+  const [currentMediaIndexInProduct, setCurrentMediaIndexInProduct] = useState(() => {
+    const initialMedia = allMedia.find(m => m.id === initialMediaId);
+    if (!initialMedia) return 0;
+    const group = productMediaGroups.find(g => g.productId === initialMedia.productId);
+    if (!group) return 0;
+    const idx = group.media.findIndex(m => m.id === initialMediaId);
     return idx >= 0 ? idx : 0;
   });
   
@@ -34,20 +63,40 @@ export default function MediaViewer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const currentMedia = allMedia[currentIndex];
+  const currentProductGroup = productMediaGroups[currentProductIndex];
+  const currentMedia = currentProductGroup?.media[currentMediaIndexInProduct];
   const currentProduct = currentMedia?.product;
 
-  const goToNext = useCallback(() => {
-    if (currentIndex < allMedia.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+  const goToNextProduct = useCallback(() => {
+    if (currentProductIndex < productMediaGroups.length - 1) {
+      setCurrentProductIndex(prev => prev + 1);
+      setCurrentMediaIndexInProduct(0);
     }
-  }, [currentIndex, allMedia.length]);
+  }, [currentProductIndex, productMediaGroups.length]);
 
-  const goToPrev = useCallback(() => {
-    if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
+  const goToPrevProduct = useCallback(() => {
+    if (currentProductIndex > 0) {
+      setCurrentProductIndex(prev => prev - 1);
+      setCurrentMediaIndexInProduct(0);
     }
-  }, [currentIndex]);
+  }, [currentProductIndex]);
+
+  const goToNextMedia = useCallback(() => {
+    if (!currentProductGroup) return;
+    if (currentMediaIndexInProduct < currentProductGroup.media.length - 1) {
+      setCurrentMediaIndexInProduct(prev => prev + 1);
+    } else {
+      goToNextProduct();
+    }
+  }, [currentMediaIndexInProduct, currentProductGroup, goToNextProduct]);
+
+  const goToPrevMedia = useCallback(() => {
+    if (currentMediaIndexInProduct > 0) {
+      setCurrentMediaIndexInProduct(prev => prev - 1);
+    } else {
+      goToPrevProduct();
+    }
+  }, [currentMediaIndexInProduct, goToPrevProduct]);
 
   const handleAddToCart = () => {
     if (!currentProduct) return;
@@ -83,17 +132,17 @@ export default function MediaViewer({
     const absX = Math.abs(touchDelta.x);
     const absY = Math.abs(touchDelta.y);
     
-    if (absX > absY && absX > threshold) {
-      if (touchDelta.x < 0) {
-        goToNext();
+    if (absY > absX && absY > threshold) {
+      if (touchDelta.y < 0) {
+        goToNextProduct();
       } else {
-        goToPrev();
+        goToPrevProduct();
       }
-    } else if (absY > threshold) {
-      if (touchDelta.y > 0) {
-        goToNext();
+    } else if (absX > threshold) {
+      if (touchDelta.x < 0) {
+        goToNextMedia();
       } else {
-        goToPrev();
+        goToPrevMedia();
       }
     }
     
@@ -106,18 +155,20 @@ export default function MediaViewer({
     if (videoRef.current && currentMedia?.type === "video") {
       videoRef.current.play().catch(() => {});
     }
-  }, [currentIndex, currentMedia?.type]);
+  }, [currentProductIndex, currentMediaIndexInProduct, currentMedia?.type]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight" || e.key === "ArrowDown") goToNext();
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp") goToPrev();
+      if (e.key === "ArrowDown") goToNextProduct();
+      if (e.key === "ArrowUp") goToPrevProduct();
+      if (e.key === "ArrowRight") goToNextMedia();
+      if (e.key === "ArrowLeft") goToPrevMedia();
     };
     
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose, goToNext, goToPrev]);
+  }, [onClose, goToNextProduct, goToPrevProduct, goToNextMedia, goToPrevMedia]);
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
@@ -168,9 +219,9 @@ export default function MediaViewer({
           <X className="w-5 h-5" />
         </button>
 
-        {currentIndex > 0 && (
+        {currentProductIndex > 0 && (
           <button
-            onClick={goToPrev}
+            onClick={goToPrevProduct}
             className="absolute left-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white/80 hover:bg-black/50 hidden md:flex"
             data-testid="button-prev"
           >
@@ -178,9 +229,9 @@ export default function MediaViewer({
           </button>
         )}
 
-        {currentIndex < allMedia.length - 1 && (
+        {currentProductIndex < productMediaGroups.length - 1 && (
           <button
-            onClick={goToNext}
+            onClick={goToNextProduct}
             className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white/80 hover:bg-black/50 hidden md:flex"
             data-testid="button-next"
           >
@@ -188,7 +239,7 @@ export default function MediaViewer({
           </button>
         )}
 
-        {currentIndex < allMedia.length - 1 && (
+        {currentProductIndex < productMediaGroups.length - 1 && (
           <div className="absolute bottom-24 left-1/2 -translate-x-1/2 animate-bounce md:hidden">
             <ChevronDown className="w-8 h-8 text-white/50" />
           </div>
@@ -196,13 +247,13 @@ export default function MediaViewer({
 
         <div className="absolute bottom-20 left-0 right-0 px-4">
           <div className="flex justify-center gap-1">
-            {allMedia.slice(Math.max(0, currentIndex - 3), Math.min(allMedia.length, currentIndex + 4)).map((m, i) => {
-              const actualIndex = Math.max(0, currentIndex - 3) + i;
+            {productMediaGroups.slice(Math.max(0, currentProductIndex - 3), Math.min(productMediaGroups.length, currentProductIndex + 4)).map((g, i) => {
+              const actualIndex = Math.max(0, currentProductIndex - 3) + i;
               return (
                 <div
-                  key={m.id}
+                  key={g.productId}
                   className={`h-1 rounded-full transition-all ${
-                    actualIndex === currentIndex 
+                    actualIndex === currentProductIndex 
                       ? "w-6 bg-white" 
                       : "w-1 bg-white/40"
                   }`}
