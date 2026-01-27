@@ -159,7 +159,16 @@ export default function AdminProductForm({
   });
 
   const handleMediaUpload = async () => {
-    if (!productId || !mediaFile) return;
+    console.log("[MediaUpload] Starting upload:", { productId, mediaFile: mediaFile?.name, adminPassword: !!adminPassword });
+    
+    if (!productId) {
+      toast({ title: "Ошибка", description: "ID товара не найден", variant: "destructive" });
+      return;
+    }
+    if (!mediaFile) {
+      toast({ title: "Ошибка", description: "Выберите файл для загрузки", variant: "destructive" });
+      return;
+    }
     
     setIsMediaUploading(true);
     const data = new FormData();
@@ -169,8 +178,13 @@ export default function AdminProductForm({
     data.append("file", mediaFile);
     if (mediaThumbnail) data.append("thumbnail", mediaThumbnail);
     
+    console.log("[MediaUpload] Sending request with FormData");
+    
     try {
       await createMediaMutation.mutateAsync(data);
+      console.log("[MediaUpload] Upload successful");
+    } catch (error) {
+      console.error("[MediaUpload] Upload failed:", error);
     } finally {
       setIsMediaUploading(false);
     }
@@ -825,9 +839,16 @@ export default function AdminProductForm({
                   <Input
                     type="file"
                     accept={mediaType === "video" ? "video/*" : "image/*"}
-                    onChange={(e) => setMediaFile(e.target.files?.[0] || null)}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      console.log("[MediaUpload] File selected:", file?.name);
+                      setMediaFile(file);
+                    }}
                     data-testid="input-media-file"
                   />
+                  {mediaFile && (
+                    <p className="text-xs text-green-600">Выбран: {mediaFile.name} ({(mediaFile.size / 1024 / 1024).toFixed(2)} MB)</p>
+                  )}
                 </div>
                 
                 {mediaType === "video" && (
