@@ -11,6 +11,7 @@ import AdminStats from "@/components/AdminStats";
 import AdminBannerManagement from "@/components/AdminBannerManagement";
 import AdminTVDisplay from "@/components/AdminTVDisplay";
 import AdminExperiments from "@/components/AdminExperiments";
+import AdminMedia from "@/components/AdminMedia";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -389,6 +390,7 @@ export default function Admin() {
             <TabsTrigger value="banners" data-testid="tab-banners" className="min-w-max">Баннеры</TabsTrigger>
             <TabsTrigger value="experiments" data-testid="tab-experiments" className="min-w-max">Эксперименты</TabsTrigger>
             <TabsTrigger value="tv-display" data-testid="tab-tv-display" className="min-w-max">ТВ-дисплей</TabsTrigger>
+            <TabsTrigger value="media" data-testid="tab-media" className="min-w-max">Медиа</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings" className="min-w-max">Настройки</TabsTrigger>
             <TabsTrigger value="tea-types" data-testid="tab-tea-types" className="min-w-max">Типы чая</TabsTrigger>
             <TabsTrigger value="quiz" data-testid="tab-quiz" className="min-w-max">Квиз подбора</TabsTrigger>
@@ -578,6 +580,10 @@ export default function Admin() {
 
           <TabsContent value="tv-display">
             <AdminTVDisplay adminFetch={adminFetch} />
+          </TabsContent>
+
+          <TabsContent value="media">
+            <AdminMedia adminPassword={adminPassword || ""} />
           </TabsContent>
 
           <TabsContent value="settings">

@@ -8,8 +8,10 @@ import CartDrawer from "@/components/CartDrawer";
 import CheckoutForm from "@/components/CheckoutForm";
 import TeaQuiz from "@/components/TeaQuiz";
 import RecommendedProducts from "@/components/RecommendedProducts";
+import VideoCard from "@/components/VideoCard";
+import MediaViewer from "@/components/MediaViewer";
 import { BannerSlot } from "@/components/InfoBanner";
-import type { InfoBanner } from "@shared/schema";
+import type { InfoBanner, Media } from "@shared/schema";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import {
   Dialog,
@@ -19,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Sparkles, ShoppingCart } from "lucide-react";
+import { Sparkles, ShoppingCart, Play } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -273,6 +275,22 @@ export default function Home() {
   const { data: banners = [] } = useQuery<InfoBanner[]>({
     queryKey: ['/api/banners'],
   });
+
+  interface FeaturedMediaResponse extends Media {
+    product: Product;
+  }
+
+  const { data: featuredMedia = [] } = useQuery<FeaturedMediaResponse[]>({
+    queryKey: ['/api/media/featured'],
+  });
+
+  const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
+
+  const handleMediaAddToCart = (productId: number, quantity: number) => {
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    addToCart(productId, quantity);
+  };
 
   const filteredProducts = useMemo(() => {
     const filtered = products.filter((product) => {
@@ -700,6 +718,28 @@ export default function Home() {
               />
             )}
 
+            {/* Video Gallery Section */}
+            {featuredMedia.length > 0 && (
+              <div className="mb-12">
+                <div className="flex items-center gap-2 mb-4">
+                  <Play className="w-5 h-5 text-primary" />
+                  <h2 className="font-serif text-2xl font-semibold" data-testid="heading-gallery-section">
+                    Видео о чае
+                  </h2>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
+                  {featuredMedia.slice(0, 6).map((media) => (
+                    <VideoCard
+                      key={media.id}
+                      media={media}
+                      product={media.product}
+                      onClick={() => setSelectedMediaId(media.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Tea Products with between-rows banners */}
             {teaProducts.length > 0 && (
               <div className="mb-12">
@@ -900,6 +940,16 @@ export default function Home() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* Media Viewer (TikTok-style fullscreen) */}
+      {selectedMediaId !== null && featuredMedia.length > 0 && (
+        <MediaViewer
+          allMedia={featuredMedia}
+          initialMediaId={selectedMediaId}
+          onClose={() => setSelectedMediaId(null)}
+          onAddToCart={handleMediaAddToCart}
+        />
       )}
     </div>
   );

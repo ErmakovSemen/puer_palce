@@ -3487,6 +3487,195 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ================== MEDIA (Video Gallery) ==================
+
+  // Get all media (optional productId filter)
+  app.get("/api/media", async (req, res) => {
+    try {
+      const productId = req.query.productId ? parseInt(req.query.productId as string) : undefined;
+      const mediaItems = await storage.getMedia(productId);
+      res.json(mediaItems);
+    } catch (error) {
+      console.error("[Media] Error fetching media:", error);
+      res.status(500).json({ error: "Failed to fetch media" });
+    }
+  });
+
+  // Get featured media for homepage (with product info)
+  app.get("/api/media/featured", async (req, res) => {
+    try {
+      const featuredMedia = await storage.getFeaturedMedia();
+      res.json(featuredMedia);
+    } catch (error) {
+      console.error("[Media] Error fetching featured media:", error);
+      res.status(500).json({ error: "Failed to fetch featured media" });
+    }
+  });
+
+  // Get single media item
+  app.get("/api/media/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const mediaItem = await storage.getMediaItem(id);
+      if (!mediaItem) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+      res.json(mediaItem);
+    } catch (error) {
+      console.error("[Media] Error fetching media item:", error);
+      res.status(500).json({ error: "Failed to fetch media item" });
+    }
+  });
+
+  // Configure multer for video uploads (larger file size)
+  const videoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit for videos
+  });
+
+  // Admin: Create media (video or image upload)
+  app.post("/api/admin/media", requireAdminAuth, videoUpload.fields([
+    { name: "file", maxCount: 1 },
+    { name: "thumbnail", maxCount: 1 }
+  ]), async (req, res) => {
+    try {
+      const { productId, type, title, description, sourceUrl, featured } = req.body;
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+      
+      if (!productId || !type) {
+        return res.status(400).json({ error: "productId and type are required" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      let sourceValue: string;
+      let sourceType: "file" | "url";
+      let thumbnailUrl: string | null = null;
+
+      // Handle file upload or URL
+      if (files?.file?.[0]) {
+        const file = files.file[0];
+        
+        // Validate MIME type matches declared type
+        const isVideo = file.mimetype.startsWith("video/");
+        const isImage = file.mimetype.startsWith("image/");
+        
+        if (type === "video" && !isVideo) {
+          return res.status(400).json({ error: "File must be a video for type 'video'" });
+        }
+        if (type === "image" && !isImage) {
+          return res.status(400).json({ error: "File must be an image for type 'image'" });
+        }
+        
+        const ext = type === "video" ? ".mp4" : ".webp";
+        const filename = `media/${randomUUID()}${ext}`;
+        
+        if (type === "image") {
+          // Convert image to WebP
+          const sharp = (await import("sharp")).default;
+          const webpBuffer = await sharp(file.buffer).webp({ quality: 85 }).toBuffer();
+          sourceValue = await objectStorageService.uploadPublicObject(webpBuffer, filename.replace(ext, ".webp"));
+        } else {
+          // Upload video as-is
+          sourceValue = await objectStorageService.uploadPublicObject(file.buffer, filename);
+        }
+        sourceType = "file";
+      } else if (sourceUrl) {
+        sourceValue = sourceUrl;
+        sourceType = "url";
+      } else {
+        return res.status(400).json({ error: "Either file or sourceUrl is required" });
+      }
+
+      // Handle thumbnail upload
+      if (files?.thumbnail?.[0]) {
+        const thumbnailFile = files.thumbnail[0];
+        const sharp = (await import("sharp")).default;
+        const webpBuffer = await sharp(thumbnailFile.buffer).webp({ quality: 80 }).toBuffer();
+        const thumbnailFilename = `media/thumb_${randomUUID()}.webp`;
+        thumbnailUrl = await objectStorageService.uploadPublicObject(webpBuffer, thumbnailFilename);
+      }
+
+      const newMedia = await storage.createMedia({
+        productId: parseInt(productId),
+        type: type as "video" | "image",
+        title: title || null,
+        description: description || null,
+        source: sourceValue,
+        sourceType,
+        thumbnail: thumbnailUrl,
+        featured: featured === "true" || featured === true,
+        displayOrder: 0,
+      });
+
+      res.json(newMedia);
+    } catch (error) {
+      console.error("[Media] Error creating media:", error);
+      res.status(500).json({ error: "Failed to create media" });
+    }
+  });
+
+  // Admin: Update media
+  app.patch("/api/admin/media/:id", requireAdminAuth, videoUpload.single("thumbnail"), async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { title, description, featured, displayOrder } = req.body;
+      
+      const updateData: any = {};
+      if (title !== undefined) updateData.title = title || null;
+      if (description !== undefined) updateData.description = description || null;
+      if (featured !== undefined) updateData.featured = featured === "true" || featured === true;
+      if (displayOrder !== undefined) updateData.displayOrder = parseInt(displayOrder);
+
+      // Handle thumbnail update
+      if (req.file) {
+        const objectStorageService = new ObjectStorageService();
+        const sharp = (await import("sharp")).default;
+        const webpBuffer = await sharp(req.file.buffer).webp({ quality: 80 }).toBuffer();
+        const thumbnailFilename = `media/thumb_${randomUUID()}.webp`;
+        updateData.thumbnail = await objectStorageService.uploadPublicObject(webpBuffer, thumbnailFilename);
+      }
+
+      const updated = await storage.updateMedia(id, updateData);
+      if (!updated) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+      res.json(updated);
+    } catch (error) {
+      console.error("[Media] Error updating media:", error);
+      res.status(500).json({ error: "Failed to update media" });
+    }
+  });
+
+  // Admin: Delete media
+  app.delete("/api/admin/media/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const deleted = await storage.deleteMedia(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Media not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Media] Error deleting media:", error);
+      res.status(500).json({ error: "Failed to delete media" });
+    }
+  });
+
+  // Admin: Reorder media
+  app.post("/api/admin/media/reorder", requireAdminAuth, async (req, res) => {
+    try {
+      const { orders } = req.body;
+      if (!Array.isArray(orders)) {
+        return res.status(400).json({ error: "orders array is required" });
+      }
+      await storage.reorderMedia(orders);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[Media] Error reordering media:", error);
+      res.status(500).json({ error: "Failed to reorder media" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress, type XpTransaction, type InsertXpTransaction, type TvSlide, type InsertTvSlide, type UpdateTvSlide, type Experiment, type InsertExperiment, type UpdateExperiment, type AbEvent, type InsertAbEvent, type DeviceUserMapping, type InsertDeviceUserMapping } from "@shared/schema";
+import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress, type XpTransaction, type InsertXpTransaction, type TvSlide, type InsertTvSlide, type UpdateTvSlide, type Experiment, type InsertExperiment, type UpdateExperiment, type AbEvent, type InsertAbEvent, type DeviceUserMapping, type InsertDeviceUserMapping, type Media, type InsertMedia, type UpdateMedia } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { normalizePhone } from "./utils";
 
@@ -123,6 +123,15 @@ export interface IStorage {
   // A/B Testing - Device/User Mapping
   createDeviceUserMapping(deviceId: string, userId: string): Promise<import("@shared/schema").DeviceUserMapping>;
   getDeviceUserMapping(deviceId: string): Promise<import("@shared/schema").DeviceUserMapping | undefined>;
+  
+  // Media (Video Gallery)
+  getMedia(productId?: number): Promise<Media[]>;
+  getFeaturedMedia(): Promise<(Media & { product: Product })[]>;
+  getMediaItem(id: number): Promise<Media | undefined>;
+  createMedia(mediaData: InsertMedia): Promise<Media>;
+  updateMedia(id: number, mediaData: UpdateMedia): Promise<Media | undefined>;
+  deleteMedia(id: number): Promise<boolean>;
+  reorderMedia(orders: { id: number; displayOrder: number }[]): Promise<void>;
   
   // Session store for auth
   sessionStore: any;
@@ -613,7 +622,7 @@ export class MemStorage implements IStorage {
 }
 
 import { db } from "./db";
-import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable, siteSettings as siteSettingsTable, savedAddresses as savedAddressesTable, tvSlides as tvSlidesTable, experiments as experimentsTable, abEvents as abEventsTable, deviceUserMappings as deviceUserMappingsTable } from "@shared/schema";
+import { users as usersTable, products as productsTable, settings as settingsTable, orders as ordersTable, teaTypes as teaTypesTable, cartItems as cartItemsTable, smsVerifications as smsVerificationsTable, siteSettings as siteSettingsTable, savedAddresses as savedAddressesTable, tvSlides as tvSlidesTable, experiments as experimentsTable, abEvents as abEventsTable, deviceUserMappings as deviceUserMappingsTable, media as mediaTable } from "@shared/schema";
 import { eq, desc, and, sql, asc } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
@@ -1530,6 +1539,65 @@ export class DbStorage implements IStorage {
   async getDeviceUserMapping(deviceId: string): Promise<DeviceUserMapping | undefined> {
     const [mapping] = await db.select().from(deviceUserMappingsTable).where(eq(deviceUserMappingsTable.deviceId, deviceId));
     return mapping;
+  }
+
+  // Media (Video Gallery)
+  async getMedia(productId?: number): Promise<Media[]> {
+    if (productId) {
+      return db.select().from(mediaTable).where(eq(mediaTable.productId, productId)).orderBy(asc(mediaTable.displayOrder));
+    }
+    return db.select().from(mediaTable).orderBy(asc(mediaTable.displayOrder));
+  }
+
+  async getFeaturedMedia(): Promise<(Media & { product: Product })[]> {
+    const results = await db
+      .select({
+        media: mediaTable,
+        product: productsTable,
+      })
+      .from(mediaTable)
+      .innerJoin(productsTable, eq(mediaTable.productId, productsTable.id))
+      .where(eq(mediaTable.featured, true))
+      .orderBy(asc(mediaTable.displayOrder));
+    
+    return results.map(r => ({ ...r.media, product: r.product }));
+  }
+
+  async getMediaItem(id: number): Promise<Media | undefined> {
+    const [item] = await db.select().from(mediaTable).where(eq(mediaTable.id, id));
+    return item;
+  }
+
+  async createMedia(mediaData: InsertMedia): Promise<Media> {
+    const [newMedia] = await db.insert(mediaTable).values({
+      productId: mediaData.productId,
+      type: mediaData.type,
+      title: mediaData.title,
+      description: mediaData.description,
+      source: mediaData.source,
+      sourceType: mediaData.sourceType,
+      thumbnail: mediaData.thumbnail,
+      featured: mediaData.featured ?? true,
+      displayOrder: mediaData.displayOrder ?? 0,
+    }).returning();
+    return newMedia;
+  }
+
+  async updateMedia(id: number, mediaData: UpdateMedia): Promise<Media | undefined> {
+    const updateData: any = { ...mediaData, updatedAt: new Date().toISOString() };
+    const [updated] = await db.update(mediaTable).set(updateData).where(eq(mediaTable.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMedia(id: number): Promise<boolean> {
+    const result = await db.delete(mediaTable).where(eq(mediaTable.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async reorderMedia(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    for (const order of orders) {
+      await db.update(mediaTable).set({ displayOrder: order.displayOrder, updatedAt: new Date().toISOString() }).where(eq(mediaTable.id, order.id));
+    }
   }
 }
 
