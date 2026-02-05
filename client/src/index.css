@@ -412,14 +412,14 @@
   }
 }
 
-/* Gradient Button - Warm golden tones */
+/* Gradient Button - Fresh green tones */
 .btn-gradient {
-  background: linear-gradient(90deg, #C9A86C 0%, #B8956B 50%, #A67C52 100%);
+  background: linear-gradient(90deg, #4CAF50 0%, #45A049 50%, #3D8B40 100%);
   color: white;
   font-weight: 600;
   border: none;
   border-radius: 9999px;
-  box-shadow: 0 4px 12px rgba(169, 130, 90, 0.35);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.35);
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
@@ -427,12 +427,12 @@
 
 .btn-gradient:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(169, 130, 90, 0.45);
+  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.45);
 }
 
 .btn-gradient:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(169, 130, 90, 0.3);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
 }
 
 /* Sparkle animation for gradient buttons */
@@ -446,7 +446,7 @@
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(255, 255, 255, 0.4) 50%,
+    rgba(255, 255, 255, 0.5) 50%,
     transparent 100%
   );
   animation: sparkle-sweep 3s ease-in-out infinite;
@@ -466,24 +466,24 @@
 
 /* Gradient icon button (for cart icon when item is in cart) */
 .btn-gradient-icon {
-  background: linear-gradient(135deg, #C9A86C 0%, #B8956B 50%, #A67C52 100%);
+  background: linear-gradient(135deg, #4CAF50 0%, #45A049 50%, #3D8B40 100%);
   color: white;
   border: 2px solid white;
-  box-shadow: 0 3px 10px rgba(169, 130, 90, 0.35);
+  box-shadow: 0 3px 10px rgba(76, 175, 80, 0.35);
   transition: all 0.3s ease;
 }
 
 .btn-gradient-icon:hover {
   transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 5px 15px rgba(169, 130, 90, 0.45);
+  box-shadow: 0 5px 15px rgba(76, 175, 80, 0.45);
 }
 
 /* Cart FAB gradient border with sparkle animation */
 .cart-fab-gradient-border {
-  background: linear-gradient(90deg, #C9A86C 0%, #B8956B 50%, #A67C52 100%);
+  background: linear-gradient(90deg, #4CAF50 0%, #45A049 50%, #3D8B40 100%);
   background-size: 200% 200%;
   animation: gradient-shift 3s ease infinite;
-  box-shadow: 0 4px 12px rgba(169, 130, 90, 0.35);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.35);
 }
 
 @keyframes gradient-shift {
