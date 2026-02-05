@@ -3729,6 +3729,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // Analytics Endpoints
+  // ============================================
+
+  const { logEvent, logEventsBatch, analyticsEventSchema, analyticsEventsBatchSchema } = await import("./analytics");
+
+  // Public endpoint: Log a single analytics event
+  app.post("/api/analytics/log", async (req, res) => {
+    try {
+      const validatedEvent = analyticsEventSchema.parse(req.body);
+      
+      // Если user_id не передан, пытаемся взять из сессии
+      if (!validatedEvent.user_id && req.user) {
+        validatedEvent.user_id = (req.user as any).id;
+      }
+
+      const result = await logEvent(validatedEvent);
+      res.json(result);
+    } catch (error) {
+      console.error("Error logging analytics event:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        res.status(400).json({ error: "Invalid event data", details: error });
+      } else {
+        res.status(500).json({ error: "Failed to log event" });
+      }
+    }
+  });
+
+  // Public endpoint: Log multiple analytics events (batch)
+  app.post("/api/analytics/log/batch", async (req, res) => {
+    try {
+      const validatedBatch = analyticsEventsBatchSchema.parse(req.body);
+      
+      // Добавляем user_id из сессии, если не передан
+      const events = validatedBatch.events.map(event => {
+        if (!event.user_id && req.user) {
+          return { ...event, user_id: (req.user as any).id };
+        }
+        return event;
+      });
+
+      const result = await logEventsBatch(events);
+      res.json(result);
+    } catch (error) {
+      console.error("Error logging analytics events batch:", error);
+      if (error instanceof Error && error.name === "ZodError") {
+        res.status(400).json({ error: "Invalid events data", details: error });
+      } else {
+        res.status(500).json({ error: "Failed to log events" });
+      }
+    }
+  });
+
+  // Admin endpoint: Get analytics summary
+  app.get("/api/admin/analytics/summary", requireAdminAuth, async (req, res) => {
+    try {
+      const { pool } = await import("./db");
+      
+      // Получаем статистику за последние 7 дней
+      const result = await pool.query(`
+        SELECT 
+          date AS "date",
+          active_users AS "activeUsers",
+          total_sessions AS "sessions",
+          total_events AS "events",
+          total_orders AS "orders",
+          total_revenue AS "revenue"
+        FROM daily_stats
+        WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+        ORDER BY date DESC
+      `);
+
+      res.json({ stats: result.rows });
+    } catch (error) {
+      console.error("Error fetching analytics summary:", error);
+      res.status(500).json({ error: "Failed to fetch analytics summary" });
+    }
+  });
+
+  // Admin endpoint: Get ETL job status
+  app.get("/api/admin/analytics/etl-status", requireAdminAuth, async (req, res) => {
+    try {
+      const { pool } = await import("./db");
+      
+      const result = await pool.query(`
+        SELECT 
+          job_name,
+          start_time,
+          end_time,
+          status,
+          rows_processed,
+          error_message
+        FROM etl_runs
+        ORDER BY start_time DESC
+        LIMIT 20
+      `);
+
+      res.json({ jobs: result.rows });
+    } catch (error) {
+      console.error("Error fetching ETL status:", error);
+      res.status(500).json({ error: "Failed to fetch ETL status" });
+    }
+  });
+
+  // Admin endpoint: Manually trigger ETL process
+  app.post("/api/admin/analytics/etl/trigger/:job", requireAdminAuth, async (req, res) => {
+    try {
+      const { pool } = await import("./db");
+      const jobName = req.params.job;
+
+      let query: string;
+      switch (jobName) {
+        case "sessions":
+          query = "SELECT process_sessions()";
+          break;
+        case "events_clean":
+          query = "SELECT process_events_clean()";
+          break;
+        case "experiment_metrics":
+          query = "SELECT aggregate_experiment_metrics_daily()";
+          break;
+        case "daily_stats":
+          query = "SELECT aggregate_daily_stats()";
+          break;
+        case "retention":
+          query = "SELECT update_user_retention()";
+          break;
+        default:
+          return res.status(400).json({ error: "Unknown job name" });
+      }
+
+      const result = await pool.query(query);
+      res.json({ success: true, result: result.rows[0] });
+    } catch (error) {
+      console.error(`Error triggering ETL job ${req.params.job}:`, error);
+      res.status(500).json({ error: "Failed to trigger ETL job" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
