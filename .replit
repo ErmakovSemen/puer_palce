@@ -4,7 +4,7 @@ hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
 
 [nix]
 channel = "stable-24_05"
-packages = ["imagemagick", "libheif", "jdk17"]
+packages = ["imagemagick", "libheif", "jdk17", "parallel-full"]
 
 [deployment]
 deploymentTarget = "autoscale"
