@@ -412,7 +412,7 @@
   }
 }
 
-/* Gradient Button - Fresh green tones */
+/* Gradient Button - Fresh green tones (for cart buttons in product cards) */
 .btn-gradient {
   background: linear-gradient(90deg, #4CAF50 0%, #45A049 50%, #3D8B40 100%);
   color: white;
@@ -433,6 +433,54 @@
 .btn-gradient:active {
   transform: translateY(0);
   box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+/* Primary CTA Button - Pure black (for "Подобрать чай") */
+.btn-primary-cta {
+  background: #000000;
+  color: white;
+  font-weight: 600;
+  border: none;
+  border-radius: 9999px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+  background: #1a1a1a;
+}
+
+.btn-primary-cta:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Secondary Button - Dark gray (for "Связаться с нами") */
+.btn-secondary {
+  background: #374151;
+  color: white;
+  font-weight: 500;
+  border: none;
+  border-radius: 9999px;
+  box-shadow: 0 4px 12px rgba(55, 65, 81, 0.25);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-secondary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(55, 65, 81, 0.35);
+  background: #4b5563;
+}
+
+.btn-secondary:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(55, 65, 81, 0.2);
 }
 
 /* Sparkle animation for gradient buttons */

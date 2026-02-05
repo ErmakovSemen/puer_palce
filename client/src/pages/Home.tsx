@@ -481,9 +481,18 @@ export default function Home() {
       setGuestCartItems(prev => {
         const existing = prev.find(item => item.id === productId);
         if (existing) {
+          // Update both quantity and price when adding more
+          const newQuantity = existing.quantity + quantityInGrams;
+          const BULK_DISCOUNT = 0.10;
+          const isTea = product.category === "tea";
+          const adjustedBasePrice = Math.round(product.pricePerGram * getPriceMultiplier());
+          const newPrice = (isTea && newQuantity >= 100)
+            ? adjustedBasePrice * (1 - BULK_DISCOUNT)
+            : adjustedBasePrice;
+          
           return prev.map(item =>
             item.id === productId
-              ? { ...item, quantity: item.quantity + quantityInGrams }
+              ? { ...item, quantity: newQuantity, price: newPrice }
               : item
           );
         }
