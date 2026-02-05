@@ -427,8 +427,8 @@ export default function Home() {
 
   // Mutation for updating cart item quantity
   const updateCartMutation = useMutation({
-    mutationFn: async ({ cartItemId, quantity }: { cartItemId: number; quantity: number }) => {
-      return await apiRequest("PATCH", `/api/cart/${cartItemId}`, { quantity });
+    mutationFn: async ({ cartItemId, quantity, pricePerUnit }: { cartItemId: number; quantity: number; pricePerUnit?: number }) => {
+      return await apiRequest("PATCH", `/api/cart/${cartItemId}`, { quantity, pricePerUnit });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/cart'] });
@@ -510,20 +510,28 @@ export default function Home() {
     const product = products.find(p => p.id === productId);
     const isTea = product?.category === "tea";
     
-    // Calculate new price per unit based on quantity threshold (for guest cart)
+    // Apply A/B testing price multiplier
+    const priceMultiplier = getPriceMultiplier();
+    const adjustedBasePrice = product ? Math.round(product.pricePerGram * priceMultiplier) : 0;
+    
+    // Calculate new price per unit based on quantity threshold
     const newPricePerUnit = (isTea && quantity >= 100) 
-      ? product!.pricePerGram * (1 - BULK_DISCOUNT)
-      : product?.pricePerGram ?? 0;
+      ? adjustedBasePrice * (1 - BULK_DISCOUNT)
+      : adjustedBasePrice;
     
     if (user) {
-      // Authenticated: update in DB (server recalculates pricePerUnit)
+      // Authenticated: update in DB with pricePerUnit (includes A/B test multiplier)
       const cartItem = cartItems.find(item => item.id === productId);
       if (!cartItem || !cartItem.cartItemId) return;
 
       if (quantity === 0) {
         removeFromCartMutation.mutate(cartItem.cartItemId);
       } else {
-        updateCartMutation.mutate({ cartItemId: cartItem.cartItemId, quantity });
+        updateCartMutation.mutate({ 
+          cartItemId: cartItem.cartItemId, 
+          quantity, 
+          pricePerUnit: newPricePerUnit 
+        });
       }
     } else {
       // Guest: update localStorage with client-side price calculation

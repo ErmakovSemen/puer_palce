@@ -301,7 +301,7 @@ export default function ProductCard({
                     </button>
                     <div className="flex-1 text-center py-1 px-1 min-w-[45px]">
                       <span className="text-white font-bold text-[11px] whitespace-nowrap" data-testid={`text-product-price-${id}`}>
-                        {Math.round((cartPricePerUnit ?? adjustedPricePerGram) * cartQuantity)}₽
+                        {Math.round(adjustedPricePerGram * cartQuantity)}₽
                       </span>
                     </div>
                     <button

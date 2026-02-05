@@ -1550,7 +1550,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const userId = req.user.id;
-      const { quantity } = updateCartItemSchema.parse(req.body);
+      const { quantity, pricePerUnit } = updateCartItemSchema.parse(req.body);
       
       // Get current cart item to find productId
       const cartItems = await storage.getCartItems(userId);
@@ -1560,15 +1560,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      // Server-side calculation of pricePerUnit based on quantity threshold
-      const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
-      const product = currentItem.product;
-      const isTea = product.category === "tea";
-      const calculatedPricePerUnit = (isTea && quantity >= 100)
-        ? product.pricePerGram * (1 - BULK_DISCOUNT)
-        : product.pricePerGram;
+      // Use provided pricePerUnit from client (includes A/B test multiplier),
+      // or fallback to server-side calculation if not provided
+      let finalPricePerUnit: number;
+      if (pricePerUnit !== undefined) {
+        finalPricePerUnit = pricePerUnit;
+      } else {
+        const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
+        const product = currentItem.product;
+        const isTea = product.category === "tea";
+        finalPricePerUnit = (isTea && quantity >= 100)
+          ? product.pricePerGram * (1 - BULK_DISCOUNT)
+          : product.pricePerGram;
+      }
       
-      const updatedItem = await storage.updateCartItem(id, quantity, userId, calculatedPricePerUnit);
+      const updatedItem = await storage.updateCartItem(id, quantity, userId, finalPricePerUnit);
       if (!updatedItem) {
         res.status(404).json({ error: "Cart item not found" });
         return;
