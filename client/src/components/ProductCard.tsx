@@ -202,8 +202,14 @@ export default function ProductCard({
           </h3>
           <div className="flex flex-wrap gap-1.5">
             <Badge 
-              className="text-xs transition-all duration-200 cursor-pointer hover:opacity-90 px-2 py-0.5 font-medium"
-              style={getTeaTypeBadgeStyleDynamic(teaType, teaTypes)}
+              variant="outline"
+              className="text-xs transition-all duration-200 cursor-pointer hover:bg-gray-100 px-2 py-0.5 font-medium"
+              style={{ 
+                backgroundColor: '#fafafa',
+                color: '#374151',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+              }}
               onClick={(e) => handleTagClick(e, 'teaType', teaType)}
               data-testid={`badge-tea-type-${id}`}
             >
@@ -301,7 +307,11 @@ export default function ProductCard({
                     </button>
                     <div className="flex-1 text-center py-1 px-1 min-w-[45px]">
                       <span className="text-white font-bold text-[11px] whitespace-nowrap" data-testid={`text-product-price-${id}`}>
-                        {Math.round(adjustedPricePerGram * cartQuantity)}₽
+                        {(() => {
+                          const hasDiscount = !isSoldByPiece && cartQuantity >= 100;
+                          const pricePerUnit = hasDiscount ? adjustedPricePerGram * (1 - BULK_DISCOUNT) : adjustedPricePerGram;
+                          return Math.round(pricePerUnit * cartQuantity);
+                        })()}₽
                       </span>
                     </div>
                     <button
