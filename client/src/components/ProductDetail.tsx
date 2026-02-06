@@ -1,11 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Link2, Check } from "lucide-react";
 import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { useState } from "react";
 import { useTeaTypes } from "@/hooks/use-tea-types";
 import { useAbTesting } from "@/hooks/use-ab-testing";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProductDetailProps {
   id: number;
@@ -57,6 +58,22 @@ export default function ProductDetail({
   });
   const [customQuantity, setCustomQuantity] = useState<string>("");
   const { data: teaTypes } = useTeaTypes();
+  const { toast } = useToast();
+  const [linkCopied, setLinkCopied] = useState(false);
+  
+  const copyProductLink = async () => {
+    const url = new URL(window.location.href);
+    url.search = '';
+    url.searchParams.set('product', String(id));
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setLinkCopied(true);
+      toast({ title: "Ссылка скопирована" });
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      toast({ title: "Не удалось скопировать", variant: "destructive" });
+    }
+  };
   
   // A/B Testing price multiplier
   const { getPriceMultiplier } = useAbTesting();
@@ -115,9 +132,19 @@ export default function ProductDetail({
         {/* Product Info */}
         <div className="space-y-4">
           <div>
-            <h2 className="font-serif text-3xl font-bold mb-3" data-testid={`text-detail-name-${id}`}>
-              {name}
-            </h2>
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <h2 className="font-serif text-3xl font-bold" data-testid={`text-detail-name-${id}`}>
+                {name}
+              </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={copyProductLink}
+                data-testid={`button-copy-link-${id}`}
+              >
+                {linkCopied ? <Check className="w-4 h-4 text-green-600" /> : <Link2 className="w-4 h-4" />}
+              </Button>
+            </div>
             <div className="flex flex-wrap gap-2 mb-4">
               <Badge 
                 variant="outline"

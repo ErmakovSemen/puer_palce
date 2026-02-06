@@ -22,7 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Sparkles, ShoppingCart, Play } from "lucide-react";
+import { Sparkles, ShoppingCart, Play, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -224,20 +224,36 @@ export default function Home() {
       logEvent("page_view", { url: window.location.pathname });
     }
   }, [logEvent]);
-  // Handle URL params for tag-based filtering (runs on initial mount only)
+  const updateUrlParams = (params: Record<string, string | null>) => {
+    const url = new URL(window.location.href);
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) {
+        url.searchParams.set(key, value);
+      } else {
+        url.searchParams.delete(key);
+      }
+    });
+    window.history.replaceState({}, '', url.toString());
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const type = params.get('type');
     const effect = params.get('effect');
+    const productId = params.get('product');
     
     if (type) {
-      setSelectedTypes([type]);
+      setSelectedTypes(type.split(',').filter(Boolean));
       setSelectedEffects([]);
-      window.history.replaceState({}, '', window.location.pathname);
     } else if (effect) {
-      setSelectedEffects([effect]);
+      setSelectedEffects(effect.split(',').filter(Boolean));
       setSelectedTypes([]);
-      window.history.replaceState({}, '', window.location.pathname);
+    }
+    if (productId) {
+      const pid = parseInt(productId, 10);
+      if (!isNaN(pid)) {
+        setSelectedProductId(pid);
+      }
     }
   }, []);
 
@@ -367,6 +383,27 @@ export default function Home() {
   }, [filteredProducts]);
 
   const hasTeaware = teawareProducts.length > 0;
+
+  const handleSelectProduct = (productId: number | null) => {
+    setSelectedProductId(productId);
+    if (productId) {
+      updateUrlParams({ product: String(productId), type: null, effect: null });
+    } else {
+      updateUrlParams({ product: null });
+    }
+  };
+
+  const handleFilterByType = (type: string) => {
+    setSelectedTypes([type]);
+    setSelectedEffects([]);
+    updateUrlParams({ type, effect: null, product: null });
+  };
+
+  const handleFilterByEffect = (effect: string) => {
+    setSelectedEffects([effect]);
+    setSelectedTypes([]);
+    updateUrlParams({ effect, type: null, product: null });
+  };
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
@@ -570,6 +607,7 @@ export default function Home() {
     setSearchTerm("");
     setSelectedTypes([]);
     setSelectedEffects([]);
+    updateUrlParams({ type: null, effect: null, product: null });
   };
 
   const handleCheckout = () => {
@@ -714,9 +752,9 @@ export default function Home() {
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
             selectedTypes={selectedTypes}
-            onTypesChange={setSelectedTypes}
+            onTypesChange={(types: string[]) => { setSelectedTypes(types); updateUrlParams({ type: types.length > 0 ? types.join(',') : null, effect: null, product: null }); }}
             selectedEffects={selectedEffects}
-            onEffectsChange={setSelectedEffects}
+            onEffectsChange={(effects: string[]) => { setSelectedEffects(effects); updateUrlParams({ effect: effects.length > 0 ? effects.join(',') : null, type: null, product: null }); }}
             onQuizClick={() => setIsQuizOpen(true)}
           />
         </div>
@@ -768,7 +806,7 @@ export default function Home() {
               <RecommendedProducts
                 onAddToCart={addToCart}
                 onUpdateQuantity={updateQuantity}
-                onProductClick={setSelectedProductId}
+                onProductClick={handleSelectProduct}
                 cartItems={cartItemsMap}
                 onRecommendationsLoaded={setRecommendedProductIds}
               />
@@ -787,10 +825,10 @@ export default function Home() {
                   mediaByProduct={mediaByProduct}
                   onAddToCart={addToCart}
                   onUpdateQuantity={updateQuantity}
-                  onProductClick={setSelectedProductId}
+                  onProductClick={handleSelectProduct}
                   onMediaProductClick={handleMediaProductClick}
-                  onFilterByType={(type) => { setSelectedTypes([type]); setSelectedEffects([]); }}
-                  onFilterByEffect={(effect) => { setSelectedEffects([effect]); setSelectedTypes([]); }}
+                  onFilterByType={handleFilterByType}
+                  onFilterByEffect={handleFilterByEffect}
                 />
               </div>
             )}
@@ -817,9 +855,9 @@ export default function Home() {
                           cartOriginalPrice={cartInfo?.originalPrice}
                           onAddToCart={addToCart}
                           onUpdateQuantity={updateQuantity}
-                          onClick={setSelectedProductId}
-                          onFilterByType={(type) => { setSelectedTypes([type]); setSelectedEffects([]); }}
-                          onFilterByEffect={(effect) => { setSelectedEffects([effect]); setSelectedTypes([]); }}
+                          onClick={handleSelectProduct}
+                          onFilterByType={handleFilterByType}
+                          onFilterByEffect={handleFilterByEffect}
                         />
                       </div>
                     );
@@ -864,7 +902,7 @@ export default function Home() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={selectedProductId !== null} onOpenChange={(open) => !open && setSelectedProductId(null)}>
+      <Dialog open={selectedProductId !== null} onOpenChange={(open) => !open && handleSelectProduct(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="sr-only">Детали товара</DialogTitle>
@@ -876,7 +914,7 @@ export default function Home() {
             <ProductDetail
               {...selectedProduct}
               onAddToCart={addToCart}
-              onClose={() => setSelectedProductId(null)}
+              onClose={() => handleSelectProduct(null)}
             />
           )}
         </DialogContent>
