@@ -104,57 +104,49 @@ async function testDatabase() {
     return;
   }
 
+  const { execSync } = await import("child_process");
+
   try {
-    const { Pool } = await import("@neondatabase/serverless");
-    const ws = (await import("ws")).default;
-    const { neonConfig } = await import("@neondatabase/serverless");
-    neonConfig.webSocketConstructor = ws;
+    // Используем psql (не требует node_modules)
+    const runSql = (sql) => {
+      return execSync(
+        `psql "${DATABASE_URL}" -t -A -c ${JSON.stringify(sql)}` +
+          (process.platform === "win32" ? "" : " 2>/dev/null"),
+        { encoding: "utf-8" }
+      ).trim();
+    };
 
-    const pool = new Pool({ connectionString: DATABASE_URL });
-
-    // Проверка таблицы raw_events
-    const tablesRes = await pool.query(`
-      SELECT table_name FROM information_schema.tables
-      WHERE table_name IN ('raw_events', 'sessions', 'events_clean', 'daily_stats')
-      ORDER BY table_name
-    `);
-
-    if (tablesRes.rows.length >= 4) {
-      passed(`Таблицы существуют (${tablesRes.rows.length}/4)`);
+    // Проверка таблиц
+    const tablesOut = runSql(
+      `SELECT count(*) FROM information_schema.tables WHERE table_name IN ('raw_events','sessions','events_clean','daily_stats')`
+    );
+    const tablesCount = parseInt(tablesOut, 10) || 0;
+    if (tablesCount >= 4) {
+      passed(`Таблицы существуют (${tablesCount}/4)`);
     } else {
-      failed("Таблицы", `найдено ${tablesRes.rows.length}/4`);
+      failed("Таблицы", `найдено ${tablesCount}/4`);
     }
 
-    // Проверка количества событий
-    const countRes = await pool.query("SELECT COUNT(*) as cnt FROM raw_events");
-    const count = parseInt(countRes.rows[0]?.cnt || "0", 10);
+    // Количество событий
+    const countOut = runSql("SELECT COUNT(*) FROM raw_events");
+    const count = parseInt(countOut, 10) || 0;
     passed(`raw_events: ${count} записей`);
 
-    // Проверка ETL функций
-    const funcRes = await pool.query(`
-      SELECT routine_name FROM information_schema.routines
-      WHERE routine_name IN ('process_sessions', 'process_events_clean', 'aggregate_daily_stats')
-    `);
-    if (funcRes.rows.length >= 3) {
-      passed(`ETL функции (${funcRes.rows.length}/3)`);
-    } else {
-      failed("ETL функции", `найдено ${funcRes.rows.length}/3`);
-    }
+    // ETL функции
+    const funcOut = runSql(
+      `SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE n.nspname = 'public' AND p.proname IN ('process_sessions','process_events_clean','aggregate_daily_stats')`
+    );
+    const funcCount = parseInt(funcOut, 10) || 0;
+    if (funcCount >= 3) passed(`ETL функции (${funcCount}/3)`);
+    else failed("ETL функции", `найдено ${funcCount}/3`);
 
-    // Проверка VIEW
-    const viewRes = await pool.query(`
-      SELECT table_name FROM information_schema.views
-      WHERE table_name LIKE 'v_analytics_%'
-    `);
-    if (viewRes.rows.length >= 5) {
-      passed(`BI Views (${viewRes.rows.length})`);
-    } else {
-      failed("BI Views", `найдено ${viewRes.rows.length}`);
-    }
-
-    await pool.end();
+    // BI Views
+    const viewOut = runSql(`SELECT count(*) FROM information_schema.views WHERE table_name LIKE 'v_analytics_%'`);
+    const viewCount = parseInt(viewOut, 10) || 0;
+    if (viewCount >= 5) passed(`BI Views (${viewCount})`);
+    else failed("BI Views", `найдено ${viewCount}`);
   } catch (err) {
-    failed("Database", err.message);
+    failed("Database", err.message.includes("psql") ? "psql не найден или ошибка подключения" : err.message);
   }
 }
 
