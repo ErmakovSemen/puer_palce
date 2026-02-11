@@ -1,4 +1,4 @@
-const CACHE_NAME = 'puer-pub-v4';
+const CACHE_NAME = 'puer-pub-v5';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
@@ -63,7 +63,8 @@ self.addEventListener('fetch', (event) => {
   } else if (url.pathname.startsWith('/api/')) {
     const shouldBypassCache = NO_CACHE_ENDPOINTS.some(endpoint => url.pathname.includes(endpoint));
     
-    if (shouldBypassCache) {
+    if (shouldBypassCache || request.method !== 'GET') {
+      // POST/PUT/DELETE нельзя кэшировать - Cache API поддерживает только GET
       event.respondWith(fetch(request));
       return;
     }
