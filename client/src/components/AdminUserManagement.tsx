@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Minus, Trophy, Copy, Check, Trash2, MessageCircle, RefreshCw, CheckCircle2, XCircle, HelpCircle } from "lucide-react";
+import { Search, Plus, Minus, Trophy, Copy, Check, Trash2, MessageCircle, RefreshCw, CheckCircle2, XCircle, HelpCircle, UserPlus, X } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { format } from "date-fns";
@@ -27,6 +27,10 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   const [discountAmount, setDiscountAmount] = useState<string>("");
   const [showRecentUsers, setShowRecentUsers] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createPhone, setCreatePhone] = useState("");
+  const [createName, setCreateName] = useState("");
+  const [createPassword, setCreatePassword] = useState("");
   const { toast } = useToast();
 
   const handleCopyLeaderboardLink = async () => {
@@ -46,6 +50,47 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
         variant: "destructive",
       });
     }
+  };
+
+  // Create user mutation
+  const createUserMutation = useMutation({
+    mutationFn: async ({ phone, name, password }: { phone: string; name: string; password: string }) => {
+      const res = await fetch(getApiUrl('/api/admin/users/create'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Password': adminPassword,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ phone, name: name || undefined, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка создания пользователя');
+      return data as { id: string; phone: string; name: string | null; phoneVerified: boolean };
+    },
+    onSuccess: (data) => {
+      toast({ title: "Пользователь создан", description: `Телефон: ${data.phone}` });
+      setShowCreateForm(false);
+      setCreatePhone("");
+      setCreateName("");
+      setCreatePassword("");
+      // Auto-search created user
+      setSearchPhone(data.phone);
+      setShouldAutoRefetch(true);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Ошибка", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleCreateUser = () => {
+    if (!createPhone.trim()) {
+      return toast({ title: "Ошибка", description: "Укажите номер телефона", variant: "destructive" });
+    }
+    if (createPassword.length < 4) {
+      return toast({ title: "Ошибка", description: "Пароль должен быть не менее 4 символов", variant: "destructive" });
+    }
+    createUserMutation.mutate({ phone: createPhone.trim(), name: createName.trim(), password: createPassword });
   };
 
   // Recent users query
@@ -332,24 +377,78 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
+        <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
           <CardTitle>Поиск пользователя</CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleCopyLeaderboardLink}
-            data-testid="button-copy-leaderboard"
-          >
-            {isCopied ? (
-              <Check className="h-4 w-4 mr-2 text-green-500" />
-            ) : (
-              <Trophy className="h-4 w-4 mr-2" />
-            )}
-            {isCopied ? "Скопировано!" : "Лидерборд"}
-            {!isCopied && <Copy className="h-3 w-3 ml-1.5" />}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              data-testid="button-toggle-create-form"
+            >
+              {showCreateForm ? (
+                <X className="h-4 w-4 mr-2" />
+              ) : (
+                <UserPlus className="h-4 w-4 mr-2" />
+              )}
+              {showCreateForm ? "Отмена" : "Создать"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopyLeaderboardLink}
+              data-testid="button-copy-leaderboard"
+            >
+              {isCopied ? (
+                <Check className="h-4 w-4 mr-2 text-green-500" />
+              ) : (
+                <Trophy className="h-4 w-4 mr-2" />
+              )}
+              {isCopied ? "Скопировано!" : "Лидерборд"}
+              {!isCopied && <Copy className="h-3 w-3 ml-1.5" />}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
+          {showCreateForm && (
+            <div className="mb-6 p-4 rounded-md border bg-muted/30 space-y-3">
+              <p className="text-sm font-medium">Новый пользователь</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Input
+                  placeholder="Телефон (+7...)"
+                  value={createPhone}
+                  onChange={(e) => setCreatePhone(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateUser()}
+                  data-testid="input-create-phone"
+                />
+                <Input
+                  placeholder="Имя клиента (необязательно)"
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateUser()}
+                  data-testid="input-create-name"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  placeholder="Временный пароль (мин. 4 символа)"
+                  value={createPassword}
+                  onChange={(e) => setCreatePassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateUser()}
+                  data-testid="input-create-password"
+                  className="flex-1"
+                />
+                <Button
+                  onClick={handleCreateUser}
+                  disabled={createUserMutation.isPending}
+                  data-testid="button-create-user-submit"
+                >
+                  {createUserMutation.isPending ? "Создание..." : "Создать"}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="flex gap-2 mb-4">
             <Input
               placeholder="Введите номер телефона"

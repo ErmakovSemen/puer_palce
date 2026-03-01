@@ -6,7 +6,7 @@ import multer from "multer";
 import { randomUUID } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
-import { setupAuth } from "./auth";
+import { setupAuth, hashPassword } from "./auth";
 import { normalizePhone } from "./utils";
 import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification } from "./telegram";
 import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
@@ -1019,6 +1019,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("[Admin] Delete user error:", error);
       res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
+  app.post("/api/admin/users/create", requireAdminAuth, async (req, res) => {
+    try {
+      const { phone, name, password } = req.body;
+
+      if (!phone || typeof phone !== "string") {
+        return res.status(400).json({ error: "Укажите номер телефона" });
+      }
+      if (!password || typeof password !== "string" || password.length < 4) {
+        return res.status(400).json({ error: "Пароль должен быть не менее 4 символов" });
+      }
+
+      const normalizedPhone = normalizePhone(phone);
+      const existing = await storage.getUserByPhone(normalizedPhone);
+      if (existing) {
+        return res.status(409).json({ error: "Пользователь с таким телефоном уже существует" });
+      }
+
+      const user = await storage.createUser({
+        phone: normalizedPhone,
+        name: name?.trim() || null,
+        password: await hashPassword(password),
+      });
+
+      await storage.markPhoneVerified(user.id);
+
+      console.log(`[Admin] Created user manually: ${normalizedPhone} (id=${user.id})`);
+      res.status(201).json({
+        id: user.id,
+        phone: user.phone,
+        name: user.name,
+        phoneVerified: user.phoneVerified,
+      });
+    } catch (error) {
+      console.error("[Admin] Create user error:", error);
+      res.status(500).json({ error: "Ошибка создания пользователя" });
     }
   });
 
