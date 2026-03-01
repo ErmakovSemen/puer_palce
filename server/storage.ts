@@ -97,7 +97,7 @@ export interface IStorage {
   getUserXpTransactions(userId: string): Promise<XpTransaction[]>;
   
   // Leaderboard
-  getMonthlyLeaderboard(): Promise<import("@shared/schema").LeaderboardEntry[]>;
+  getMonthlyLeaderboard(month?: string): Promise<import("@shared/schema").LeaderboardEntry[]>;
   
   // TV Slides
   getTvSlides(activeOnly?: boolean): Promise<TvSlide[]>;
@@ -534,15 +534,23 @@ export class MemStorage implements IStorage {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
   
-  async getMonthlyLeaderboard(): Promise<import("@shared/schema").LeaderboardEntry[]> {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  async getMonthlyLeaderboard(month?: string): Promise<import("@shared/schema").LeaderboardEntry[]> {
+    let startOfMonth: Date;
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const [year, mon] = month.split('-').map(Number);
+      startOfMonth = new Date(year, mon - 1, 1);
+    } else {
+      const now = new Date();
+      startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    let endOfMonth: Date;
+    endOfMonth = new Date(startOfMonth.getFullYear(), startOfMonth.getMonth() + 1, 1);
     
     const userXpMap = new Map<string, number>();
     
     for (const t of this.xpTransactions) {
       const txDate = new Date(t.createdAt);
-      if (txDate >= startOfMonth) {
+      if (txDate >= startOfMonth && txDate < endOfMonth) {
         userXpMap.set(t.userId, (userXpMap.get(t.userId) || 0) + t.amount);
       }
     }
@@ -591,6 +599,7 @@ export class MemStorage implements IStorage {
       durationSeconds: slide.durationSeconds ?? 60,
       orderIndex: slide.orderIndex ?? 0,
       isActive: slide.isActive ?? true,
+      leaderboardMonth: slide.leaderboardMonth ?? null,
       createdAt: new Date().toISOString(),
     };
     this.tvSlides.push(newSlide);
@@ -1366,7 +1375,7 @@ export class DbStorage implements IStorage {
       .orderBy(desc(xpTransactions.createdAt));
   }
 
-  async getMonthlyLeaderboard(): Promise<import("@shared/schema").LeaderboardEntry[]> {
+  async getMonthlyLeaderboard(month?: string): Promise<import("@shared/schema").LeaderboardEntry[]> {
     const { xpTransactions } = await import("@shared/schema");
     
     const now = new Date();
@@ -1397,6 +1406,10 @@ export class DbStorage implements IStorage {
     console.log("[Leaderboard] ========================");
     
     // Используем DATE_TRUNC на стороне PostgreSQL для корректного сравнения
+    const monthFilter = (month && /^\d{4}-\d{2}$/.test(month))
+      ? sql`${xpTransactions.createdAt}::timestamp >= DATE_TRUNC('month', TO_DATE(${month}, 'YYYY-MM')) AND ${xpTransactions.createdAt}::timestamp < DATE_TRUNC('month', TO_DATE(${month}, 'YYYY-MM')) + INTERVAL '1 month'`
+      : sql`${xpTransactions.createdAt}::timestamp >= DATE_TRUNC('month', NOW())`;
+
     const results = await db
       .select({
         userId: xpTransactions.userId,
@@ -1405,7 +1418,7 @@ export class DbStorage implements IStorage {
       })
       .from(xpTransactions)
       .innerJoin(usersTable, eq(xpTransactions.userId, usersTable.id))
-      .where(sql`${xpTransactions.createdAt}::timestamp >= DATE_TRUNC('month', NOW())`)
+      .where(monthFilter)
       .groupBy(xpTransactions.userId, usersTable.name)
       .having(sql`SUM(${xpTransactions.amount}) > 0`)
       .orderBy(sql`xp_this_month DESC`)

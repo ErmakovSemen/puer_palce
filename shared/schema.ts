@@ -645,6 +645,7 @@ export const tvSlides = pgTable("tv_slides", {
   durationSeconds: integer("duration_seconds").notNull().default(60), // How long to show slide
   orderIndex: integer("order_index").notNull().default(0), // Order in rotation
   isActive: boolean("is_active").notNull().default(true),
+  leaderboardMonth: text("leaderboard_month"), // "YYYY-MM" for specific month, null = current month
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -655,6 +656,7 @@ export const insertTvSlideSchema = createInsertSchema(tvSlides, {
   durationSeconds: z.number().int().min(5).max(3600).default(60),
   orderIndex: z.number().int().default(0),
   isActive: z.boolean().default(true),
+  leaderboardMonth: z.string().regex(/^\d{4}-\d{2}$/).optional().nullable(),
 }).omit({ id: true, createdAt: true });
 
 export const updateTvSlideSchema = z.object({
@@ -664,6 +666,7 @@ export const updateTvSlideSchema = z.object({
   durationSeconds: z.number().int().min(5).max(3600).optional(),
   orderIndex: z.number().int().optional(),
   isActive: z.boolean().optional(),
+  leaderboardMonth: z.string().regex(/^\d{4}-\d{2}$/).optional().nullable(),
 });
 
 export type InsertTvSlide = z.infer<typeof insertTvSlideSchema>;

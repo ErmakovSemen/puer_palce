@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Trophy, Crown, Medal, Award } from "lucide-react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ru } from "date-fns/locale";
 import type { TvSlide, LeaderboardEntry } from "@shared/schema";
 
 interface DisplayData {
   slides: TvSlide[];
   leaderboard: LeaderboardEntry[];
+  leaderboardsBySlide?: Record<number, LeaderboardEntry[]>;
   timestamp: number;
 }
 
@@ -155,6 +156,28 @@ export default function TVDisplay() {
   const slides = displayData?.slides || cachedSlides;
   const leaderboard = displayData?.leaderboard || [];
 
+  const getSlideLeaderboard = (slide: TvSlide | null | undefined): LeaderboardEntry[] => {
+    if (!slide || slide.type !== "leaderboard") return leaderboard;
+    if (displayData?.leaderboardsBySlide && displayData.leaderboardsBySlide[slide.id] !== undefined) {
+      return displayData.leaderboardsBySlide[slide.id];
+    }
+    return leaderboard;
+  };
+
+  const getSlideMonthLabel = (slide: TvSlide | null | undefined): string => {
+    const month = slide?.leaderboardMonth;
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      try {
+        const label = format(parseISO(month + "-01"), "LLLL yyyy", { locale: ru });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+      } catch {
+        // fallback to current month
+      }
+    }
+    const current = format(new Date(), "LLLL yyyy", { locale: ru });
+    return current.charAt(0).toUpperCase() + current.slice(1);
+  };
+
   // Функция для получения CSS класса анимации
   const getAnimationClass = (userId: string): string => {
     if (animations.newUsers.has(userId)) return "animate-slide-in";
@@ -249,13 +272,7 @@ export default function TVDisplay() {
     };
   }, [currentSlideIndex, slides, goToNextSlide]);
 
-  const currentMonth = format(new Date(), "LLLL yyyy", { locale: ru });
-  const capitalizedMonth = currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1);
-
-  const first = leaderboard[0];
-  const second = leaderboard[1];
-  const third = leaderboard[2];
-  const rest = leaderboard.slice(3, 10);
+  const currentSlide = slides[currentSlideIndex] || null;
 
   const renderHeroTile = (entry: LeaderboardEntry) => (
     <div 
@@ -316,7 +333,14 @@ export default function TVDisplay() {
     </div>
   );
 
-  const renderLeaderboard = () => (
+  const renderLeaderboard = (slide?: TvSlide | null) => {
+    const slideLeaderboard = getSlideLeaderboard(slide);
+    const monthLabel = getSlideMonthLabel(slide);
+    const first = slideLeaderboard[0];
+    const second = slideLeaderboard[1];
+    const third = slideLeaderboard[2];
+    const rest = slideLeaderboard.slice(3, 10);
+    return (
     <div 
       className="h-screen bg-gradient-to-br from-amber-950 via-stone-900 to-amber-950 flex flex-col overflow-hidden"
       style={{ padding: "1.5vh 2vw" }}
@@ -327,10 +351,10 @@ export default function TVDisplay() {
         <h1 className="font-serif font-bold text-white whitespace-nowrap" style={{ fontSize: "3.5vh", lineHeight: 1 }}>
           Топ-10 покупателей
         </h1>
-        <span className="text-amber-200/70 whitespace-nowrap" style={{ fontSize: "2.5vh" }}>• {capitalizedMonth}</span>
+        <span className="text-amber-200/70 whitespace-nowrap" style={{ fontSize: "2.5vh" }}>• {monthLabel}</span>
       </div>
 
-      {leaderboard.length === 0 ? (
+      {slideLeaderboard.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-amber-200/60" style={{ fontSize: "3vh" }}>
           Пока нет данных за этот месяц
         </div>
@@ -393,6 +417,7 @@ export default function TVDisplay() {
       )}
     </div>
   );
+  };
 
   const renderImageSlide = (slide: TvSlide) => (
     <div className="min-h-screen bg-black flex items-center justify-center">
@@ -417,14 +442,13 @@ export default function TVDisplay() {
 
   const renderCurrentSlide = () => {
     if (slides.length === 0) {
-      return renderLeaderboard();
+      return renderLeaderboard(null);
     }
 
-    const currentSlide = slides[currentSlideIndex];
-    if (!currentSlide) return renderLeaderboard();
+    if (!currentSlide) return renderLeaderboard(null);
 
     if (currentSlide.type === "leaderboard") {
-      return renderLeaderboard();
+      return renderLeaderboard(currentSlide);
     }
 
     return renderImageSlide(currentSlide);

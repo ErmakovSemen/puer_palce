@@ -2147,14 +2147,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get TV display data (slides + leaderboard) for offline caching
   app.get("/api/tv/display", async (_req, res) => {
     try {
-      const [slides, leaderboard] = await Promise.all([
-        storage.getTvSlides(true),
-        storage.getMonthlyLeaderboard(),
-      ]);
+      const slides = await storage.getTvSlides(true);
+
+      // Collect unique months needed across all leaderboard slides
+      const leaderboardSlides = slides.filter(s => s.type === "leaderboard");
+      const monthsNeeded = new Set<string | null>(leaderboardSlides.map(s => s.leaderboardMonth ?? null));
+
+      // Fetch leaderboard for each unique month in parallel
+      const monthLeaderboards = new Map<string | null, import("@shared/schema").LeaderboardEntry[]>();
+      await Promise.all(
+        Array.from(monthsNeeded).map(async (m) => {
+          const data = await storage.getMonthlyLeaderboard(m ?? undefined);
+          monthLeaderboards.set(m, data);
+        })
+      );
+
+      // Build per-slide leaderboard map
+      const leaderboardsBySlide: Record<number, import("@shared/schema").LeaderboardEntry[]> = {};
+      for (const slide of leaderboardSlides) {
+        leaderboardsBySlide[slide.id] = monthLeaderboards.get(slide.leaderboardMonth ?? null) || [];
+      }
+
+      // For backward compat, expose first leaderboard slide's data as top-level `leaderboard`
+      const firstLeaderboardSlide = leaderboardSlides[0];
+      const leaderboard = firstLeaderboardSlide
+        ? (leaderboardsBySlide[firstLeaderboardSlide.id] || [])
+        : [];
+
       res.set("Cache-Control", "no-store, no-cache, must-revalidate");
       res.set("Pragma", "no-cache");
       res.set("Expires", "0");
-      res.json({ slides, leaderboard, timestamp: Date.now() });
+      res.json({ slides, leaderboard, leaderboardsBySlide, timestamp: Date.now() });
     } catch (error) {
       console.error("[TV Display] Error fetching display data:", error);
       res.status(500).json({ error: "Failed to fetch display data" });
@@ -2164,7 +2187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create TV slide with image upload
   app.post("/api/admin/tv-slides", requireAdminAuth, upload.single("image"), async (req, res) => {
     try {
-      const { type, title, durationSeconds, orderIndex, isActive } = req.body;
+      const { type, title, durationSeconds, orderIndex, isActive, leaderboardMonth } = req.body;
       
       let imageUrl: string | undefined;
       
@@ -2204,6 +2227,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         durationSeconds: durationSeconds ? parseInt(durationSeconds) : 60,
         orderIndex: orderIndex ? parseInt(orderIndex) : 0,
         isActive: isActive === "true" || isActive === true,
+        leaderboardMonth: (leaderboardMonth && /^\d{4}-\d{2}$/.test(leaderboardMonth)) ? leaderboardMonth : null,
       });
 
       res.status(201).json(slide);
@@ -2217,7 +2241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/admin/tv-slides/:id", requireAdminAuth, upload.single("image"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { type, title, durationSeconds, orderIndex, isActive } = req.body;
+      const { type, title, durationSeconds, orderIndex, isActive, leaderboardMonth } = req.body;
       
       const existingSlide = await storage.getTvSlide(id);
       if (!existingSlide) {
@@ -2250,6 +2274,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (orderIndex !== undefined) updateData.orderIndex = parseInt(orderIndex);
       if (isActive !== undefined) updateData.isActive = isActive === "true" || isActive === true;
       if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+      if (leaderboardMonth !== undefined) {
+        updateData.leaderboardMonth = (leaderboardMonth && /^\d{4}-\d{2}$/.test(leaderboardMonth)) ? leaderboardMonth : null;
+      }
 
       const updatedSlide = await storage.updateTvSlide(id, updateData);
       res.json(updatedSlide);

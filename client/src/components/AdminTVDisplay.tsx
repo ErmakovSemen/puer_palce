@@ -48,6 +48,7 @@ export default function AdminTVDisplay({ adminFetch }: AdminTVDisplayProps) {
     title: "",
     durationSeconds: 60,
     isActive: true,
+    leaderboardMonth: "" as string,
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -127,6 +128,7 @@ export default function AdminTVDisplay({ adminFetch }: AdminTVDisplayProps) {
         title: slide.title || "",
         durationSeconds: slide.durationSeconds,
         isActive: slide.isActive,
+        leaderboardMonth: slide.leaderboardMonth || "",
       });
     } else {
       setEditingSlide(null);
@@ -135,6 +137,7 @@ export default function AdminTVDisplay({ adminFetch }: AdminTVDisplayProps) {
         title: "",
         durationSeconds: 60,
         isActive: true,
+        leaderboardMonth: "",
       });
     }
     setSelectedFile(null);
@@ -154,6 +157,7 @@ export default function AdminTVDisplay({ adminFetch }: AdminTVDisplayProps) {
     data.append("durationSeconds", formData.durationSeconds.toString());
     data.append("isActive", formData.isActive.toString());
     data.append("orderIndex", slides.length.toString());
+    data.append("leaderboardMonth", formData.leaderboardMonth || "");
 
     if (selectedFile) {
       data.append("image", selectedFile);
@@ -324,6 +328,21 @@ export default function AdminTVDisplay({ adminFetch }: AdminTVDisplayProps) {
                 </SelectContent>
               </Select>
             </div>
+
+            {formData.type === "leaderboard" && (
+              <div className="space-y-2">
+                <Label>Месяц лидерборда</Label>
+                <Input
+                  type="month"
+                  value={formData.leaderboardMonth}
+                  onChange={(e) => setFormData({ ...formData, leaderboardMonth: e.target.value })}
+                  data-testid="input-leaderboard-month"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Оставьте пустым для показа текущего месяца
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Название (опционально)</Label>
