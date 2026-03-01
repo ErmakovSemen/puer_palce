@@ -198,13 +198,21 @@ export function setupAuth(app: Express) {
       await storage.createSmsVerification(normalizedPhone, hashedCode, type);
 
       // Send SMS
+      console.log(`[SMS Verification] Отправка SMS на ${normalizedPhone} type=${type}`);
       await sendSmsCode(normalizedPhone, code);
+      console.log(`[SMS Verification] ✓ SMS отправлено на ${normalizedPhone}`);
 
       // Also try to send via Telegram if user has linked profile
       try {
-        await sendVerificationCodeToTelegram(normalizedPhone, code, type);
+        console.log(`[SMS Verification] Попытка дублировать код в Telegram для ${normalizedPhone}`);
+        const telegramSent = await sendVerificationCodeToTelegram(normalizedPhone, code, type);
+        if (telegramSent) {
+          console.log(`[SMS Verification] ✓ Код также доставлен в Telegram для ${normalizedPhone}`);
+        } else {
+          console.log(`[SMS Verification] Telegram-доставка не выполнена (нет профиля или ошибка) — SMS уже отправлено`);
+        }
       } catch (telegramError) {
-        console.log("[SMS Verification] Telegram delivery failed (SMS was sent):", telegramError);
+        console.error(`[SMS Verification] Исключение при Telegram-доставке для ${normalizedPhone}:`, telegramError);
       }
 
       // Clean up expired codes

@@ -1161,6 +1161,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Telegram delivery diagnostic — check if a phone number has a linked Telegram profile
+  app.get("/api/admin/telegram/check", requireAdminAuth, async (req, res) => {
+    try {
+      const phone = req.query.phone as string;
+      if (!phone) {
+        return res.status(400).json({ error: "Укажите параметр ?phone=+79001234567" });
+      }
+
+      const { normalizePhone } = await import("./utils");
+      let normalizedPhone: string;
+      try {
+        normalizedPhone = normalizePhone(phone);
+      } catch {
+        return res.status(400).json({ error: "Неверный формат номера телефона" });
+      }
+
+      // Find user
+      const user = await storage.getUserByPhone(normalizedPhone);
+      if (!user) {
+        return res.json({
+          phone: normalizedPhone,
+          userFound: false,
+          telegramLinked: false,
+          diagnosis: "Пользователь с таким номером не найден в базе данных"
+        });
+      }
+
+      // Find Telegram profile
+      const { telegramProfiles } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const { db } = await import("./db");
+
+      const [profile] = await db.select()
+        .from(telegramProfiles)
+        .where(eq(telegramProfiles.userId, user.id))
+        .limit(1);
+
+      if (!profile) {
+        return res.json({
+          phone: normalizedPhone,
+          userFound: true,
+          userId: user.id,
+          userName: user.name,
+          telegramLinked: false,
+          diagnosis: "Пользователь найден, но Telegram не привязан. Пользователь должен пройти привязку через бота."
+        });
+      }
+
+      // Try sending a test ping to check if bot is reachable
+      let botReachable: boolean | null = null;
+      try {
+        const testResponse = await fetch(
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getChat`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: profile.chatId }),
+          }
+        );
+        const testData = await testResponse.json();
+        botReachable = testData.ok === true;
+      } catch {
+        botReachable = null;
+      }
+
+      return res.json({
+        phone: normalizedPhone,
+        userFound: true,
+        userId: user.id,
+        userName: user.name,
+        telegramLinked: true,
+        chatId: profile.chatId,
+        telegramUsername: profile.username || null,
+        telegramFirstName: profile.firstName || null,
+        linkedAt: profile.createdAt,
+        botCanReachUser: botReachable,
+        diagnosis: botReachable === false
+          ? "⚠️ Бот не может достучаться до пользователя (возможно, заблокировал бота)"
+          : botReachable === true
+          ? "✓ Telegram привязан, бот может отправлять сообщения"
+          : "Telegram привязан, статус доступности бота неизвестен"
+      });
+    } catch (error) {
+      console.error("[Admin] Telegram check error:", error);
+      res.status(500).json({ error: "Ошибка при проверке" });
+    }
+  });
+
   app.get("/api/admin/loyalty/export", requireAdminAuth, async (req, res) => {
     try {
       const XLSX = await import("xlsx");

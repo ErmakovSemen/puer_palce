@@ -101,46 +101,98 @@ interface InlineKeyboardMarkup {
   inline_keyboard: InlineKeyboardButton[][];
 }
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export async function sendMessage(
   chatId: string | number,
   text: string,
-  replyMarkup?: InlineKeyboardMarkup
+  replyMarkup?: InlineKeyboardMarkup,
+  context?: string
 ): Promise<boolean> {
   if (!TELEGRAM_BOT_TOKEN) {
     console.error("[TelegramBot] Bot token not configured");
     return false;
   }
 
-  try {
-    const body: any = {
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-    };
+  const ctx = context ? ` [${context}]` : "";
+  const MAX_RETRIES = 2;
+  const RETRY_DELAYS_MS = [1000, 3000];
 
-    if (replyMarkup) {
-      body.reply_markup = replyMarkup;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delay = RETRY_DELAYS_MS[attempt - 1];
+      console.log(`[TelegramBot]${ctx} Retry attempt ${attempt}/${MAX_RETRIES} for chat_id=${chatId} (waiting ${delay}ms)`);
+      await sleep(delay);
     }
 
-    const response = await fetch(
-      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+    try {
+      const body: any = {
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+      };
+
+      if (replyMarkup) {
+        body.reply_markup = replyMarkup;
       }
-    );
 
-    const data = await response.json();
-    if (!data.ok) {
-      console.error("[TelegramBot] API error:", data);
-      return false;
+      const response = await fetch(
+        `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!data.ok) {
+        const errCode = data.error_code;
+        const errDesc = data.description || "unknown error";
+
+        if (errCode === 403) {
+          console.error(`[TelegramBot]${ctx} [BOT_BLOCKED] chat_id=${chatId} — пользователь заблокировал бота. error_code=${errCode}: ${errDesc}`);
+          return false; // No retry on blocked
+        }
+        if (errCode === 400) {
+          console.error(`[TelegramBot]${ctx} [INVALID_CHAT] chat_id=${chatId} — неверный chat_id или удалён аккаунт. error_code=${errCode}: ${errDesc}`);
+          return false; // No retry on invalid chat
+        }
+        if (errCode === 429) {
+          const retryAfter = data.parameters?.retry_after || 5;
+          console.warn(`[TelegramBot]${ctx} [RATE_LIMITED] chat_id=${chatId} — rate limit, retry_after=${retryAfter}s. Attempt ${attempt + 1}/${MAX_RETRIES + 1}`);
+          if (attempt < MAX_RETRIES) {
+            await sleep(retryAfter * 1000);
+            continue;
+          }
+        } else {
+          console.error(`[TelegramBot]${ctx} [API_ERROR] chat_id=${chatId} — error_code=${errCode}: ${errDesc}. Attempt ${attempt + 1}/${MAX_RETRIES + 1}`);
+        }
+
+        if (attempt >= MAX_RETRIES) {
+          console.error(`[TelegramBot]${ctx} [GIVE_UP] chat_id=${chatId} — все попытки исчерпаны. Последняя ошибка: ${errCode}: ${errDesc}`);
+          return false;
+        }
+        continue; // Retry
+      }
+
+      if (attempt > 0) {
+        console.log(`[TelegramBot]${ctx} Сообщение доставлено с попытки ${attempt + 1} для chat_id=${chatId}`);
+      }
+      return true;
+
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      console.error(`[TelegramBot]${ctx} [NETWORK_ERROR] chat_id=${chatId} — ${errMsg}. Attempt ${attempt + 1}/${MAX_RETRIES + 1}`);
+      if (attempt >= MAX_RETRIES) {
+        console.error(`[TelegramBot]${ctx} [GIVE_UP] chat_id=${chatId} — сетевые ошибки, все попытки исчерпаны`);
+        return false;
+      }
     }
-    return true;
-  } catch (error) {
-    console.error("[TelegramBot] Send error:", error);
-    return false;
   }
+
+  return false;
 }
 
 export async function sendPhoto(
@@ -522,12 +574,38 @@ async function handlePhoneForCodeInput(chatId: string, phone: string) {
 
 ⚠️ Никому не сообщайте этот код!`;
 
-    await sendMessage(chatId, message);
+    console.log(`[TelegramBot] [/code] Попытка отправить код для phone=${normalizedPhone} chatId=${chatId}`);
+    const delivered = await sendMessage(chatId, message, undefined, "/code-delivery");
     
-    console.log(`[TelegramBot] Verification code sent to chat ${chatId} for phone ${normalizedPhone}`);
+    if (delivered) {
+      console.log(`[TelegramBot] [/code] ✓ Код доставлен chatId=${chatId} phone=${normalizedPhone}`);
+    } else {
+      console.error(`[TelegramBot] [/code] ✗ Не удалось доставить код chatId=${chatId} phone=${normalizedPhone}`);
+      // Alert admin
+      const adminChatId = process.env.TELEGRAM_CHAT_ID;
+      if (adminChatId && adminChatId !== chatId) {
+        const adminAlert = `⚠️ <b>Сбой доставки кода через /code</b>
+
+Пользователь запросил код через бота, но отправка не удалась.
+📱 Телефон: <code>${normalizedPhone}</code>
+💬 chatId: <code>${chatId}</code>
+
+Возможно, заблокировал бота или технический сбой.`;
+        await sendMessage(adminChatId, adminAlert, undefined, "admin-code-alert").catch(() => {});
+      }
+      await sendMessage(chatId, `❌ <b>Не удалось доставить код</b>
+
+Возникла техническая проблема при отправке. Пожалуйста:
+• Убедитесь, что вы не заблокировали бота
+• Попробуйте написать /start и повторить
+• Воспользуйтесь SMS-кодом с сайта
+
+Если проблема продолжается — напишите нам напрямую.`, undefined, "/code-delivery-error");
+    }
 
   } catch (error) {
-    console.error("[TelegramBot] Error sending verification code:", error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[TelegramBot] [/code] Критическая ошибка для chatId=${chatId}: ${errMsg}`);
     await sendMessage(chatId, `❌ <b>Произошла ошибка</b>
 
 Попробуйте позже или запросите код по SMS на сайте.`);
@@ -2241,35 +2319,61 @@ export async function sendVerificationCodeToTelegram(
   code: string,
   type: "registration" | "password_reset"
 ): Promise<boolean> {
+  const logPrefix = `[TelegramBot] [sendVerificationCode] phone=${phone} type=${type}`;
+
   try {
-    // Find user by phone
+    // Step 1: Find user by phone
+    console.log(`${logPrefix} — шаг 1: поиск пользователя по номеру`);
     const user = await db.query.users.findFirst({
       where: eq(users.phone, phone),
     });
     
     if (!user) {
-      console.log(`[TelegramBot] No user found for phone ${phone}`);
+      console.log(`${logPrefix} — пользователь не найден в БД (нет аккаунта с этим телефоном)`);
       return false;
     }
     
-    // Find telegram profile linked to this user
+    console.log(`${logPrefix} — шаг 2: пользователь найден userId=${user.id} name="${user.name}"`);
+
+    // Step 2: Find linked Telegram profile
     const profile = await db.query.telegramProfiles.findFirst({
       where: eq(telegramProfiles.userId, user.id),
     });
     
     if (!profile) {
-      console.log(`[TelegramBot] No Telegram profile linked for user ${user.id}`);
+      console.log(`${logPrefix} — Telegram профиль не привязан для userId=${user.id}`);
       return false;
     }
     
-    // Send the code
+    console.log(`${logPrefix} — шаг 3: Telegram профиль найден chatId=${profile.chatId} username=@${profile.username || "нет"}`);
+
+    // Step 3: Send the code
     const success = await sendVerificationCodeToChat(profile.chatId, code, type);
+
     if (success) {
-      console.log(`[TelegramBot] Verification code sent to Telegram for phone ${phone}`);
+      console.log(`${logPrefix} — ✓ КОД ДОСТАВЛЕН chatId=${profile.chatId} userId=${user.id}`);
+    } else {
+      console.error(`${logPrefix} — ✗ НЕ УДАЛОСЬ ДОСТАВИТЬ КОД chatId=${profile.chatId} userId=${user.id}`);
+      // Notify admin about delivery failure
+      const adminChatId = process.env.TELEGRAM_CHAT_ID;
+      if (adminChatId && adminChatId !== profile.chatId) {
+        const adminMsg = `⚠️ <b>Ошибка доставки кода верификации</b>
+
+Не удалось отправить код через Telegram.
+📱 Телефон: <code>${phone}</code>
+👤 Пользователь: ${user.name || "без имени"} (ID: ${user.id})
+💬 chatId: <code>${profile.chatId}</code>
+🔑 Тип: ${type}
+
+Пользователю отправлено SMS. Проверьте, не заблокировал ли он бота.`;
+        await sendMessage(adminChatId, adminMsg, undefined, "admin-delivery-alert").catch(() => {});
+      }
     }
+
     return success;
   } catch (error) {
-    console.error("[TelegramBot] Error sending verification code to Telegram:", error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error(`${logPrefix} — критическая ошибка: ${errMsg}`);
     return false;
   }
 }
