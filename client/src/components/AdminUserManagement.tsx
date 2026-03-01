@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Minus, Trophy, Copy, Check, Trash2 } from "lucide-react";
+import { Search, Plus, Minus, Trophy, Copy, Check, Trash2, MessageCircle, RefreshCw, CheckCircle2, XCircle, HelpCircle } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { format } from "date-fns";
@@ -287,6 +287,38 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     updateDiscountMutation.mutate({ userId: user.id, discount });
   };
 
+  // Telegram diagnostic query — auto-runs when user is found
+  const {
+    data: telegramStatus,
+    isLoading: isLoadingTelegram,
+    refetch: refetchTelegram,
+    isFetching: isFetchingTelegram,
+  } = useQuery({
+    queryKey: ['/api/admin/telegram/check', user?.phone],
+    enabled: !!user?.phone,
+    staleTime: 0,
+    queryFn: async () => {
+      const res = await fetch(
+        getApiUrl(`/api/admin/telegram/check?phone=${encodeURIComponent(user!.phone || '')}`),
+        { headers: { 'X-Admin-Password': adminPassword }, credentials: 'include' }
+      );
+      if (!res.ok) throw new Error('Ошибка проверки Telegram');
+      return await res.json() as {
+        phone: string;
+        userFound: boolean;
+        telegramLinked: boolean;
+        userId?: string;
+        userName?: string;
+        chatId?: string;
+        telegramUsername?: string | null;
+        telegramFirstName?: string | null;
+        linkedAt?: string;
+        botCanReachUser?: boolean | null;
+        diagnosis: string;
+      };
+    },
+  });
+
   const loyaltyProgress = user ? getLoyaltyProgress(user.xp) : null;
 
   const handleSelectUser = (selectedUser: UserWithoutPassword) => {
@@ -549,6 +581,104 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
                   </p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4" />
+                Telegram
+              </CardTitle>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refetchTelegram()}
+                disabled={isFetchingTelegram}
+                data-testid="button-refresh-telegram"
+              >
+                <RefreshCw className={`w-4 h-4 mr-2 ${isFetchingTelegram ? 'animate-spin' : ''}`} />
+                Обновить
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {isLoadingTelegram ? (
+                <div className="space-y-2">
+                  <div className="h-4 bg-muted/60 rounded animate-pulse w-1/3" />
+                  <div className="h-4 bg-muted/60 rounded animate-pulse w-1/2" />
+                </div>
+              ) : !telegramStatus ? (
+                <p className="text-sm text-muted-foreground">Нет данных</p>
+              ) : !telegramStatus.telegramLinked ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="w-4 h-4 text-muted-foreground" />
+                    <Badge variant="outline">Не привязан</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Пользователь не привязал Telegram-бот. Пусть откроет бота и нажмёт «Привязать аккаунт».
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400">
+                      Привязан
+                    </Badge>
+                    {telegramStatus.botCanReachUser === true && (
+                      <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400">
+                        Бот доступен
+                      </Badge>
+                    )}
+                    {telegramStatus.botCanReachUser === false && (
+                      <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400">
+                        Бот заблокирован
+                      </Badge>
+                    )}
+                    {telegramStatus.botCanReachUser === null && (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        Доступность неизвестна
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                    {telegramStatus.telegramUsername && (
+                      <>
+                        <span className="text-muted-foreground">Username</span>
+                        <span>@{telegramStatus.telegramUsername}</span>
+                      </>
+                    )}
+                    {telegramStatus.telegramFirstName && (
+                      <>
+                        <span className="text-muted-foreground">Имя в Telegram</span>
+                        <span>{telegramStatus.telegramFirstName}</span>
+                      </>
+                    )}
+                    <span className="text-muted-foreground">Chat ID</span>
+                    <span className="font-mono text-xs">{telegramStatus.chatId}</span>
+                    {telegramStatus.linkedAt && (
+                      <>
+                        <span className="text-muted-foreground">Привязан</span>
+                        <span>
+                          {format(new Date(telegramStatus.linkedAt), 'dd MMM yyyy', { locale: ru })}
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {telegramStatus.botCanReachUser === false && (
+                    <div className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-md p-3">
+                      <HelpCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>
+                        Пользователь, вероятно, заблокировал бота. Попросите его написать боту{' '}
+                        <strong>/start</strong> — это разблокирует отправку сообщений.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
 
