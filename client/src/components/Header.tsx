@@ -48,46 +48,18 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
       />
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          {/* Left side: Logo + Contact button on mobile */}
-          <div className="flex items-center gap-2 sm:gap-0">
+          {/* Left side: Logo */}
+          <div className="flex items-center">
             <Link href="/" onClick={handleLogoClick} data-testid="link-home">
               <h1 className="font-serif text-2xl md:text-3xl font-bold text-foreground cursor-pointer hover-elevate px-2 sm:px-4 py-2 rounded-md transition-all">
                 Пуэр Паб
               </h1>
             </Link>
-            
-            {/* Contact button - mobile only (left side) - wrapped in form for Yandex Direct */}
-            {!isAdmin && (
-              <form
-                id="goal-contact-form-mobile"
-                name="contact-telegram"
-                action="/goal/contact"
-                method="POST"
-                target="goal-contact-iframe"
-                className="ym-disable-keys sm:hidden"
-                onSubmit={() => {
-                  setTimeout(() => {
-                    window.open("https://t.me/PuerPabbot?start=ask", "_blank", "noopener,noreferrer");
-                  }, 0);
-                }}
-                data-testid="form-contact-goal-mobile"
-              >
-                <input type="hidden" name="goal" value="contact" />
-                <input type="hidden" name="form_name" value="contact-telegram" />
-                <Button
-                  type="submit"
-                  className="btn-secondary px-3 py-1.5 text-sm flex items-center no-default-hover-elevate no-default-active-elevate"
-                  data-testid="button-contact-mobile"
-                >
-                  <span>Написать</span>
-                </Button>
-              </form>
-            )}
           </div>
           
-          <div className="flex items-center gap-3 md:gap-4">
+          <div className="flex items-center gap-4 md:gap-4">
             
-            {/* Contact button - desktop only (right side next to Войти) - wrapped in form for Yandex Direct */}
+            {/* Contact button - mobile: "Написать", desktop: "Связаться с нами" */}
             {!isAdmin && (
               <form
                 id="goal-contact-form"
@@ -95,7 +67,7 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                 action="/goal/contact"
                 method="POST"
                 target="goal-contact-iframe"
-                className="ym-disable-keys hidden sm:block"
+                className="ym-disable-keys block"
                 onSubmit={() => {
                   setTimeout(() => {
                     window.open("https://t.me/PuerPabbot?start=ask", "_blank", "noopener,noreferrer");
@@ -107,10 +79,11 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                 <input type="hidden" name="form_name" value="contact-telegram" />
                 <Button
                   type="submit"
-                  className="btn-secondary px-5 py-2 text-sm flex items-center no-default-hover-elevate no-default-active-elevate"
+                  className="btn-secondary px-3 sm:px-5 py-2 text-sm flex items-center no-default-hover-elevate no-default-active-elevate"
                   data-testid="button-contact"
                 >
-                  <span>Связаться с нами</span>
+                  <span className="sm:hidden">Написать</span>
+                  <span className="hidden sm:inline">Связаться с нами</span>
                 </Button>
               </form>
             )}
