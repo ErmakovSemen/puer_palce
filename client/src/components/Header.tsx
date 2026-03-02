@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { ShoppingCart, User, LogOut, Sparkles } from "lucide-react";
+import { ShoppingCart, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
@@ -76,10 +76,9 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                 <input type="hidden" name="form_name" value="contact-telegram" />
                 <Button
                   type="submit"
-                  className="btn-secondary btn-gradient-sparkle px-3 py-1.5 text-sm flex items-center gap-1.5 no-default-hover-elevate no-default-active-elevate"
+                  className="btn-secondary px-3 py-1.5 text-sm flex items-center no-default-hover-elevate no-default-active-elevate"
                   data-testid="button-contact-mobile"
                 >
-                  <Sparkles className="w-4 h-4" />
                   <span>Написать</span>
                 </Button>
               </form>
@@ -108,10 +107,9 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                 <input type="hidden" name="form_name" value="contact-telegram" />
                 <Button
                   type="submit"
-                  className="btn-secondary btn-gradient-sparkle px-5 py-2 text-base flex items-center gap-2 no-default-hover-elevate no-default-active-elevate"
+                  className="btn-secondary px-5 py-2 text-sm flex items-center no-default-hover-elevate no-default-active-elevate"
                   data-testid="button-contact"
                 >
-                  <Sparkles className="w-5 h-5" />
                   <span>Связаться с нами</span>
                 </Button>
               </form>
