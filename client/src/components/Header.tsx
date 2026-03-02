@@ -128,14 +128,6 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                         data-testid="button-user-menu"
                       >
                         <User className="w-12 h-12" />
-                        {!user.firstOrderDiscountUsed && (
-                          <Badge 
-                            className="absolute -top-1 -right-2 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold z-10"
-                            data-testid="badge-discount-available"
-                          >
-                            20%
-                          </Badge>
-                        )}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -166,12 +158,6 @@ export default function Header({ cartItemCount, onCartClick, onLogoClick, isAdmi
                   >
                     <Link href="/auth">
                       Войти
-                      <Badge 
-                        className="absolute -top-1 -right-1 h-6 min-w-[1.5rem] px-1.5 flex items-center justify-center bg-amber-500 text-white border-2 border-amber-600 text-xs font-bold z-10"
-                        data-testid="badge-login-discount"
-                      >
-                        20%
-                      </Badge>
                     </Link>
                   </Button>
                 )}
