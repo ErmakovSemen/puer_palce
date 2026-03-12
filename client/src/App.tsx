@@ -13,6 +13,7 @@ import OrderSuccess from "@/pages/OrderSuccess";
 import OrderError from "@/pages/OrderError";
 import Leaderboard from "@/pages/Leaderboard";
 import TVDisplay from "@/pages/TVDisplay";
+import AppWaitlist from "@/pages/AppWaitlist";
 import { useDesignMode } from "@/hooks/use-design-mode";
 import { AuthProvider } from "@/hooks/use-auth";
 import { FirstOrderPromo } from "@/components/FirstOrderPromo";
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/payment/error" component={PaymentError} />
       <Route path="/order/success" component={OrderSuccess} />
       <Route path="/order/error" component={OrderError} />
+      <Route path="/app-waitlist" component={AppWaitlist} />
       <Route component={NotFound} />
     </Switch>
   );

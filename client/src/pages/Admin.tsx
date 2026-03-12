@@ -140,6 +140,12 @@ export default function Admin() {
     enabled: !!adminPassword,
   });
 
+  const { data: waitlistEntries = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/waitlist"],
+    queryFn: () => adminFetch("/api/admin/waitlist"),
+    enabled: !!adminPassword,
+  });
+
   const createProductMutation = useMutation({
     mutationFn: async (product: InsertProduct) => {
       return await adminFetch("/api/products", {
@@ -404,6 +410,7 @@ export default function Admin() {
             <TabsTrigger value="settings" data-testid="tab-settings" className="min-w-max">Настройки</TabsTrigger>
             <TabsTrigger value="tea-types" data-testid="tab-tea-types" className="min-w-max">Типы чая</TabsTrigger>
             <TabsTrigger value="quiz" data-testid="tab-quiz" className="min-w-max">Квиз подбора</TabsTrigger>
+            <TabsTrigger value="waitlist" data-testid="tab-waitlist" className="min-w-max">Лист ожидания</TabsTrigger>
           </TabsList>
 
           <TabsContent value="products">
@@ -627,6 +634,49 @@ export default function Admin() {
                 <p className="text-muted-foreground">Загрузка конфигурации квиза...</p>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="waitlist">
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-serif text-xl sm:text-2xl font-semibold">Лист ожидания приложения</h2>
+                <span className="text-sm text-muted-foreground">{waitlistEntries.length} заявок</span>
+              </div>
+              {waitlistEntries.length === 0 ? (
+                <Card className="p-8 text-center">
+                  <p className="text-muted-foreground">Заявок пока нет</p>
+                </Card>
+              ) : (
+                <Card>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left p-3 font-medium text-muted-foreground">Имя</th>
+                          <th className="text-left p-3 font-medium text-muted-foreground">Телефон</th>
+                          <th className="text-left p-3 font-medium text-muted-foreground">Телеграм</th>
+                          <th className="text-left p-3 font-medium text-muted-foreground">Email</th>
+                          <th className="text-left p-3 font-medium text-muted-foreground">Дата</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {waitlistEntries.map((entry) => (
+                          <tr key={entry.id} className="border-b last:border-0" data-testid={`row-waitlist-${entry.id}`}>
+                            <td className="p-3">{entry.name}</td>
+                            <td className="p-3">{entry.phone}</td>
+                            <td className="p-3 text-muted-foreground">{entry.telegram || "—"}</td>
+                            <td className="p-3 text-muted-foreground">{entry.email || "—"}</td>
+                            <td className="p-3 text-muted-foreground whitespace-nowrap">
+                              {new Date(entry.createdAt).toLocaleDateString("ru-RU")}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </div>

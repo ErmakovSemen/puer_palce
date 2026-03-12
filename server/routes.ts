@@ -12,7 +12,7 @@ import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotificat
 import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
 import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
 import { db } from "./db";
-import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable } from "@shared/schema";
+import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
@@ -4024,6 +4024,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error(`Error triggering ETL job ${req.params.job}:`, error);
       res.status(500).json({ error: "Failed to trigger ETL job" });
+    }
+  });
+
+  // ============================================================
+  // App Waitlist routes
+  // ============================================================
+
+  // Public: submit waitlist entry
+  app.post("/api/waitlist", async (req, res) => {
+    try {
+      const parsed = insertAppWaitlistSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.flatten().fieldErrors });
+      }
+      const [entry] = await db.insert(appWaitlist).values(parsed.data).returning();
+      return res.status(201).json(entry);
+    } catch (error) {
+      console.error("Waitlist insert error:", error);
+      return res.status(500).json({ error: "Не удалось сохранить заявку" });
+    }
+  });
+
+  // Admin: get all waitlist entries
+  app.get("/api/admin/waitlist", requireAdminAuth, async (_req, res) => {
+    try {
+      const entries = await db.select().from(appWaitlist).orderBy(desc(appWaitlist.createdAt));
+      return res.json(entries);
+    } catch (error) {
+      console.error("Waitlist fetch error:", error);
+      return res.status(500).json({ error: "Не удалось загрузить список" });
     }
   });
 

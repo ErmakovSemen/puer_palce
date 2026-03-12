@@ -796,3 +796,25 @@ export const updateMediaSchema = z.object({
 export type InsertMedia = z.infer<typeof insertMediaSchema>;
 export type UpdateMedia = z.infer<typeof updateMediaSchema>;
 export type Media = typeof media.$inferSelect;
+
+// App Waitlist — pre-registration before app release
+export const appWaitlist = pgTable("app_waitlist", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  telegram: text("telegram"),
+  email: text("email"),
+  consent: boolean("consent").notNull().default(false),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertAppWaitlistSchema = createInsertSchema(appWaitlist, {
+  name: z.string().min(2, "Введите имя (минимум 2 символа)"),
+  phone: z.string().min(10, "Введите корректный номер телефона"),
+  telegram: z.string().optional().nullable(),
+  email: z.string().email("Введите корректный email").optional().nullable(),
+  consent: z.literal(true, { errorMap: () => ({ message: "Необходимо согласие" }) }),
+}).omit({ id: true, createdAt: true });
+
+export type InsertAppWaitlist = z.infer<typeof insertAppWaitlistSchema>;
+export type AppWaitlist = typeof appWaitlist.$inferSelect;
