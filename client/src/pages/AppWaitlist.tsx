@@ -134,7 +134,7 @@ export default function AppWaitlist() {
                     name="telegram"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Ник в Телеграме</FormLabel>
+                        <FormLabel>Ник в Телеграме <span className="text-muted-foreground font-normal">(необязательно)</span></FormLabel>
                         <FormControl>
                           <Input
                             data-testid="input-telegram"
@@ -153,7 +153,7 @@ export default function AppWaitlist() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Электронная почта</FormLabel>
+                        <FormLabel>Электронная почта <span className="text-muted-foreground font-normal">(необязательно)</span></FormLabel>
                         <FormControl>
                           <Input
                             data-testid="input-email"
