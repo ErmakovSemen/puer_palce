@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { getLoyaltyDiscount } from "@shared/loyalty";
+import { getLoyaltyDiscountFromSettings } from "@shared/pricing";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
@@ -66,8 +66,8 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
   const firstOrderDiscount = (user && !user.firstOrderDiscountUsed) ? firstOrderDiscountPct : 0;
   const firstOrderDiscountAmount = (total * firstOrderDiscount) / 100;
   
-  // Loyalty discount (only if user is verified)
-  const loyaltyDiscount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
+  // Loyalty discount (only if user is verified, derived from site settings)
+  const loyaltyDiscount = (user && user.phoneVerified) ? getLoyaltyDiscountFromSettings(user.xp, siteSettings) : 0;
   const loyaltyDiscountAmount = ((total - firstOrderDiscountAmount) * loyaltyDiscount) / 100;
   
   // Custom discount (individual discount from admin)
