@@ -316,7 +316,7 @@ export default function Home() {
   });
 
   const { data: siteSettings } = useQuery<SiteSettings>({
-    queryKey: ['/api/settings'],
+    queryKey: ['/api/site-settings'],
   });
   const firstOrderDiscountPercent = siteSettings?.firstOrderDiscount ?? 20;
 

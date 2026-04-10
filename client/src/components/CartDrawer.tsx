@@ -289,7 +289,7 @@ export default function CartDrawer({
                     >
                       <span className="text-amber-400 flex items-center gap-1.5">
                         <Gift className="w-3.5 h-3.5" />
-                        Скидка на первый заказ (20%)
+                        Скидка на первый заказ ({firstOrderDiscountPercent}%)
                       </span>
                       <span className="text-amber-400">
                         −{Math.round(firstOrderDiscountAmount)} ₽
