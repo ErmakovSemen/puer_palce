@@ -1,8 +1,9 @@
 import { X, Minus, Plus, Trash2, Gift, Star, Crown, Percent } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getLoyaltyDiscount, getLoyaltyLevel } from "@shared/loyalty";
-import { calculateCartBreakdown, BULK_DISCOUNT } from "@shared/pricing";
+import { getLoyaltyLevel } from "@shared/loyalty";
+import { calculateCartBreakdown, getLoyaltyDiscountFromSettings, BULK_DISCOUNT } from "@shared/pricing";
+import type { LoyaltySettings } from "@shared/pricing";
 
 interface CartItem {
   id: number;
@@ -31,6 +32,7 @@ interface CartDrawerProps {
   user?: UserInfo | null;
   abMultiplier?: number;
   firstOrderDiscountPercent?: number;
+  siteSettings?: LoyaltySettings | null;
 }
 
 export default function CartDrawer({
@@ -43,8 +45,9 @@ export default function CartDrawer({
   user,
   abMultiplier = 1,
   firstOrderDiscountPercent = 20,
+  siteSettings,
 }: CartDrawerProps) {
-  const loyaltyDiscountPercent = user ? getLoyaltyDiscount(user.xp) : 0;
+  const loyaltyDiscountPercent = user ? getLoyaltyDiscountFromSettings(user.xp, siteSettings) : 0;
   const loyaltyLevel = user ? getLoyaltyLevel(user.xp) : null;
 
   const breakdown = calculateCartBreakdown(

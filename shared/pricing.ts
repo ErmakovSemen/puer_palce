@@ -1,5 +1,24 @@
 export const BULK_DISCOUNT = 0.10; // 10% for tea items with quantity >= 100g
 
+export interface LoyaltySettings {
+  loyaltyLevel2MinXP?: number;
+  loyaltyLevel2Discount?: number;
+  loyaltyLevel3MinXP?: number;
+  loyaltyLevel3Discount?: number;
+  loyaltyLevel4MinXP?: number;
+  loyaltyLevel4Discount?: number;
+}
+
+export function getLoyaltyDiscountFromSettings(xp: number, settings?: LoyaltySettings | null): number {
+  const level4MinXP = settings?.loyaltyLevel4MinXP ?? 15000;
+  const level3MinXP = settings?.loyaltyLevel3MinXP ?? 7000;
+  const level2MinXP = settings?.loyaltyLevel2MinXP ?? 3000;
+  if (xp >= level4MinXP) return settings?.loyaltyLevel4Discount ?? 15;
+  if (xp >= level3MinXP) return settings?.loyaltyLevel3Discount ?? 10;
+  if (xp >= level2MinXP) return settings?.loyaltyLevel2Discount ?? 5;
+  return 0;
+}
+
 export interface PricingItem {
   category?: string;
   basePrice: number;  // raw pricePerGram, without any discounts

@@ -13,8 +13,7 @@ import MediaViewer from "@/components/MediaViewer";
 import MediaProductCard from "@/components/MediaProductCard";
 import { BannerSlot } from "@/components/InfoBanner";
 import type { InfoBanner, Media, SiteSettings } from "@shared/schema";
-import { getLoyaltyDiscount } from "@shared/loyalty";
-import { calculateCartBreakdown, BULK_DISCOUNT } from "@shared/pricing";
+import { calculateCartBreakdown, getLoyaltyDiscountFromSettings, BULK_DISCOUNT } from "@shared/pricing";
 import {
   Dialog,
   DialogContent,
@@ -454,7 +453,9 @@ export default function Home() {
   // Canonical price breakdown (shared with CartDrawer & server)
   const cartBreakdown = useMemo(() => {
     const abMultiplier = getPriceMultiplier();
-    const loyaltyDiscountPercent = user?.phoneVerified ? getLoyaltyDiscount(user.xp) : 0;
+    const loyaltyDiscountPercent = user?.phoneVerified
+      ? getLoyaltyDiscountFromSettings(user.xp, siteSettings)
+      : 0;
     return calculateCartBreakdown(
       cartItems.map((item) => ({
         category: item.category,
@@ -472,7 +473,7 @@ export default function Home() {
       loyaltyDiscountPercent,
       abMultiplier,
     );
-  }, [cartItems, user, getPriceMultiplier, firstOrderDiscountPercent]);
+  }, [cartItems, user, getPriceMultiplier, firstOrderDiscountPercent, siteSettings]);
 
   // Mutation for adding items to cart
   const addToCartMutation = useMutation({
@@ -911,6 +912,7 @@ export default function Home() {
         } : null}
         abMultiplier={getPriceMultiplier()}
         firstOrderDiscountPercent={firstOrderDiscountPercent}
+        siteSettings={siteSettings}
       />
 
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
