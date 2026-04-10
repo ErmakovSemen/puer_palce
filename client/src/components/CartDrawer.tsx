@@ -30,6 +30,7 @@ interface CartDrawerProps {
   onCheckout: () => void;
   user?: UserInfo | null;
   abMultiplier?: number;
+  firstOrderDiscountPercent?: number;
 }
 
 export default function CartDrawer({
@@ -41,6 +42,7 @@ export default function CartDrawer({
   onCheckout,
   user,
   abMultiplier = 1,
+  firstOrderDiscountPercent = 20,
 }: CartDrawerProps) {
   const loyaltyDiscountPercent = user ? getLoyaltyDiscount(user.xp) : 0;
   const loyaltyLevel = user ? getLoyaltyLevel(user.xp) : null;
@@ -58,7 +60,7 @@ export default function CartDrawer({
           customDiscount: user.customDiscount,
         }
       : null,
-    20,
+    firstOrderDiscountPercent,
     loyaltyDiscountPercent,
     abMultiplier,
   );

@@ -12,7 +12,7 @@ import VideoCard from "@/components/VideoCard";
 import MediaViewer from "@/components/MediaViewer";
 import MediaProductCard from "@/components/MediaProductCard";
 import { BannerSlot } from "@/components/InfoBanner";
-import type { InfoBanner, Media } from "@shared/schema";
+import type { InfoBanner, Media, SiteSettings } from "@shared/schema";
 import { getLoyaltyDiscount } from "@shared/loyalty";
 import { calculateCartBreakdown, BULK_DISCOUNT } from "@shared/pricing";
 import {
@@ -315,6 +315,11 @@ export default function Home() {
     queryKey: ['/api/banners'],
   });
 
+  const { data: siteSettings } = useQuery<SiteSettings>({
+    queryKey: ['/api/settings'],
+  });
+  const firstOrderDiscountPercent = siteSettings?.firstOrderDiscount ?? 20;
+
   interface FeaturedMediaResponse extends Media {
     product: Product;
   }
@@ -463,11 +468,11 @@ export default function Home() {
             customDiscount: user.customDiscount,
           }
         : null,
-      20,
+      firstOrderDiscountPercent,
       loyaltyDiscountPercent,
       abMultiplier,
     );
-  }, [cartItems, user, getPriceMultiplier]);
+  }, [cartItems, user, getPriceMultiplier, firstOrderDiscountPercent]);
 
   // Mutation for adding items to cart
   const addToCartMutation = useMutation({
@@ -905,6 +910,7 @@ export default function Home() {
           customDiscount: user.customDiscount
         } : null}
         abMultiplier={getPriceMultiplier()}
+        firstOrderDiscountPercent={firstOrderDiscountPercent}
       />
 
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>

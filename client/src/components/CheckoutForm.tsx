@@ -55,9 +55,15 @@ interface CheckoutFormProps {
 
 export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, user }: CheckoutFormProps) {
   const { toast } = useToast();
-  
-  // First order discount (20% if user hasn't used it yet)
-  const firstOrderDiscount = (user && !user.firstOrderDiscountUsed) ? 20 : 0;
+
+  // Fetch site settings for contact info and discount values
+  const { data: siteSettings } = useQuery<SiteSettings>({
+    queryKey: ["/api/site-settings"],
+  });
+
+  // First order discount (from site settings, default 20%)
+  const firstOrderDiscountPct = siteSettings?.firstOrderDiscount ?? 20;
+  const firstOrderDiscount = (user && !user.firstOrderDiscountUsed) ? firstOrderDiscountPct : 0;
   const firstOrderDiscountAmount = (total * firstOrderDiscount) / 100;
   
   // Loyalty discount (only if user is verified)
@@ -70,11 +76,6 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
   
   // Calculate final total (clamp to zero to prevent negative totals)
   const finalTotal = Math.max(total - firstOrderDiscountAmount - loyaltyDiscountAmount - customDiscountAmount, 0);
-  
-  // Fetch site settings for contact info
-  const { data: siteSettings } = useQuery<SiteSettings>({
-    queryKey: ["/api/site-settings"],
-  });
   
   // Fetch saved addresses for authenticated users
   const { data: savedAddresses = [] } = useQuery<SavedAddress[]>({
@@ -377,7 +378,7 @@ export default function CheckoutForm({ onSubmit, onCancel, isSubmitting, total, 
             </div>
             {firstOrderDiscount > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-amber-600 font-medium">Скидка на первый заказ (-20%):</span>
+                <span className="text-amber-600 font-medium">Скидка на первый заказ (-{firstOrderDiscountPct}%):</span>
                 <span className="text-amber-600 font-medium" data-testid="text-first-order-discount">
                   -{Math.round(firstOrderDiscountAmount)} ₽
                 </span>
