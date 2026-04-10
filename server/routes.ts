@@ -16,6 +16,7 @@ import { users as usersTable, orders as ordersTable, walletTransactions, pending
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
+import { BULK_DISCOUNT, calculateCartBreakdown, getAbMultiplierFromExperiments } from "@shared/pricing";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -817,74 +818,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Backend security check: Recalculate total with proper discount
+      // Backend security check: Recalculate total using canonical pricing logic
       // This prevents manipulation of discounts
-      const BULK_DISCOUNT = 0.10; // 10% discount for 100g or more per item
-      let calculatedTotal = 0;
       const products = await storage.getProducts();
-      
-      for (const item of orderData.items) {
-        const product = products.find((p: any) => p.id === item.id);
-        if (product) {
-          let itemPrice = (product.pricePerGram || 0) * item.quantity;
-          // Apply bulk discount for tea products with quantity >= 100g
-          if (product.category === "tea" && item.quantity >= 100) {
-            itemPrice = itemPrice * (1 - BULK_DISCOUNT);
-          }
-          calculatedTotal += itemPrice;
+
+      // Determine A/B price multiplier for this user/device
+      const experiments = await storage.getActiveExperiments();
+      const identifier = orderData.deviceId || userId || "unknown";
+      let savedAssignments: Record<string, string> | null = null;
+      if (user?.analytics) {
+        try {
+          const analytics = JSON.parse(user.analytics);
+          savedAssignments = analytics.abAssignments || null;
+        } catch {
+          // ignore parse errors
         }
       }
-      
+      const abMultiplier = getAbMultiplierFromExperiments(
+        experiments,
+        identifier,
+        userId,
+        savedAssignments,
+      );
+      if (abMultiplier !== 1) {
+        console.log("[Order] A/B price multiplier applied:", abMultiplier, "for identifier:", identifier);
+      }
+
+      // Map order items to PricingItem using server-authoritative product data
+      const pricingItems = orderData.items.map((item: any) => {
+        const product = products.find((p: any) => p.id === item.id);
+        return {
+          category: product?.category || "tea",
+          basePrice: product?.pricePerGram || item.pricePerGram || 0,
+          quantity: item.quantity,
+        };
+      });
+
       // Get site settings for discount values
       const siteSettings = await storage.getSiteSettings();
       const firstOrderDiscountPercent = siteSettings?.firstOrderDiscount ?? 20;
-      
-      // Apply first order discount first (configurable % from base total)
-      let usedFirstOrderDiscount = false;
-      let firstOrderDiscountAmount = 0;
-      if (user && !user.firstOrderDiscountUsed) {
-        firstOrderDiscountAmount = calculatedTotal * (firstOrderDiscountPercent / 100);
-        calculatedTotal = calculatedTotal - firstOrderDiscountAmount;
-        usedFirstOrderDiscount = true;
-        console.log("[Order] First order discount applied:", firstOrderDiscountAmount, `(${firstOrderDiscountPercent}%)`);
-      }
-      
-      // Apply loyalty discount to the reduced total (only if user is verified)
-      // Use configurable loyalty levels from site settings
-      let loyaltyDiscount = 0;
-      if (user && user.phoneVerified) {
+
+      // Compute loyalty discount percent from configurable site settings
+      let loyaltyDiscountPercent = 0;
+      if (user?.phoneVerified) {
         const xp = user.xp;
         const level4MinXP = siteSettings?.loyaltyLevel4MinXP ?? 15000;
         const level3MinXP = siteSettings?.loyaltyLevel3MinXP ?? 7000;
         const level2MinXP = siteSettings?.loyaltyLevel2MinXP ?? 3000;
-        
-        if (xp >= level4MinXP) {
-          loyaltyDiscount = siteSettings?.loyaltyLevel4Discount ?? 15;
-        } else if (xp >= level3MinXP) {
-          loyaltyDiscount = siteSettings?.loyaltyLevel3Discount ?? 10;
-        } else if (xp >= level2MinXP) {
-          loyaltyDiscount = siteSettings?.loyaltyLevel2Discount ?? 5;
-        }
+        if (xp >= level4MinXP) loyaltyDiscountPercent = siteSettings?.loyaltyLevel4Discount ?? 15;
+        else if (xp >= level3MinXP) loyaltyDiscountPercent = siteSettings?.loyaltyLevel3Discount ?? 10;
+        else if (xp >= level2MinXP) loyaltyDiscountPercent = siteSettings?.loyaltyLevel2Discount ?? 5;
       }
-      const loyaltyDiscountAmount = (calculatedTotal * loyaltyDiscount) / 100;
-      calculatedTotal = calculatedTotal - loyaltyDiscountAmount;
-      
-      // Apply custom discount (individual discount from admin) to the reduced total
-      const customDiscount = user?.customDiscount || 0;
-      const customDiscountAmount = (calculatedTotal * customDiscount) / 100;
-      calculatedTotal = calculatedTotal - customDiscountAmount;
-      
-      // Clamp total to zero (prevent negative totals from stacked discounts)
-      calculatedTotal = Math.max(calculatedTotal, 0);
-      
-      // Log if there's a discrepancy
+
+      // Run canonical breakdown (same order of discounts as CartDrawer)
+      const breakdown = calculateCartBreakdown(
+        pricingItems,
+        user
+          ? {
+              phoneVerified: user.phoneVerified,
+              firstOrderDiscountUsed: user.firstOrderDiscountUsed,
+              customDiscount: user.customDiscount,
+            }
+          : null,
+        firstOrderDiscountPercent,
+        loyaltyDiscountPercent,
+        abMultiplier,
+      );
+
+      const calculatedTotal = breakdown.finalTotal;
+      const usedFirstOrderDiscount = breakdown.firstOrderDiscountAmount > 0;
+
+      if (breakdown.firstOrderDiscountAmount > 0) {
+        console.log("[Order] First order discount applied:", breakdown.firstOrderDiscountAmount, `(${firstOrderDiscountPercent}%)`);
+      }
+
+      // Log mismatch only when outside rounding tolerance (indicates stale client data)
       if (Math.abs(calculatedTotal - orderData.total) > 1) {
-        console.warn("[Order] Total mismatch - calculated:", calculatedTotal, "received:", orderData.total);
+        console.warn(
+          "[Order] Total mismatch - calculated:", calculatedTotal,
+          "received:", orderData.total,
+          "abMultiplier:", abMultiplier,
+        );
       }
-      
-      // Use calculated total (prevents price manipulation)
+
+      // Use server-calculated total (prevents price manipulation)
       const finalTotal = calculatedTotal;
-      
+
       // Validate total is not negative
       if (finalTotal < 0) {
         res.status(400).json({ error: "Итоговая сумма заказа не может быть отрицательной" });
@@ -912,7 +931,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Clear custom discount if it was used
-      if (customDiscount > 0 && userId) {
+      if (breakdown.customDiscountAmount > 0 && userId) {
         await db.update(usersTable).set({ customDiscount: null }).where(eq(usersTable.id, userId));
         console.log("[Order] Custom discount cleared for user:", userId);
       }
@@ -1641,7 +1660,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const existingItem = existingCartItems.find(item => item.productId === productId);
       const totalQuantity = (existingItem?.quantity || 0) + quantity;
       
-      const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
       const isTea = product.category === "tea";
       const calculatedPricePerUnit = (isTea && totalQuantity >= 100)
         ? product.pricePerGram * (1 - BULK_DISCOUNT)
@@ -1692,7 +1710,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (pricePerUnit !== undefined) {
         finalPricePerUnit = pricePerUnit;
       } else {
-        const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
         const product = currentItem.product;
         const isTea = product.category === "tea";
         finalPricePerUnit = (isTea && quantity >= 100)

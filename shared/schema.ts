@@ -277,6 +277,7 @@ export const orderSchema = z.object({
   items: z.array(orderItemSchema).min(1, "Корзина не может быть пустой"),
   total: z.number().min(500, "Минимальная сумма заказа 500₽"),
   saveAddress: z.boolean().optional(),
+  deviceId: z.string().optional().nullable(),
 });
 
 export const insertOrderSchema = createInsertSchema(orders, {

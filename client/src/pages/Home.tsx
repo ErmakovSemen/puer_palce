@@ -14,6 +14,7 @@ import MediaProductCard from "@/components/MediaProductCard";
 import { BannerSlot } from "@/components/InfoBanner";
 import type { InfoBanner, Media } from "@shared/schema";
 import { getLoyaltyDiscount } from "@shared/loyalty";
+import { calculateCartBreakdown, BULK_DISCOUNT } from "@shared/pricing";
 import {
   Dialog,
   DialogContent,
@@ -214,7 +215,7 @@ export default function Home() {
   
   // A/B Testing event logging
   const { logEvent } = useAbEvent();
-  const { getPriceMultiplier } = useAbTesting();
+  const { getPriceMultiplier, deviceId } = useAbTesting();
   const hasLoggedPageView = useRef(false);
   
   // Log page_view event on initial page load
@@ -445,6 +446,29 @@ export default function Home() {
     return cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
   }, [cartItems]);
 
+  // Canonical price breakdown (shared with CartDrawer & server)
+  const cartBreakdown = useMemo(() => {
+    const abMultiplier = getPriceMultiplier();
+    const loyaltyDiscountPercent = user?.phoneVerified ? getLoyaltyDiscount(user.xp) : 0;
+    return calculateCartBreakdown(
+      cartItems.map((item) => ({
+        category: item.category,
+        basePrice: item.originalPrice,
+        quantity: item.quantity,
+      })),
+      user
+        ? {
+            phoneVerified: user.phoneVerified,
+            firstOrderDiscountUsed: user.firstOrderDiscountUsed,
+            customDiscount: user.customDiscount,
+          }
+        : null,
+      20,
+      loyaltyDiscountPercent,
+      abMultiplier,
+    );
+  }, [cartItems, user, getPriceMultiplier]);
+
   // Mutation for adding items to cart
   const addToCartMutation = useMutation({
     mutationFn: async ({ productId, quantity, pricePerUnit }: { productId: number; quantity: number; pricePerUnit?: number }) => {
@@ -520,7 +544,6 @@ export default function Home() {
         if (existing) {
           // Update both quantity and price when adding more
           const newQuantity = existing.quantity + quantityInGrams;
-          const BULK_DISCOUNT = 0.10;
           const isTea = product.category === "tea";
           const adjustedBasePrice = Math.round(product.pricePerGram * getPriceMultiplier());
           const newPrice = (isTea && newQuantity >= 100)
@@ -552,7 +575,6 @@ export default function Home() {
   };
 
   const updateQuantity = (productId: number, quantity: number) => {
-    const BULK_DISCOUNT = 0.10; // 10% discount for quantities >= 100g
     const product = products.find(p => p.id === productId);
     const isTea = product?.category === "tea";
     
@@ -611,10 +633,11 @@ export default function Home() {
   };
 
   const handleCheckout = () => {
-    if (cartTotal < 500) {
+    const subtotal = cartBreakdown.subtotalAfterItemDiscounts;
+    if (subtotal < 500) {
       toast({
         title: "Минимальная сумма заказа 500₽",
-        description: `Текущая сумма: ${Math.round(cartTotal)}₽. Добавьте товаров еще на ${Math.round(500 - cartTotal)}₽`,
+        description: `Текущая сумма: ${Math.round(subtotal)}₽. Добавьте товаров еще на ${Math.round(500 - subtotal)}₽`,
         variant: "destructive",
       });
       return;
@@ -692,19 +715,18 @@ export default function Home() {
         id: item.id,
         name: item.name,
         pricePerGram: product?.pricePerGram || 0,
-        quantity: item.quantity, // Already in grams
+        quantity: item.quantity,
       };
     });
 
-    // Apply loyalty discount only if user is authenticated AND phone is verified
-    const discount = (user && user.phoneVerified) ? getLoyaltyDiscount(user.xp) : 0;
-    const discountAmount = (cartTotal * discount) / 100;
-    const finalTotal = cartTotal - discountAmount;
+    // Use the canonical breakdown total (matches CartDrawer & server calculation)
+    const finalTotal = cartBreakdown.finalTotal;
 
     orderMutation.mutate({
       ...data,
       items: orderItems,
       total: finalTotal,
+      deviceId: deviceId || null,
     });
   };
 
@@ -882,6 +904,7 @@ export default function Home() {
           firstOrderDiscountUsed: user.firstOrderDiscountUsed,
           customDiscount: user.customDiscount
         } : null}
+        abMultiplier={getPriceMultiplier()}
       />
 
       <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
@@ -896,7 +919,7 @@ export default function Home() {
             onSubmit={handleOrderSubmit}
             onCancel={() => setIsCheckoutOpen(false)}
             isSubmitting={orderMutation.isPending}
-            total={cartTotal}
+            total={cartBreakdown.subtotalAfterItemDiscounts}
             user={user}
           />
         </DialogContent>
@@ -1009,7 +1032,7 @@ export default function Home() {
                 data-testid="button-cart-mobile"
               >
                 <ShoppingCart className="w-8 h-8" />
-                <span className="text-sm font-bold">{Math.round(cartTotal)}₽</span>
+                <span className="text-sm font-bold">{Math.round(cartBreakdown.finalTotal)}₽</span>
               </button>
             </div>
           </form>

@@ -4,8 +4,8 @@ import teaImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
 
 export default function CartDrawerExample() {
   const [items, setItems] = useState([
-    { id: 1, name: "Шу Пуэр Императорский", price: 1200, quantity: 2, image: teaImage },
-    { id: 2, name: "Шен Пуэр Дикий", price: 1500, quantity: 1, image: teaImage }
+    { id: 1, name: "Шу Пуэр Императорский", category: "tea", price: 1200, originalPrice: 1200, quantity: 100, image: teaImage },
+    { id: 2, name: "Шен Пуэр Дикий", category: "tea", price: 1500, originalPrice: 1500, quantity: 50, image: teaImage }
   ]);
 
   return (
