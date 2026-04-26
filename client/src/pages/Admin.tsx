@@ -637,8 +637,8 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="waitlist">
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-6">
+              <div className="flex items-center justify-between gap-1 flex-wrap">
                 <h2 className="font-serif text-xl sm:text-2xl font-semibold">Лист ожидания приложения</h2>
                 <span className="text-sm text-muted-foreground">{waitlistEntries.length} заявок</span>
               </div>
@@ -647,34 +647,182 @@ export default function Admin() {
                   <p className="text-muted-foreground">Заявок пока нет</p>
                 </Card>
               ) : (
-                <Card>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left p-3 font-medium text-muted-foreground">Имя</th>
-                          <th className="text-left p-3 font-medium text-muted-foreground">Телефон</th>
-                          <th className="text-left p-3 font-medium text-muted-foreground">Телеграм</th>
-                          <th className="text-left p-3 font-medium text-muted-foreground">Email</th>
-                          <th className="text-left p-3 font-medium text-muted-foreground">Дата</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {waitlistEntries.map((entry) => (
-                          <tr key={entry.id} className="border-b last:border-0" data-testid={`row-waitlist-${entry.id}`}>
-                            <td className="p-3">{entry.name}</td>
-                            <td className="p-3">{entry.phone}</td>
-                            <td className="p-3 text-muted-foreground">{entry.telegram || "—"}</td>
-                            <td className="p-3 text-muted-foreground">{entry.email || "—"}</td>
-                            <td className="p-3 text-muted-foreground whitespace-nowrap">
-                              {new Date(entry.createdAt).toLocaleDateString("ru-RU")}
-                            </td>
+                <>
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left p-3 font-medium text-muted-foreground">Имя</th>
+                            <th className="text-left p-3 font-medium text-muted-foreground">Телефон</th>
+                            <th className="text-left p-3 font-medium text-muted-foreground">Телеграм</th>
+                            <th className="text-left p-3 font-medium text-muted-foreground">Email</th>
+                            <th className="text-left p-3 font-medium text-muted-foreground">Дата</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {waitlistEntries.map((entry) => (
+                            <tr key={entry.id} className="border-b last:border-0" data-testid={`row-waitlist-${entry.id}`}>
+                              <td className="p-3">{entry.name}</td>
+                              <td className="p-3">{entry.phone}</td>
+                              <td className="p-3 text-muted-foreground">{entry.telegram || "—"}</td>
+                              <td className="p-3 text-muted-foreground">{entry.email || "—"}</td>
+                              <td className="p-3 text-muted-foreground whitespace-nowrap">
+                                {new Date(entry.createdAt).toLocaleDateString("ru-RU")}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                  <div className="flex flex-col gap-4">
+                    <h3 className="font-serif text-lg font-semibold" data-testid="heading-survey-stats">Опрос (лист ожидания)</h3>
+                    {(() => {
+                      const Q4_CUSTOM = "Свой вариант";
+                      const Q5_CUSTOM = "Свой вариант";
+
+                      const SURVEY_QUESTIONS: {
+                        key: "surveyQ1" | "surveyQ2" | "surveyQ3" | "surveyQ4" | "surveyQ5";
+                        customKey?: "surveyQ4Custom" | "surveyQ5Custom";
+                        text: string;
+                        options: string[];
+                        customMarker?: string;
+                      }[] = [
+                        {
+                          key: "surveyQ1",
+                          text: "Пробовали ли вы ранее китайский чай?",
+                          options: ["Не пробовал(а)", "1 раз", "Несколько раз", "Периодически пью", "Пью часто и очень люблю его"],
+                        },
+                        {
+                          key: "surveyQ2",
+                          text: "Где бы вы пили чай, который увидели?",
+                          options: ["Дома", "На работе", "Во время тренировок", "В дороге", "В любой удобной ситуации"],
+                        },
+                        {
+                          key: "surveyQ3",
+                          text: "Нравится ли вам тот продукт, который вы увидели?",
+                          options: ["Однозначно да", "Скорее да", "Скорее нет", "Однозначно нет", "Не знаю, но купил бы попробовать"],
+                        },
+                        {
+                          key: "surveyQ4",
+                          customKey: "surveyQ4Custom",
+                          customMarker: Q4_CUSTOM,
+                          text: "Чего, как вам кажется, не хватает Чайному Ритму?",
+                          options: [
+                            "Большего разнообразия добавок",
+                            "Больше готовых рецептов",
+                            "Более низкой цены",
+                            "Большей нацеленности на функциональность (расслабление, бодрость, концентрация, энергия и т.д.)",
+                            "Большего разнообразия чаёв в ассортименте",
+                            "Всего хватает",
+                            Q4_CUSTOM,
+                          ],
+                        },
+                        {
+                          key: "surveyQ5",
+                          customKey: "surveyQ5Custom",
+                          customMarker: Q5_CUSTOM,
+                          text: "Что больше всего понравилось в продукте?",
+                          options: [
+                            "Свобода действий для создания своего чая",
+                            "Возможность добавлять в чай ягоды и травы",
+                            "Удобство в заваривании «сложного» чая",
+                            "Демо-интерфейс приложения",
+                            "Красивая упаковка",
+                            "Доставка на маркетплейсы",
+                            "Ничего из вышеперечисленного",
+                            Q5_CUSTOM,
+                          ],
+                        },
+                      ];
+
+                      return SURVEY_QUESTIONS.map((q) => {
+                        const counts: Record<string, number> = {};
+                        const customAnswers: string[] = [];
+
+                        for (const entry of waitlistEntries) {
+                          const val: string | null = entry[q.key];
+                          if (!val) continue;
+                          counts[val] = (counts[val] || 0) + 1;
+                          if (q.customKey && q.customMarker && val === q.customMarker) {
+                            const custom: string | null = entry[q.customKey];
+                            if (custom) customAnswers.push(custom);
+                          }
+                        }
+
+                        const total = q.options.reduce((s, opt) => s + (counts[opt] || 0), 0);
+                        const maxCount = Math.max(1, ...q.options.map((opt) => counts[opt] || 0));
+
+                        const optionRows = q.options
+                          .map((opt) => ({ label: opt, count: counts[opt] || 0 }))
+                          .filter((r) => r.count > 0 || q.options.length <= 8);
+
+                        return (
+                          <Card key={q.key} className="p-4" data-testid={`card-survey-${q.key}`}>
+                            <div className="flex flex-col gap-3">
+                              <p className="text-sm font-medium leading-snug">
+                                {q.text}
+                                {total > 0 && (
+                                  <span className="ml-2 text-xs text-muted-foreground font-normal">
+                                    {total} ответов
+                                  </span>
+                                )}
+                              </p>
+                              {total === 0 ? (
+                                <p className="text-sm text-muted-foreground">Нет ответов</p>
+                              ) : (
+                                <div className="flex flex-col gap-2">
+                                  {optionRows.map((row) => {
+                                    const pct = total > 0 ? Math.round((row.count / total) * 100) : 0;
+                                    const barWidth = total > 0 ? (row.count / maxCount) * 100 : 0;
+                                    const isCustom = q.customMarker && row.label === q.customMarker;
+                                    return (
+                                      <div key={row.label} className="flex flex-col gap-1">
+                                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                                          <span className="text-xs text-muted-foreground leading-tight" data-testid={`text-survey-option-${q.key}-${row.label.slice(0, 20)}`}>
+                                            {row.label}
+                                            {isCustom && row.count > 0 && (
+                                              <span className="ml-1 text-xs">(см. ниже)</span>
+                                            )}
+                                          </span>
+                                          <span className="text-xs font-medium shrink-0" data-testid={`text-survey-count-${q.key}-${row.label.slice(0, 20)}`}>
+                                            {row.count > 0 ? `${row.count} (${pct}%)` : "—"}
+                                          </span>
+                                        </div>
+                                        {row.count > 0 && (
+                                          <div className="h-2 rounded-sm bg-muted overflow-hidden">
+                                            <div
+                                              className="h-full rounded-sm bg-primary/70"
+                                              style={{ width: `${barWidth}%` }}
+                                            />
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {customAnswers.length > 0 && (
+                                <div className="flex flex-col gap-1 mt-1 pt-3 border-t">
+                                  <p className="text-xs font-medium text-muted-foreground">Свои варианты ({customAnswers.length}):</p>
+                                  <ul className="flex flex-col gap-1">
+                                    {customAnswers.map((ans, i) => (
+                                      <li key={i} className="text-xs text-foreground" data-testid={`text-survey-custom-${q.key}-${i}`}>
+                                        — {ans}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          </Card>
+                        );
+                      });
+                    })()}
                   </div>
-                </Card>
+                </>
               )}
             </div>
           </TabsContent>
