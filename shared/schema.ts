@@ -807,6 +807,14 @@ export const appWaitlist = pgTable("app_waitlist", {
   email: text("email"),
   consent: boolean("consent").notNull().default(false),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  // Survey answers (all optional)
+  surveyQ1: text("survey_q1"),
+  surveyQ2: text("survey_q2"),
+  surveyQ3: text("survey_q3"),
+  surveyQ4: text("survey_q4"),
+  surveyQ4Custom: text("survey_q4_custom"),
+  surveyQ5: text("survey_q5"),
+  surveyQ5Custom: text("survey_q5_custom"),
 });
 
 export const insertAppWaitlistSchema = createInsertSchema(appWaitlist, {
@@ -815,6 +823,13 @@ export const insertAppWaitlistSchema = createInsertSchema(appWaitlist, {
   telegram: z.string().optional().nullable(),
   email: z.string().email("Введите корректный email").optional().nullable(),
   consent: z.literal(true, { errorMap: () => ({ message: "Необходимо согласие" }) }),
+  surveyQ1: z.string().optional().nullable(),
+  surveyQ2: z.string().optional().nullable(),
+  surveyQ3: z.string().optional().nullable(),
+  surveyQ4: z.string().optional().nullable(),
+  surveyQ4Custom: z.string().optional().nullable(),
+  surveyQ5: z.string().optional().nullable(),
+  surveyQ5Custom: z.string().optional().nullable(),
 }).omit({ id: true, createdAt: true });
 
 export type InsertAppWaitlist = z.infer<typeof insertAppWaitlistSchema>;
