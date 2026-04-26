@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch, type Control } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation } from "@tanstack/react-query";
@@ -98,7 +98,7 @@ function SurveyQuestion({
   options: string[];
   fieldName: keyof WaitlistForm;
   customFieldName?: keyof WaitlistForm;
-  control: any;
+  control: Control<WaitlistForm>;
 }) {
   const selected = useWatch({ control, name: fieldName });
   const showCustom = customFieldName && selected === (fieldName === "surveyQ4" ? Q4_CUSTOM : Q5_CUSTOM);
