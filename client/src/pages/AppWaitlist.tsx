@@ -421,15 +421,14 @@ export default function AppWaitlist() {
                     {mutation.isPending ? "Отправка..." : "Оставить заявку"}
                   </Button>
 
-                  <a href="/" className="w-full" data-testid="link-go-to-shop">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                    >
-                      Перейти на сайт и заказать чай
-                    </Button>
-                  </a>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full"
+                    data-testid="link-go-to-shop"
+                  >
+                    <a href="/">Перейти на сайт и заказать чай</a>
+                  </Button>
                 </form>
               </Form>
             </CardContent>
