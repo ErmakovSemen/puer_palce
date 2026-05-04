@@ -3152,6 +3152,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           } else {
             console.error("[Telegram Order] Pending order not found:", orderIdRaw);
           }
+        } else if (paymentStatus === "REJECTED" || paymentStatus === "CANCELLED") {
+          // Find the pending order to get customer name for admin notification
+          const pendingOrder = await db.query.pendingTelegramOrders.findFirst({
+            where: eq(pendingTelegramOrdersTable.orderId, orderIdRaw),
+          });
+
+          if (pendingOrder) {
+            // Idempotency guard: only notify if we haven't already processed this rejection
+            if (pendingOrder.status === "pending") {
+              // Mark as cancelled to prevent duplicate notifications on webhook retries
+              await db.update(pendingTelegramOrdersTable)
+                .set({ status: "cancelled" })
+                .where(eq(pendingTelegramOrdersTable.id, pendingOrder.id));
+
+              try {
+                await sendPaymentStatusNotification(pendingOrder.id, pendingOrder.name, paymentStatus as 'REJECTED' | 'CANCELLED');
+              } catch (notifyError) {
+                console.error("[Telegram Order] Failed to send rejection notification:", notifyError);
+              }
+            } else {
+              console.log("[Telegram Order] Rejection already processed for:", orderIdRaw, "status:", pendingOrder.status);
+            }
+          } else {
+            console.error("[Telegram Order] Pending order not found for rejection:", orderIdRaw);
+          }
         }
         
         res.send(tinkoffClient.getNotificationSuccessResponse());
