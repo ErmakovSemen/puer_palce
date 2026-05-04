@@ -974,7 +974,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Send Telegram notification (non-blocking)
       try {
-        await sendTelegramOrderNotification(savedOrder);
+        await sendTelegramOrderNotification(savedOrder, breakdown, {
+          firstOrder: firstOrderDiscountPercent,
+          loyalty: loyaltyDiscountPercent,
+          custom: user?.customDiscount ?? undefined,
+        });
         console.log("[Order] Telegram notification sent successfully");
       } catch (telegramError) {
         console.error("[Order] Telegram notification failed:", telegramError);
