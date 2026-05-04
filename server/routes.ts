@@ -3171,6 +3171,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
               } catch (notifyError) {
                 console.error("[Telegram Order] Failed to send rejection notification:", notifyError);
               }
+
+              // Notify the customer that their payment was rejected
+              try {
+                const { sendMessage } = await import("./services/telegramBot");
+                const delivered = await sendMessage(
+                  pendingOrder.chatId,
+                  `❌ <b>Платёж по заказу не прошёл</b>\n\nК сожалению, оплата была отклонена. Это может произойти по разным причинам (недостаточно средств, ограничения банка и т.д.).\n\nПожалуйста, попробуйте оформить заказ снова или свяжитесь с нашей службой поддержки — мы готовы помочь!`
+                );
+                if (!delivered) {
+                  console.error("[Telegram Order] Customer rejection notification not delivered to chatId:", pendingOrder.chatId);
+                }
+              } catch (customerNotifyError) {
+                console.error("[Telegram Order] Failed to send customer rejection notification:", customerNotifyError);
+              }
             } else {
               console.log("[Telegram Order] Rejection already processed for:", orderIdRaw, "status:", pendingOrder.status);
             }
