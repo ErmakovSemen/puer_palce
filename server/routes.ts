@@ -3081,7 +3081,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               // Send order notification to admin group chat
               try {
-                await sendTelegramOrderNotification(newOrder);
+                // Reconstruct a breakdown from pendingOrder fields (amounts stored in kopecks)
+                const subtotalRubles = pendingOrder.subtotal / 100;
+                const discountRubles = pendingOrder.discount / 100;
+                const telegramBreakdown = {
+                  baseTotal: subtotalRubles,
+                  abAdjustedTotal: subtotalRubles,
+                  abDiscountAmount: 0,
+                  bulkDiscountAmount: 0,
+                  subtotalAfterItemDiscounts: subtotalRubles,
+                  firstOrderDiscountAmount: pendingOrder.discountType === "first_order" ? discountRubles : 0,
+                  loyaltyDiscountAmount: pendingOrder.discountType === "loyalty" ? discountRubles : 0,
+                  customDiscountAmount: pendingOrder.discountType === "custom" ? discountRubles : 0,
+                  finalTotal: pendingOrder.total / 100,
+                };
+                // Approximate percent for label (shown only if meaningful)
+                const approxPct = subtotalRubles > 0 ? Math.round((discountRubles / subtotalRubles) * 100) : 0;
+                const telegramPercents = {
+                  firstOrder: pendingOrder.discountType === "first_order" ? approxPct : undefined,
+                  loyalty: pendingOrder.discountType === "loyalty" ? approxPct : undefined,
+                  custom: pendingOrder.discountType === "custom" ? approxPct : undefined,
+                };
+                await sendTelegramOrderNotification(newOrder, telegramBreakdown, telegramPercents);
               } catch (adminNotifyError) {
                 console.error("[Telegram Order] Failed to send admin notification:", adminNotifyError);
               }
