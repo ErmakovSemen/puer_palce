@@ -1,5 +1,6 @@
 import type { DbOrder } from "@shared/schema";
 import type { CartBreakdown } from "@shared/pricing";
+import type { AbAssignment } from "@shared/pricing";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
@@ -97,7 +98,7 @@ function formatMoney(amount: number): string {
 }
 
 function formatPaymentStatus(paymentStatus: string | null | undefined): string {
-  if (!paymentStatus) return 'Оплата при получении';
+  if (!paymentStatus) return 'Ожидает оплаты';
   switch (paymentStatus) {
     case 'NEW':              return 'Ожидает оплаты';
     case 'CONFIRMED':        return 'Оплачено ✓';
@@ -116,6 +117,7 @@ export function formatOrderNotification(
   order: DbOrder,
   breakdown?: CartBreakdown | null,
   percents?: OrderDiscountPercents | null,
+  abInfo?: AbAssignment | null,
 ): string {
   const items = JSON.parse(order.items);
 
@@ -130,6 +132,13 @@ export function formatOrderNotification(
 
   // --- Статус оплаты ---
   message += `<b>Оплата:</b> ${formatPaymentStatus(order.paymentStatus)}\n`;
+
+  // --- A/B тест ---
+  if (abInfo && abInfo.multiplier !== 1) {
+    const pct = Math.round((1 - abInfo.multiplier) * 100);
+    const sign = pct > 0 ? `−${pct}%` : `+${Math.abs(pct)}%`;
+    message += `<b>A/B тест:</b> ${abInfo.testId} / вариант <code>${abInfo.variantId}</code> (цена ${sign})\n`;
+  }
 
   // --- Состав ---
   message += `\n<b>Состав заказа:</b>\n`;
@@ -149,7 +158,6 @@ export function formatOrderNotification(
       breakdown.customDiscountAmount > 0.005;
 
     if (hasDiscount) {
-      // Show pre-discount subtotal (A/B prices, before bulk)
       message += `  Подытог: ${formatMoney(breakdown.abAdjustedTotal)}\n`;
 
       if (breakdown.bulkDiscountAmount > 0.005) {
@@ -204,8 +212,9 @@ export async function sendOrderNotification(
   order: DbOrder,
   breakdown?: CartBreakdown | null,
   percents?: OrderDiscountPercents | null,
+  abInfo?: AbAssignment | null,
 ): Promise<void> {
-  const message = formatOrderNotification(order, breakdown, percents);
+  const message = formatOrderNotification(order, breakdown, percents, abInfo);
   const success = await sendTelegramMessage(message);
   
   if (!success) {

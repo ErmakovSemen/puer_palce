@@ -143,12 +143,18 @@ export function determineVariantFromHash(
   return variants[variants.length - 1];
 }
 
-export function getAbMultiplierFromExperiments(
+export interface AbAssignment {
+  testId: string;
+  variantId: string;
+  multiplier: number;
+}
+
+export function getAbAssignmentFromExperiments(
   experiments: ExperimentEntry[],
   identifier: string,
   userId?: string | null,
   savedAssignments?: Record<string, string> | null,
-): number {
+): AbAssignment | null {
   for (const exp of experiments) {
     if (exp.status !== "active") continue;
 
@@ -179,11 +185,12 @@ export function getAbMultiplierFromExperiments(
     if (savedAssignments?.[exp.testId]) {
       const savedId = savedAssignments[exp.testId];
       const savedVariant = variants.find((v) => v.id === savedId);
-      if (
-        savedVariant &&
-        typeof savedVariant.config.price_multy === "number"
-      ) {
-        return savedVariant.config.price_multy as number;
+      if (savedVariant && typeof savedVariant.config.price_multy === "number") {
+        return {
+          testId: exp.testId,
+          variantId: savedVariant.id,
+          multiplier: savedVariant.config.price_multy as number,
+        };
       }
     }
 
@@ -192,10 +199,23 @@ export function getAbMultiplierFromExperiments(
       try {
         const variant = determineVariantFromHash(identifier, exp.testId, variants);
         if (typeof variant.config.price_multy === "number") {
-          return variant.config.price_multy as number;
+          return {
+            testId: exp.testId,
+            variantId: variant.id,
+            multiplier: variant.config.price_multy as number,
+          };
         }
       } catch {}
     }
   }
-  return 1;
+  return null;
+}
+
+export function getAbMultiplierFromExperiments(
+  experiments: ExperimentEntry[],
+  identifier: string,
+  userId?: string | null,
+  savedAssignments?: Record<string, string> | null,
+): number {
+  return getAbAssignmentFromExperiments(experiments, identifier, userId, savedAssignments)?.multiplier ?? 1;
 }

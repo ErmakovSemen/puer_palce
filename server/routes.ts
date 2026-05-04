@@ -16,7 +16,9 @@ import { users as usersTable, orders as ordersTable, walletTransactions, pending
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
-import { BULK_DISCOUNT, calculateCartBreakdown, getAbMultiplierFromExperiments } from "@shared/pricing";
+import { BULK_DISCOUNT, calculateCartBreakdown, getAbMultiplierFromExperiments, getAbAssignmentFromExperiments } from "@shared/pricing";
+import type { AbAssignment, CartBreakdown } from "@shared/pricing";
+import type { OrderDiscountPercents } from "./telegram";
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -146,6 +148,49 @@ async function checkAndSendReceiptFallback(
 
 // Track active fallback timers to cancel when webhook delivers first
 const activeFallbackTimers = new Map<number, NodeJS.Timeout[]>();
+
+// Pending Telegram admin notification timers for web orders
+// Sent after 5 min if unpaid, or immediately when CONFIRMED webhook fires
+interface PendingNotifyData {
+  timer: NodeJS.Timeout;
+  breakdown: CartBreakdown;
+  percents: OrderDiscountPercents;
+  abInfo: AbAssignment | null;
+}
+const pendingTelegramNotifyData = new Map<number, PendingNotifyData>();
+
+function cancelTelegramNotifyTimer(orderId: number): PendingNotifyData | null {
+  const entry = pendingTelegramNotifyData.get(orderId);
+  if (entry) {
+    clearTimeout(entry.timer);
+    pendingTelegramNotifyData.delete(orderId);
+    console.log(`[Telegram Notify] Cancelled pending timer for order ${orderId}`);
+  }
+  return entry ?? null;
+}
+
+function scheduleTelegramNotifyDeferred(
+  orderId: number,
+  breakdown: CartBreakdown,
+  percents: OrderDiscountPercents,
+  abInfo: AbAssignment | null,
+): void {
+  cancelTelegramNotifyTimer(orderId);
+  const timer = setTimeout(async () => {
+    pendingTelegramNotifyData.delete(orderId);
+    try {
+      const latestOrder = await db.query.orders.findFirst({ where: eq(ordersTable.id, orderId) });
+      if (latestOrder) {
+        await sendTelegramOrderNotification(latestOrder, breakdown, percents, abInfo);
+        console.log(`[Telegram Notify] Deferred notification sent for order ${orderId} (status: ${latestOrder.paymentStatus ?? 'null'})`);
+      }
+    } catch (err) {
+      console.error(`[Telegram Notify] Failed deferred notification for order ${orderId}:`, err);
+    }
+  }, 5 * 60 * 1000);
+  pendingTelegramNotifyData.set(orderId, { timer, breakdown, percents, abInfo });
+  console.log(`[Telegram Notify] Deferred notification scheduled for order ${orderId} in 5 min`);
+}
 
 // Cancel all pending fallback timers for an order (called when webhook delivers receipt)
 function cancelReceiptFallback(orderId: number): void {
@@ -834,14 +879,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // ignore parse errors
         }
       }
-      const abMultiplier = getAbMultiplierFromExperiments(
+      const abAssignment = getAbAssignmentFromExperiments(
         experiments,
         identifier,
         userId,
         savedAssignments,
       );
+      const abMultiplier = abAssignment?.multiplier ?? 1;
       if (abMultiplier !== 1) {
-        console.log("[Order] A/B price multiplier applied:", abMultiplier, "for identifier:", identifier);
+        console.log("[Order] A/B price multiplier applied:", abMultiplier, "for identifier:", identifier, "variant:", abAssignment?.variantId);
       }
 
       // Map order items to PricingItem using server-authoritative product data
@@ -972,18 +1018,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      // Send Telegram notification (non-blocking)
-      try {
-        await sendTelegramOrderNotification(savedOrder, breakdown, {
-          firstOrder: firstOrderDiscountPercent,
-          loyalty: loyaltyDiscountPercent,
-          custom: user?.customDiscount ?? undefined,
-        });
-        console.log("[Order] Telegram notification sent successfully");
-      } catch (telegramError) {
-        console.error("[Order] Telegram notification failed:", telegramError);
-        // Don't block order creation if Telegram fails
-      }
+      // Schedule Telegram notification: immediately if payment confirmed, else after 5 min
+      scheduleTelegramNotifyDeferred(savedOrder.id, breakdown, {
+        firstOrder: firstOrderDiscountPercent,
+        loyalty: loyaltyDiscountPercent,
+        custom: user?.customDiscount ?? undefined,
+      }, abAssignment ?? null);
       
       res.status(201).json({ 
         success: true, 
@@ -3374,6 +3414,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
               .where(eq(usersTable.id, order.userId));
 
             console.log("[Payment] Added", xpToAdd, "XP to user:", order.userId, `(x${xpMultiplier})`);
+          }
+
+          // Cancel pending 5-min timer and send immediate Telegram notification
+          // Re-query order so paymentStatus is CONFIRMED
+          const confirmedOrder = await db.query.orders.findFirst({ where: eq(ordersTable.id, orderId) });
+          if (confirmedOrder) {
+            const pending = cancelTelegramNotifyTimer(orderId);
+            try {
+              await sendTelegramOrderNotification(
+                confirmedOrder,
+                pending?.breakdown ?? null,
+                pending?.percents ?? null,
+                pending?.abInfo ?? null,
+              );
+              console.log("[Payment] Sent Telegram notification for confirmed order:", orderId);
+            } catch (tgErr) {
+              console.error("[Payment] Failed to send Telegram notification:", tgErr);
+            }
           }
         }
       }
