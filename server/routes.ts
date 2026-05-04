@@ -8,7 +8,7 @@ import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
 import { setupAuth, hashPassword } from "./auth";
 import { normalizePhone } from "./utils";
-import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification } from "./telegram";
+import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification, sendPaymentStatusNotification } from "./telegram";
 import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
 import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
 import { db } from "./db";
@@ -3323,6 +3323,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
+      // Read current status before updating (used for transition-based notifications)
+      const orderBeforeUpdate = await db.query.orders.findFirst({
+        where: eq(ordersTable.id, orderId),
+      });
+      const previousPaymentStatus = orderBeforeUpdate?.paymentStatus ?? null;
+
       // Update order payment status
       await db.update(ordersTable)
         .set({
@@ -3432,6 +3438,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } catch (tgErr) {
               console.error("[Payment] Failed to send Telegram notification:", tgErr);
             }
+            // Short payment status notification — only on actual transition to CONFIRMED
+            if (previousPaymentStatus !== 'CONFIRMED') {
+              try {
+                await sendPaymentStatusNotification(orderId, confirmedOrder.name, 'CONFIRMED', confirmedOrder.total);
+              } catch (err) {
+                console.error("[Payment] Failed to send payment status Telegram notification:", err);
+              }
+            }
+          }
+        }
+      }
+
+      if (
+        (paymentStatus === "REJECTED" || paymentStatus === "CANCELLED") &&
+        previousPaymentStatus !== paymentStatus
+      ) {
+        if (orderBeforeUpdate) {
+          try {
+            await sendPaymentStatusNotification(orderBeforeUpdate.id, orderBeforeUpdate.name, paymentStatus as 'REJECTED' | 'CANCELLED');
+          } catch (err) {
+            console.error("[Payment] Failed to send payment status Telegram notification:", err);
           }
         }
       }

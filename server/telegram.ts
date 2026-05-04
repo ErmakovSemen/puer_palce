@@ -231,6 +231,28 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+export async function sendPaymentStatusNotification(
+  orderId: number,
+  customerName: string,
+  status: 'CONFIRMED' | 'REJECTED' | 'CANCELLED',
+  total?: number,
+): Promise<void> {
+  const safeName = escapeHtml(customerName);
+  let message: string;
+  if (status === 'CONFIRMED') {
+    const totalPart = total !== undefined ? ` — ${formatMoney(total)}` : '';
+    message = `✅ Заказ #${orderId} оплачен — ${safeName}${totalPart}`;
+  } else {
+    message = `❌ Оплата отклонена по заказу #${orderId} — ${safeName}`;
+  }
+  const success = await sendTelegramMessage(message);
+  if (success) {
+    console.log(`[Telegram] Payment status notification sent for order #${orderId}: ${status}`);
+  } else {
+    console.error(`[Telegram] Failed to send payment status notification for order #${orderId}`);
+  }
+}
+
 export async function sendFailedReceiptSmsNotification(
   orderNumber: number,
   phone: string,
