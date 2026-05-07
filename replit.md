@@ -4,6 +4,10 @@
 
 Puer Pub is an e-commerce platform for premium Chinese Puer tea, offering a public-facing tea shop with a product catalog, shopping cart, and checkout. It includes an integrated admin interface for product and order management, PWA capabilities, and a native Android application. The project aims to provide a warm, culturally authentic, and premium user experience, focusing on high-quality Puer tea and teaware. Key capabilities include phone-based SMS authentication, comprehensive product and site settings management, a first-order discount system, and secure payment processing.
 
+## UML Documentation
+
+Use case documentation is stored in [`docs/uml`](docs/uml/README.md). The first diagram covers the main Puer Pub actors and functional requirements: public shop flows, customer profile and loyalty, Telegram bot flows, admin management, and external integrations.
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

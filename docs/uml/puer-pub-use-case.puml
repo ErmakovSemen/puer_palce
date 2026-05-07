@@ -1,0 +1,124 @@
+@startuml
+title Puer Pub - диаграмма вариантов использования
+
+left to right direction
+
+skinparam actorStyle awesome
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam usecase {
+  BackgroundColor #F8F2E8
+  BorderColor #6B4E2E
+  ArrowColor #3E2B1A
+}
+skinparam rectangle {
+  BorderColor #6B4E2E
+}
+
+actor "Гость" as Guest
+actor "Покупатель" as Customer
+actor "Покупатель\nв Telegram" as TelegramCustomer
+actor "Администратор" as Admin
+actor "Tinkoff\nAcquiring" as Tinkoff
+actor "SMS.ru" as SmsRu
+actor "Telegram API" as TelegramApi
+
+Customer --|> Guest
+
+rectangle "Puer Pub" {
+  package "Публичный магазин" {
+    usecase "Просмотреть каталог" as BrowseCatalog
+    usecase "Фильтровать товары" as FilterProducts
+    usecase "Посмотреть карточку товара" as ViewProduct
+    usecase "Пройти чайный квиз" as TakeQuiz
+    usecase "Собрать корзину" as ManageCart
+    usecase "Оформить заказ" as Checkout
+    usecase "Оплатить заказ" as PayOrder
+    usecase "Применить скидку" as ApplyDiscount
+    usecase "Получить чек" as GetReceipt
+  }
+
+  package "Личный кабинет" {
+    usecase "Зарегистрироваться\nили войти" as Auth
+    usecase "Подтвердить телефон" as VerifyPhone
+    usecase "Управлять профилем" as ManageProfile
+    usecase "Сохранить адреса" as ManageAddresses
+    usecase "Просмотреть заказы" as ViewOrders
+    usecase "Отслеживать XP\nи скидку лояльности" as ViewLoyalty
+    usecase "Привязать Telegram" as LinkTelegram
+  }
+
+  package "Telegram-бот" {
+    usecase "Открыть каталог\nв Telegram" as TelegramBrowse
+    usecase "Собрать корзину\nв Telegram" as TelegramCart
+    usecase "Оформить заказ\nв Telegram" as TelegramCheckout
+    usecase "Задать вопрос" as AskQuestion
+    usecase "Получить статус\nпрофиля и заказов" as TelegramProfile
+  }
+
+  package "Администрирование" {
+    usecase "CRUD товаров" as ManageProducts
+    usecase "Управлять типами чая\nи тегами" as ManageTeaTypes
+    usecase "Управлять заказами" as ManageOrders
+    usecase "Синхронизировать\nплатеж и чек" as SyncPayment
+    usecase "Управлять пользователями\nи XP" as ManageUsers
+    usecase "Экспортировать\nлояльность в Excel" as ExportLoyalty
+    usecase "Управлять баннерами\nи медиа" as ManageBanners
+    usecase "Управлять настройками\nсайта" as ManageSettings
+    usecase "Смотреть аналитику\nи A/B тесты" as ViewAnalytics
+    usecase "Делать рассылку\nв Telegram" as TelegramBroadcast
+  }
+}
+
+Guest --> BrowseCatalog
+Guest --> FilterProducts
+Guest --> ViewProduct
+Guest --> TakeQuiz
+Guest --> ManageCart
+Guest --> Checkout
+
+Customer --> Auth
+Customer --> VerifyPhone
+Customer --> ManageProfile
+Customer --> ManageAddresses
+Customer --> ViewOrders
+Customer --> ViewLoyalty
+Customer --> LinkTelegram
+Customer --> Checkout
+
+Checkout ..> PayOrder : <<include>>
+Checkout ..> ApplyDiscount : <<extend>>
+PayOrder ..> GetReceipt : <<include>>
+
+PayOrder --> Tinkoff
+GetReceipt --> Tinkoff
+VerifyPhone --> SmsRu
+LinkTelegram --> TelegramApi
+
+TelegramCustomer --> TelegramBrowse
+TelegramCustomer --> TelegramCart
+TelegramCustomer --> TelegramCheckout
+TelegramCustomer --> AskQuestion
+TelegramCustomer --> TelegramProfile
+TelegramCheckout ..> PayOrder : <<include>>
+TelegramCheckout ..> ApplyDiscount : <<extend>>
+TelegramBrowse --> TelegramApi
+TelegramCart --> TelegramApi
+TelegramProfile --> TelegramApi
+AskQuestion --> TelegramApi
+
+Admin --> ManageProducts
+Admin --> ManageTeaTypes
+Admin --> ManageOrders
+Admin --> SyncPayment
+Admin --> ManageUsers
+Admin --> ExportLoyalty
+Admin --> ManageBanners
+Admin --> ManageSettings
+Admin --> ViewAnalytics
+Admin --> TelegramBroadcast
+
+SyncPayment --> Tinkoff
+TelegramBroadcast --> TelegramApi
+
+@enduml
