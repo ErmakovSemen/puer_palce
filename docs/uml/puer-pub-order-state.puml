@@ -1,0 +1,50 @@
+@startuml
+title Puer Pub - диаграмма состояний заказа
+
+skinparam shadowing false
+skinparam state {
+  BackgroundColor #F8F2E8
+  BorderColor #6B4E2E
+  ArrowColor #3E2B1A
+}
+
+[*] --> Created : покупатель оформляет заказ
+
+state "Создан" as Created
+
+state "Ожидает оплаты" as AwaitingPayment {
+  [*] --> PaymentInitialized
+  state "Платеж создан" as PaymentInitialized
+  state "Покупатель перешел\nк оплате" as CustomerRedirected
+  state "Проверяется статус\nплатежа" as PaymentChecking
+
+  PaymentInitialized --> CustomerRedirected : получена paymentUrl
+  CustomerRedirected --> PaymentChecking : callback / возврат с оплаты
+  PaymentChecking --> CustomerRedirected : платеж не завершен
+}
+
+state "Оплачен" as Paid
+state "Собирается" as Assembling
+state "Передан в доставку" as Shipping
+state "Завершен" as Completed
+state "Отменен" as Cancelled
+
+Created --> AwaitingPayment : создан платеж в Tinkoff
+AwaitingPayment --> Paid : оплата подтверждена
+AwaitingPayment --> Cancelled : платеж отклонен\nили истекло время ожидания
+Created --> Cancelled : заказ отменен до оплаты
+
+Paid --> Assembling : администратор принял заказ
+Assembling --> Shipping : заказ собран
+Shipping --> Completed : заказ получен покупателем
+
+Cancelled --> [*]
+Completed --> [*]
+
+note right of AwaitingPayment
+  Композитное состояние:
+  внутри него заказ проходит
+  несколько подэтапов оплаты.
+end note
+
+@enduml
