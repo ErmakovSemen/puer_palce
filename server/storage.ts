@@ -1378,33 +1378,6 @@ export class DbStorage implements IStorage {
   async getMonthlyLeaderboard(month?: string): Promise<import("@shared/schema").LeaderboardEntry[]> {
     const { xpTransactions } = await import("@shared/schema");
     
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfMonthStr = startOfMonth.toISOString();
-    
-    // Диагностика: получаем информацию о базе данных
-    const dbInfoResult = await db.execute(sql`
-      SELECT 
-        NOW() as db_now,
-        DATE_TRUNC('month', NOW()) as db_month_start,
-        current_setting('TIMEZONE') as db_timezone,
-        (SELECT COUNT(*) FROM xp_transactions) as total_transactions,
-        (SELECT COUNT(*) FROM xp_transactions WHERE created_at::timestamp >= DATE_TRUNC('month', NOW())) as this_month_count,
-        (SELECT MAX(created_at) FROM xp_transactions) as last_transaction_date
-    `);
-    const dbInfo = (dbInfoResult as any).rows?.[0] || (dbInfoResult as any)[0] || {};
-    
-    console.log("[Leaderboard] === DIAGNOSTIC INFO ===");
-    console.log("[Leaderboard] Server time:", now.toISOString());
-    console.log("[Leaderboard] Server timezone:", Intl.DateTimeFormat().resolvedOptions().timeZone);
-    console.log("[Leaderboard] DB NOW():", dbInfo?.db_now);
-    console.log("[Leaderboard] DB month start:", dbInfo?.db_month_start);
-    console.log("[Leaderboard] DB timezone:", dbInfo?.db_timezone);
-    console.log("[Leaderboard] Total transactions in DB:", dbInfo?.total_transactions);
-    console.log("[Leaderboard] Transactions THIS MONTH:", dbInfo?.this_month_count);
-    console.log("[Leaderboard] Last transaction date:", dbInfo?.last_transaction_date);
-    console.log("[Leaderboard] ========================");
-    
     // Используем DATE_TRUNC на стороне PostgreSQL для корректного сравнения
     const monthFilter = (month && /^\d{4}-\d{2}$/.test(month))
       ? sql`${xpTransactions.createdAt}::timestamp >= DATE_TRUNC('month', TO_DATE(${month}, 'YYYY-MM')) AND ${xpTransactions.createdAt}::timestamp < DATE_TRUNC('month', TO_DATE(${month}, 'YYYY-MM')) + INTERVAL '1 month'`
@@ -1424,8 +1397,6 @@ export class DbStorage implements IStorage {
       .orderBy(sql`xp_this_month DESC`)
       .limit(10);
     
-    console.log("[Leaderboard] Results count:", results.length);
-    console.log("[Leaderboard] Full top-10:", results.map((r, i) => ({ rank: i + 1, name: r.name, xp: r.xpThisMonth })));
     
     return results.map((r, index) => ({
       rank: index + 1,

@@ -2731,10 +2731,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize payment for an order
   app.post("/api/payments/init", async (req, res) => {
     try {
-      const { orderId } = req.body;
+      const orderIdRaw = req.body.orderId;
 
-      if (!orderId) {
+      if (!orderIdRaw) {
         res.status(400).json({ error: "Order ID is required" });
+        return;
+      }
+
+      const orderId = Number(orderIdRaw);
+      if (isNaN(orderId)) {
+        res.status(400).json({ error: "Invalid Order ID" });
         return;
       }
 
@@ -2754,15 +2760,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (req.isAuthenticated()) {
         const userId = (req.user as any).id;
+        const userPhone = (req.user as any).phone;
         // Authenticated users can only init payment for their own orders
         if (orderUserId !== null && orderUserId !== userId) {
           res.status(403).json({ error: "Access denied" });
           return;
         }
-        // Authenticated users cannot init payment for guest orders
+        // Authenticated users can pay guest orders if their phone matches the order's phone
         if (orderUserId === null) {
-          res.status(403).json({ error: "Cannot access guest order" });
-          return;
+          const normalizedOrderPhone = normalizePhone(order.phone || "");
+          const normalizedUserPhone = normalizePhone(userPhone || "");
+          if (!normalizedUserPhone || normalizedOrderPhone !== normalizedUserPhone) {
+            res.status(403).json({ error: "Cannot access guest order" });
+            return;
+          }
+          console.log("[Payment] Authenticated user paying own guest order, phone matched:", normalizedOrderPhone);
         }
       } else {
         // Unauthenticated users can only init payment for guest orders (userId === null)
