@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "LiEfgn0vsYBfvaQznCP4X"
+uri = "file://api-endpoints.md"
+type = "text"
+title = "API Эндпоинты — Puer Pub"
