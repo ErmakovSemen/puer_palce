@@ -6,6 +6,7 @@ import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import fallbackImage from "@assets/stock_images/puer_tea_leaves_clos_59389e23.jpg";
+import { getApiUrl } from "@/lib/api-config";
 import { useTeaTypes } from "@/hooks/use-tea-types";
 import { useAbTesting } from "@/hooks/use-ab-testing";
 
@@ -142,7 +143,7 @@ export default function ProductCard({
         {imageList.length > 0 ? (
           <>
             <img 
-              src={imageError ? fallbackImage : imageList[currentImageIndex]} 
+              src={imageError ? fallbackImage : (imageList[currentImageIndex].startsWith('http') ? imageList[currentImageIndex] : getApiUrl(imageList[currentImageIndex]))} 
               alt={name}
               className="w-full h-full object-cover transition-all duration-300 group-hover/card:scale-105 group-hover/card:brightness-105"
               onError={handleImageError}

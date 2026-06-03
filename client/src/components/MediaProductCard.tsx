@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from "react";
 import { Play } from "lucide-react";
 import type { Product, Media } from "@shared/schema";
+import { getApiUrl } from "@/lib/api-config";
 
 interface MediaProductCardProps {
   product: Product;
@@ -116,7 +117,7 @@ export default function MediaProductCard({
           />
         ) : product.images?.[0] ? (
           <img
-            src={product.images[0]}
+            src={product.images[0].startsWith('http') ? product.images[0] : getApiUrl(product.images[0])}
             alt={product.name}
             className="w-full h-full object-cover transition-transform group-hover:scale-105"
           />

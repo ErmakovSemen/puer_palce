@@ -1,4 +1,5 @@
 import { X, Minus, Plus, Trash2, Gift, Star, Crown, Percent } from "lucide-react";
+import { getApiUrl } from "@/lib/api-config";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getLoyaltyLevel } from "@shared/loyalty";
@@ -147,7 +148,7 @@ export default function CartDrawer({
                     >
                       <div className="flex gap-4">
                         <img
-                          src={item.image}
+                          src={item.image.startsWith('http') ? item.image : getApiUrl(item.image)}
                           alt={item.name}
                           className="w-20 h-20 object-cover rounded-md"
                           data-testid={`img-cart-item-${item.id}`}

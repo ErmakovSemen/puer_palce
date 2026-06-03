@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { ShoppingCart, Link2, Check } from "lucide-react";
 import { getTeaTypeBadgeStyleDynamic } from "@/lib/tea-colors";
 import { useState } from "react";
+import { getApiUrl } from "@/lib/api-config";
 import { useTeaTypes } from "@/hooks/use-tea-types";
 import { useAbTesting } from "@/hooks/use-ab-testing";
 import { useToast } from "@/hooks/use-toast";
@@ -92,7 +93,7 @@ export default function ProductDetail({
           <div className="overflow-hidden rounded-md">
             {imageList.length > 0 ? (
               <img
-                src={imageList[selectedImageIndex]}
+                src={imageList[selectedImageIndex].startsWith('http') ? imageList[selectedImageIndex] : getApiUrl(imageList[selectedImageIndex])}
                 alt={name}
                 className="w-full h-auto max-h-64 md:max-h-none object-contain"
                 data-testid={`img-detail-product-${id}`}
