@@ -38,13 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/login", credentials);
       return await res.json();
     },
-    onSuccess: async (data: any) => {
-      // Save session ID for native apps (Android)
-      if (data._sessionId) {
-        localStorage.setItem("native_session_id", data._sessionId);
-      }
-      // Strip internal field before storing user
-      const { _sessionId, ...user } = data;
+    onSuccess: async (user: SelectUser) => {
       queryClient.setQueryData(["/api/user"], user);
       // Migrate guest cart to user's cart
       await migrateGuestCart();
@@ -86,7 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await apiRequest("POST", "/api/logout");
-      localStorage.removeItem("native_session_id");
     },
     onSuccess: () => {
       queryClient.setQueryData(["/api/user"], null);
