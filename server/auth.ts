@@ -57,6 +57,27 @@ export function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Token-based auth middleware for native apps (Capacitor Android)
+  // Allows authentication via X-Session-Token header instead of cookies
+  app.use((req: any, res: any, next: any) => {
+    const sessionToken = req.headers['x-session-token'] as string;
+    if (!sessionToken || req.isAuthenticated()) {
+      return next();
+    }
+    (storage.sessionStore as any).get(sessionToken, (err: any, sessionData: any) => {
+      if (err || !sessionData || !sessionData.passport?.user) {
+        return next();
+      }
+      storage.getUser(sessionData.passport.user).then((user: any) => {
+        if (user) {
+          req.user = user;
+          req.isAuthenticated = () => true;
+        }
+        next();
+      }).catch(() => next());
+    });
+  });
+
   // Use phone field instead of email for authentication
   passport.use(
     new LocalStrategy(
@@ -128,7 +149,12 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(sanitizeUser(req.user!));
+    const userData = sanitizeUser(req.user!);
+    // For native apps return session ID so it can be stored and used as a header
+    if (req.headers['x-native-app'] === 'true') {
+      return res.status(200).json({ ...userData, _sessionId: req.sessionID });
+    }
+    res.status(200).json(userData);
   });
 
   app.post("/api/logout", (req, res, next) => {

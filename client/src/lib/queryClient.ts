@@ -1,11 +1,20 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { getApiUrl } from "./api-config";
+import { getApiUrl, getApiBaseUrl } from "./api-config";
+
+function getNativeAuthHeaders(): Record<string, string> {
+  if (!getApiBaseUrl()) return {};
+  const headers: Record<string, string> = { "X-Native-App": "true" };
+  const sessionId = localStorage.getItem("native_session_id");
+  if (sessionId) {
+    headers["X-Session-Token"] = sessionId;
+  }
+  return headers;
+}
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = await res.text();
     
-    // Try to extract error message from JSON response
     let errorMessage = text || res.statusText;
     try {
       const json = JSON.parse(text);
@@ -26,9 +35,13 @@ export async function apiRequest(
   data?: unknown | undefined,
 ): Promise<Response> {
   const fullUrl = getApiUrl(url);
+  const nativeHeaders = getNativeAuthHeaders();
   const res = await fetch(fullUrl, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...nativeHeaders,
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });
@@ -47,6 +60,7 @@ export const getQueryFn: <T>(options: {
     const fullUrl = getApiUrl(path);
     const res = await fetch(fullUrl, {
       credentials: "include",
+      headers: getNativeAuthHeaders(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
