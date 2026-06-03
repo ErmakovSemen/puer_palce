@@ -39,11 +39,17 @@ function sanitizeUser(user: SelectUser) {
 }
 
 export function setupAuth(app: Express) {
+  const isProduction = process.env.NODE_ENV === 'production';
   const sessionSettings: session.SessionOptions = {
     secret: process.env.SESSION_SECRET!,
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
+    cookie: {
+      sameSite: isProduction ? 'none' : 'lax',
+      secure: isProduction,
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    },
   };
 
   app.set("trust proxy", 1);
