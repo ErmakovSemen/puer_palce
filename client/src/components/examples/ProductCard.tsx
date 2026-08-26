@@ -12,6 +12,7 @@ export default function ProductCardExample() {
         image={teaImage}
         teaType="Шу Пуэр"
         effects={["Бодрит", "Согревает"]}
+        onClick={(id) => console.log('Product clicked:', id)}
         onAddToCart={(id) => console.log('Added to cart:', id)}
       />
     </div>

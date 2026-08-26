@@ -856,6 +856,8 @@ export const ceremonyBookings = pgTable("ceremony_bookings", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const landingVariantSchema = z.enum(["ceremony", "tea", "gift"]);
+
 export const insertCeremonyBookingSchema = createInsertSchema(ceremonyBookings, {
   name: z.string().min(2, "Введите имя (минимум 2 символа)"),
   phone: z.string().min(10, "Введите корректный номер телефона"),
@@ -865,14 +867,43 @@ export const insertCeremonyBookingSchema = createInsertSchema(ceremonyBookings, 
   guests: z.number().int().min(1, "Минимум 1 гость").max(20, "Больше 20 гостей — напишите нам напрямую"),
   preferredDate: z.string().max(32).optional().nullable(),
   preferredTime: z.string().max(32).optional().nullable(),
-  variant: z.string().max(32).optional(),
+  variant: landingVariantSchema.optional(),
   utm: z.string().max(2000).optional().nullable(),
   consent: z.literal(true, { errorMap: () => ({ message: "Необходимо согласие на обработку данных" }) }),
 }).omit({ id: true, createdAt: true, userId: true, source: true, status: true });
 
 export const updateCeremonyBookingSchema = z.object({
-  status: z.enum(["new", "confirmed", "done", "cancelled"]),
+  status: z.enum(["new", "confirmed", "done", "cancelled"]).optional(),
+  guests: z.number().int().min(1, "Минимум 1 гость").max(20, "Больше 20 гостей — напишите нам напрямую").optional(),
+  preferredDate: z.string().max(32).nullable().optional(),
+  preferredTime: z.string().max(32).nullable().optional(),
+  comment: z.string().max(1000).nullable().optional(),
 });
+
+export const calendarEvents = pgTable("calendar_events", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description"),
+  startAt: text("start_at").notNull(),
+  endAt: text("end_at").notNull(),
+  eventType: text("event_type").notNull().default("event"), // event | ceremony | private
+  status: text("status").notNull().default("published"), // draft | published | cancelled
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertCalendarEventSchema = createInsertSchema(calendarEvents, {
+  title: z.string().min(2, "Введите название события").max(160, "Название слишком длинное"),
+  description: z.string().max(1000).optional().nullable(),
+  startAt: z.string().min(1, "Укажите начало события"),
+  endAt: z.string().min(1, "Укажите окончание события"),
+  eventType: z.enum(["event", "ceremony", "private"]).default("event"),
+  status: z.enum(["draft", "published", "cancelled"]).default("published"),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+
+export const updateCalendarEventSchema = insertCalendarEventSchema.partial();
 
 export type InsertCeremonyBooking = z.infer<typeof insertCeremonyBookingSchema>;
 export type CeremonyBooking = typeof ceremonyBookings.$inferSelect;
+export type InsertCalendarEvent = z.infer<typeof insertCalendarEventSchema>;
+export type CalendarEvent = typeof calendarEvents.$inferSelect;

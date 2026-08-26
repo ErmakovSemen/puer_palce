@@ -184,7 +184,7 @@ import session from "express-session";
 
 const MemoryStore = createMemoryStore(session);
 
-export class MemStorage implements IStorage {
+export class MemStorage {
   private users: Map<string, User>;
   private quizConfig: QuizConfig;
   private products: Map<number, Product>;
@@ -241,6 +241,9 @@ export class MemStorage implements IStorage {
       phoneVerified: false,
       xp: 0,
       firstOrderDiscountUsed: false,
+      customDiscount: null,
+      walletBalance: 0,
+      analytics: null,
       source: null,
     };
     this.users.set(id, user);
@@ -327,7 +330,12 @@ export class MemStorage implements IStorage {
     const product: Product = { 
       ...insertProduct, 
       id,
+      pricingUnit: insertProduct.pricingUnit ?? "gram",
+      defaultQuantity: insertProduct.defaultQuantity ?? null,
+      fixedQuantityOnly: insertProduct.fixedQuantityOnly ?? false,
       fixedQuantity: insertProduct.fixedQuantity ?? null,
+      outOfStock: insertProduct.outOfStock ?? false,
+      cardType: insertProduct.cardType ?? "classic",
     };
     this.products.set(id, product);
     return product;
@@ -340,7 +348,12 @@ export class MemStorage implements IStorage {
     const updated: Product = { 
       ...insertProduct, 
       id,
+      pricingUnit: insertProduct.pricingUnit ?? "gram",
+      defaultQuantity: insertProduct.defaultQuantity ?? null,
+      fixedQuantityOnly: insertProduct.fixedQuantityOnly ?? false,
       fixedQuantity: insertProduct.fixedQuantity ?? null,
+      outOfStock: insertProduct.outOfStock ?? false,
+      cardType: insertProduct.cardType ?? "classic",
     };
     this.products.set(id, updated);
     return updated;
@@ -403,6 +416,9 @@ export class MemStorage implements IStorage {
       paymentStatus: null,
       paymentUrl: null,
       receiptEmail: orderData.receiptEmail ?? null,
+      receiptUrl: null,
+      receiptSmsSent: false,
+      telegramChatId: null,
       createdAt: new Date().toISOString(),
     };
   }
@@ -667,57 +683,77 @@ export class DbStorage implements IStorage {
         {
           name: 'Шу Пуэр Мэнхай 2018',
           category: 'tea',
+          pricingUnit: 'gram',
           description: 'Классический выдержанный Шу Пуэр из провинции Юньнань. Насыщенный землистый вкус с нотками орехов и древесины. Идеален для ежедневного чаепития.',
           pricePerGram: 15.50,
           images: [],
           teaType: 'Шу Пуэр',
           effects: ['Бодрит', 'Концентрирует'],
           availableQuantities: ['25', '50', '100'],
+          defaultQuantity: null,
           fixedQuantityOnly: false,
+          outOfStock: false,
+          cardType: 'classic',
         },
         {
           name: 'Шэн Пуэр Дикие деревья',
           category: 'tea',
+          pricingUnit: 'gram',
           description: 'Редкий Шэн Пуэр с дикорастущих деревьев. Свежий цветочно-медовый аромат с долгим послевкусием. Для истинных ценителей.',
           pricePerGram: 28.00,
           images: [],
           teaType: 'Шэн Пуэр',
           effects: ['Концентрирует', 'Расслабляет'],
           availableQuantities: ['25', '50', '100'],
+          defaultQuantity: null,
           fixedQuantityOnly: false,
+          outOfStock: false,
+          cardType: 'classic',
         },
         {
           name: 'Белый Пуэр Лунный свет',
           category: 'tea',
+          pricingUnit: 'gram',
           description: 'Деликатный белый пуэр с мягким сладковатым вкусом. Легкий цветочный аромат успокаивает и гармонизирует.',
           pricePerGram: 22.50,
           images: [],
           teaType: 'Белый Пуэр',
           effects: ['Успокаивает', 'Расслабляет'],
           availableQuantities: ['25', '50', '100'],
+          defaultQuantity: null,
           fixedQuantityOnly: false,
+          outOfStock: false,
+          cardType: 'classic',
         },
         {
           name: 'Красный Пуэр Императорский',
           category: 'tea',
+          pricingUnit: 'gram',
           description: 'Премиальный красный пуэр глубокой ферментации. Бархатистый вкус с нотками сухофруктов и специй.',
           pricePerGram: 35.00,
           images: [],
           teaType: 'Красный Пуэр',
           effects: ['Согревает', 'Тонизирует'],
           availableQuantities: ['25', '50', '100'],
+          defaultQuantity: null,
           fixedQuantityOnly: false,
+          outOfStock: false,
+          cardType: 'classic',
         },
         {
           name: 'Чёрный Пуэр Старые головы',
           category: 'tea',
+          pricingUnit: 'gram',
           description: 'Насыщенный чёрный пуэр из крупных листьев. Глубокий вкус с оттенками шоколада и карамели.',
           pricePerGram: 18.75,
           images: [],
           teaType: 'Чёрный Пуэр',
           effects: ['Бодрит', 'Согревает'],
           availableQuantities: ['25', '50', '100'],
+          defaultQuantity: null,
           fixedQuantityOnly: false,
+          outOfStock: false,
+          cardType: 'classic',
         }
       ];
 

@@ -12,7 +12,7 @@ import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotificat
 import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
 import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
 import { db } from "./db";
-import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema, ceremonyBookings, insertCeremonyBookingSchema, updateCeremonyBookingSchema } from "@shared/schema";
+import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema, ceremonyBookings, insertCeremonyBookingSchema, updateCeremonyBookingSchema, calendarEvents, insertCalendarEventSchema, updateCalendarEventSchema } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
@@ -61,6 +61,34 @@ function isLandingRateLimited(ip: string): boolean {
   }
 
   return false;
+}
+
+function addHours(iso: string, hours: number): string {
+  return new Date(new Date(iso).getTime() + hours * 60 * 60 * 1000).toISOString();
+}
+
+function dateTimeToIso(date?: string | null, time?: string | null): string | null {
+  if (!date) return null;
+  return new Date(`${date}T${time || "12:00"}:00+03:00`).toISOString();
+}
+
+function isoToMoscowDateTime(iso: string) {
+  const date = new Date(iso);
+  const parts = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: "Europe/Moscow",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+
+  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return {
+    preferredDate: `${value("year")}-${value("month")}-${value("day")}`,
+    preferredTime: `${value("hour")}:${value("minute")}`,
+  };
 }
 
 // Admin authentication middleware
@@ -4298,6 +4326,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const normalizedPhone = normalizePhone(data.phone);
       const variant = data.variant ?? "ceremony";
 
+      if (variant === "ceremony" && data.guests > 4) {
+        return res.status(400).json({ error: "Для церемонии можно записать до 4 гостей. Если вас больше — напишите нам в Telegram." });
+      }
+
       // Пользователь попадает в общую базу с пометкой источника
       let user = await storage.getUserByPhone(normalizedPhone);
       const isNewUser = !user;
@@ -4357,6 +4389,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: единое расписание — ручные мероприятия + брони с лендинга
+  app.get("/api/admin/calendar-items", requireAdminAuth, async (_req, res) => {
+    try {
+      const [events, bookings] = await Promise.all([
+        db.select().from(calendarEvents).orderBy(desc(calendarEvents.id)),
+        db.select().from(ceremonyBookings).orderBy(desc(ceremonyBookings.id)),
+      ]);
+
+      const bookingItems = bookings
+        .map((booking) => {
+          const start = dateTimeToIso(booking.preferredDate, booking.preferredTime);
+          if (!start) return null;
+          return {
+            id: `booking:${booking.id}`,
+            source: "booking",
+            sourceId: booking.id,
+            title: `${booking.name} · ${booking.guests} гост.`,
+            description: booking.comment,
+            startAt: start,
+            endAt: addHours(start, 2),
+            eventType: "booking",
+            status: booking.status,
+            editable: true,
+            booking,
+          };
+        })
+        .filter(Boolean);
+
+      const eventItems = events.map((event) => ({
+        id: `event:${event.id}`,
+        source: "event",
+        sourceId: event.id,
+        title: event.title,
+        description: event.description,
+        startAt: event.startAt,
+        endAt: event.endAt,
+        eventType: event.eventType,
+        status: event.status,
+        editable: true,
+        event,
+      }));
+
+      return res.json([...eventItems, ...bookingItems]);
+    } catch (error) {
+      console.error("Calendar items fetch error:", error);
+      return res.status(500).json({ error: "Не удалось загрузить расписание" });
+    }
+  });
+
+  app.post("/api/admin/calendar-events", requireAdminAuth, async (req, res) => {
+    try {
+      const parsed = insertCalendarEventSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Проверьте событие" });
+      }
+
+      if (new Date(parsed.data.endAt) <= new Date(parsed.data.startAt)) {
+        return res.status(400).json({ error: "Окончание должно быть позже начала" });
+      }
+
+      const [event] = await db.insert(calendarEvents).values(parsed.data).returning();
+      return res.status(201).json(event);
+    } catch (error) {
+      console.error("Calendar event create error:", error);
+      return res.status(500).json({ error: "Не удалось создать событие" });
+    }
+  });
+
+  app.patch("/api/admin/calendar-events/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) {
+        return res.status(400).json({ error: "Некорректный идентификатор события" });
+      }
+
+      const parsed = updateCalendarEventSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Проверьте событие" });
+      }
+
+      if (parsed.data.startAt && parsed.data.endAt && new Date(parsed.data.endAt) <= new Date(parsed.data.startAt)) {
+        return res.status(400).json({ error: "Окончание должно быть позже начала" });
+      }
+
+      const [updated] = await db
+        .update(calendarEvents)
+        .set({ ...parsed.data, updatedAt: new Date().toISOString() })
+        .where(eq(calendarEvents.id, id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Событие не найдено" });
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      console.error("Calendar event update error:", error);
+      return res.status(500).json({ error: "Не удалось обновить событие" });
+    }
+  });
+
+  app.delete("/api/admin/calendar-events/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) {
+        return res.status(400).json({ error: "Некорректный идентификатор события" });
+      }
+
+      await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error("Calendar event delete error:", error);
+      return res.status(500).json({ error: "Не удалось удалить событие" });
+    }
+  });
+
+  app.patch("/api/admin/calendar-bookings/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) {
+        return res.status(400).json({ error: "Некорректный идентификатор заявки" });
+      }
+
+      if (!req.body?.startAt || typeof req.body.startAt !== "string") {
+        return res.status(400).json({ error: "Укажите новое начало брони" });
+      }
+
+      const nextDateTime = isoToMoscowDateTime(req.body.startAt);
+      const [updated] = await db
+        .update(ceremonyBookings)
+        .set(nextDateTime)
+        .where(eq(ceremonyBookings.id, id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Заявка не найдена" });
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      console.error("Calendar booking update error:", error);
+      return res.status(500).json({ error: "Не удалось перенести бронь" });
+    }
+  });
+
   // Admin: смена статуса заявки
   app.patch("/api/admin/ceremony-bookings/:id", requireAdminAuth, async (req, res) => {
     try {
@@ -4370,9 +4547,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Некорректный статус" });
       }
 
+      const updateData = Object.fromEntries(
+        Object.entries(parsed.data).map(([key, value]) => [key, value === "" ? null : value]),
+      );
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ error: "Нет данных для обновления" });
+      }
+
       const [updated] = await db
         .update(ceremonyBookings)
-        .set({ status: parsed.data.status })
+        .set(updateData)
         .where(eq(ceremonyBookings.id, id))
         .returning();
 

@@ -40,6 +40,8 @@ const waitlistSchema = z.object({
 });
 
 type WaitlistForm = z.infer<typeof waitlistSchema>;
+type SurveyFieldName = "surveyQ1" | "surveyQ2" | "surveyQ3" | "surveyQ4" | "surveyQ5";
+type SurveyCustomFieldName = "surveyQ4Custom" | "surveyQ5Custom";
 
 const Q1_OPTIONS = [
   "Не пробовал(а)",
@@ -97,8 +99,8 @@ function SurveyQuestion({
   number: number;
   question: string;
   options: string[];
-  fieldName: keyof WaitlistForm;
-  customFieldName?: keyof WaitlistForm;
+  fieldName: SurveyFieldName;
+  customFieldName?: SurveyCustomFieldName;
   control: Control<WaitlistForm>;
 }) {
   const selected = useWatch({ control, name: fieldName });

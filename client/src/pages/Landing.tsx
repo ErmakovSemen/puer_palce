@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { useRoute, useSearch } from "wouter";
 import { landingConfigs, resolveVariant } from "@/lib/landingConfigs";
 import { LandingHero } from "@/components/landing/LandingHero";
@@ -36,16 +36,23 @@ export default function Landing() {
 
   useEffect(() => {
     document.title = config.seoTitle;
-    const meta = document.querySelector('meta[name="description"]');
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "description";
+      document.head.appendChild(meta);
+    }
     const previous = meta?.getAttribute("content") ?? null;
     meta?.setAttribute("content", config.seoDescription);
 
     return () => {
-      if (meta && previous) meta.setAttribute("content", previous);
+      if (previous) {
+        meta.setAttribute("content", previous);
+      }
     };
   }, [config]);
 
-  const scrollTo = (target: React.RefObject<HTMLElement>) => {
+  const scrollTo = (target: RefObject<HTMLElement>) => {
     target.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -61,8 +68,8 @@ export default function Landing() {
         />
         <LandingDetails config={config} />
         <CeremonyRitual config={config} />
-        <LandingVenue ref={venueRef} />
         <BookingForm ref={bookingRef} config={config} utm={utm} />
+        <LandingVenue ref={venueRef} />
       </main>
 
       <LandingFooter />

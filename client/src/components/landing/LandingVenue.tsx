@@ -43,21 +43,21 @@ export const LandingVenue = forwardRef<HTMLElement>((_props, ref) => {
       className="scroll-mt-24"
       style={{ backgroundColor: "var(--paper-deep)" }}
     >
-      <div className="mx-auto w-full max-w-7xl px-6 py-24 sm:py-28 lg:px-10">
+      <div className="mx-auto w-full max-w-7xl px-6 py-14 sm:py-24 lg:px-10">
         <SectionHeading
           eyebrow="Контакты"
           title="Найти нас"
           lead={`${venue.city}, ${venue.address}. ${venue.addressHint}.`}
         />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="mt-8 grid gap-5 sm:mt-12 lg:grid-cols-[1.15fr_0.85fr]">
           <Reveal className="overflow-hidden rounded-2xl" >
             <div style={{ border: "1px solid var(--ink-faint)", borderRadius: "1rem", overflow: "hidden" }}>
               <iframe
                 src={venue.mapsEmbed}
                 title={`Пуэр Паб на карте: ${venue.city}, ${venue.address}`}
                 loading="lazy"
-                className="h-[320px] w-full border-0 sm:h-[440px]"
+                className="h-[240px] w-full border-0 sm:h-[440px]"
                 allowFullScreen
               />
             </div>
@@ -65,7 +65,7 @@ export const LandingVenue = forwardRef<HTMLElement>((_props, ref) => {
               href={venue.mapsHref}
               target="_blank"
               rel="noreferrer"
-              className="landing-btn landing-btn-ghost mt-4 w-full sm:w-auto"
+              className="landing-btn landing-btn-ghost mt-3 w-full sm:mt-4 sm:w-auto"
             >
               <MapPin className="h-4 w-4" aria-hidden="true" />
               Построить маршрут
@@ -74,9 +74,9 @@ export const LandingVenue = forwardRef<HTMLElement>((_props, ref) => {
 
           <div className="flex flex-col gap-4">
             <Reveal
-              className="rounded-2xl px-6 py-6"
+              className="rounded-2xl"
             >
-              <div style={{ backgroundColor: "var(--paper-card)", border: "1px solid var(--ink-faint)", borderRadius: "1rem", padding: "1.5rem" }}>
+              <div className="p-4 sm:p-6" style={{ backgroundColor: "var(--paper-card)", border: "1px solid var(--ink-faint)", borderRadius: "1rem" }}>
                 <div className="flex items-center justify-between gap-4">
                   <p className="landing-eyebrow flex items-center gap-2">
                     <Clock className="h-4 w-4" aria-hidden="true" />
@@ -94,7 +94,7 @@ export const LandingVenue = forwardRef<HTMLElement>((_props, ref) => {
             </Reveal>
 
             <motion.ul
-              className="grid gap-3 sm:grid-cols-2"
+              className="grid gap-2 sm:grid-cols-2 sm:gap-3"
               variants={staggerContainer}
               initial={reduce ? undefined : "hidden"}
               whileInView={reduce ? undefined : "visible"}
@@ -106,13 +106,13 @@ export const LandingVenue = forwardRef<HTMLElement>((_props, ref) => {
                     href={href}
                     target={href.startsWith("http") ? "_blank" : undefined}
                     rel={href.startsWith("http") ? "noreferrer" : undefined}
-                    className="group flex h-full flex-col justify-between gap-6 rounded-2xl p-5 transition-transform duration-300 hover:-translate-y-1"
+                    className="group flex h-full items-center gap-3 rounded-2xl p-4 transition-transform duration-300 hover:-translate-y-1 sm:flex-col sm:items-start sm:justify-between sm:gap-6 sm:p-5"
                     style={{ backgroundColor: "var(--paper-card)", border: "1px solid var(--ink-faint)" }}
                   >
                     <Icon className="h-5 w-5" style={{ color: "var(--shu)" }} aria-hidden="true" />
-                    <span>
+                    <span className="min-w-0">
                       <span className="landing-eyebrow block">{label}</span>
-                      <span className="mt-1 block text-sm font-medium">{value}</span>
+                      <span className="mt-1 block truncate text-sm font-medium">{value}</span>
                     </span>
                   </a>
                 </motion.li>

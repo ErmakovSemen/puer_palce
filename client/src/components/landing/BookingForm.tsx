@@ -30,7 +30,9 @@ type BookingFormValues = z.infer<typeof bookingSchema>;
 const TIME_SLOTS = ["12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"];
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  const date = new Date();
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 10);
 }
 
 export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm: Record<string, string> }>(
@@ -59,7 +61,7 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
         const res = await apiRequest("POST", "/api/landing/booking", {
           name: values.name.trim(),
           phone: values.phone.trim(),
-          guests: Number(values.guests),
+          guests: config.form.showGuests ? Number(values.guests) : 1,
           preferredDate: values.preferredDate || null,
           preferredTime: values.preferredTime || null,
           telegram: values.telegram?.trim() || null,
@@ -78,17 +80,17 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
     });
 
     const setGuests = (next: number) => {
-      form.setValue("guests", Math.min(20, Math.max(1, next)), { shouldValidate: true });
+      form.setValue("guests", Math.min(config.maxGuests, Math.max(1, next)), { shouldValidate: true });
     };
 
     return (
       <section id="booking" ref={ref} className="scroll-mt-24">
-        <div className="mx-auto w-full max-w-7xl px-6 py-24 sm:py-28 lg:px-10">
-          <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
+        <div className="mx-auto w-full max-w-7xl px-6 py-16 sm:py-24 lg:px-10">
+          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-20">
             <div>
               <SectionHeading eyebrow={config.form.eyebrow} title={config.form.title} lead={config.form.lead} />
               <Reveal delay={0.15}>
-                <p className="mt-8 text-sm leading-relaxed" style={{ color: "var(--ink-soft)" }}>
+                <p className="mt-5 text-sm leading-relaxed" style={{ color: "var(--ink-soft)" }}>
                   Не любите формы? Напишите прямо в{" "}
                   <a href={venue.telegramHref} target="_blank" rel="noreferrer" className="underline underline-offset-4" style={{ color: "var(--shu)" }}>
                     Telegram
@@ -104,7 +106,7 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
 
             <Reveal delay={0.1}>
               <div
-                className="rounded-3xl p-6 sm:p-9"
+                className="rounded-2xl p-5 sm:rounded-3xl sm:p-9"
                 style={{ backgroundColor: "var(--paper-card)", border: "1px solid var(--ink-faint)" }}
               >
                 {done ? (
@@ -213,7 +215,8 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
                           <button
                             type="button"
                             onClick={() => setGuests(Number(guests) - 1)}
-                            className="flex h-11 w-11 items-center justify-center rounded-full transition-colors"
+                            disabled={Number(guests) <= 1}
+                            className="flex h-11 w-11 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                             style={{ border: "1px solid var(--ink-faint)" }}
                             aria-label="Убрать гостя"
                           >
@@ -225,7 +228,8 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
                           <button
                             type="button"
                             onClick={() => setGuests(Number(guests) + 1)}
-                            className="flex h-11 w-11 items-center justify-center rounded-full transition-colors"
+                            disabled={Number(guests) >= config.maxGuests}
+                            className="flex h-11 w-11 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                             style={{ border: "1px solid var(--ink-faint)" }}
                             aria-label="Добавить гостя"
                           >
@@ -234,31 +238,6 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
                         </div>
                       </div>
                     )}
-
-                    <div>
-                      <label className="landing-label" htmlFor="booking-telegram">
-                        Telegram <span style={{ fontWeight: 400 }}>— если удобнее переписка</span>
-                      </label>
-                      <input
-                        id="booking-telegram"
-                        className="landing-field"
-                        placeholder="@username"
-                        {...form.register("telegram")}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="landing-label" htmlFor="booking-comment">
-                        Пожелания
-                      </label>
-                      <textarea
-                        id="booking-comment"
-                        className="landing-field"
-                        rows={3}
-                        placeholder="Например: отмечаем день рождения, хотим шу пуэр"
-                        {...form.register("comment")}
-                      />
-                    </div>
 
                     {/* Ловушка для ботов: человек этого поля не видит */}
                     <input

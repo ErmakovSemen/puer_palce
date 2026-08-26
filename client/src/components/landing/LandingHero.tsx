@@ -4,7 +4,6 @@ import { ArrowDown, MapPin } from "lucide-react";
 import type { LandingConfig } from "@/lib/landingConfigs";
 import { venue } from "@/lib/landingConfigs";
 import { OpenBadge } from "./primitives";
-import { InkCup } from "./InkCup";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -20,7 +19,7 @@ export function LandingHero({
   const reduce = useReducedMotion();
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const imageY = useTransform(scrollYProgress, [0, 1], ["0%", "18%"]);
+  const mediaY = useTransform(scrollYProgress, [0, 1], ["0%", "8%"]);
   const textY = useTransform(scrollYProgress, [0, 1], ["0%", "-12%"]);
 
   const rise = (delay: number) => ({
@@ -40,13 +39,13 @@ export function LandingHero({
         茶
       </span>
 
-      <div className="relative mx-auto grid min-h-[92vh] w-full max-w-7xl items-center gap-12 px-6 pb-20 pt-32 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-10">
+      <div className="relative mx-auto grid min-h-[86vh] w-full max-w-7xl items-center gap-8 px-6 pb-12 pt-24 sm:min-h-[92vh] sm:pb-20 sm:pt-28 lg:grid-cols-[1fr_0.82fr] lg:gap-16 lg:px-10">
         <motion.div style={reduce ? undefined : { y: textY }}>
           <motion.p className="landing-eyebrow" {...rise(0.05)}>
             {config.hero.eyebrow}
           </motion.p>
 
-          <h1 className="landing-display mt-6 text-[clamp(3.2rem,10vw,7rem)]">
+          <h1 className="landing-display mt-6 max-w-3xl text-[clamp(3.1rem,8vw,6.4rem)]">
             <motion.span className="block" {...rise(0.15)}>
               {config.hero.title}
             </motion.span>
@@ -74,14 +73,26 @@ export function LandingHero({
           </h1>
 
           <motion.p
-            className="mt-8 max-w-xl text-base leading-relaxed sm:text-lg"
+            className="mt-6 max-w-2xl text-base leading-relaxed sm:mt-8 sm:text-xl"
             style={{ color: "var(--ink-soft)" }}
             {...rise(0.4)}
           >
             {config.hero.lead}
           </motion.p>
 
-          <motion.div className="mt-10 flex flex-wrap items-center gap-4" {...rise(0.5)}>
+          <motion.ul className="mt-5 flex max-w-2xl flex-wrap gap-2 sm:mt-7" {...rise(0.45)}>
+            {config.hero.bullets.map((bullet) => (
+              <li
+                key={bullet}
+                className="rounded-full border px-3 py-1.5 text-sm font-semibold"
+                style={{ borderColor: "var(--ink-faint)", color: "var(--ink)" }}
+              >
+                {bullet}
+              </li>
+            ))}
+          </motion.ul>
+
+          <motion.div className="mt-7 flex flex-wrap items-center gap-3 sm:mt-10 sm:gap-4" {...rise(0.5)}>
             <button type="button" onClick={onBookClick} className="landing-btn landing-btn-primary">
               {config.hero.primaryCta}
             </button>
@@ -92,7 +103,7 @@ export function LandingHero({
           </motion.div>
 
           <motion.div
-            className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm"
+            className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 text-sm sm:mt-10"
             style={{ color: "var(--ink-soft)" }}
             {...rise(0.6)}
           >
@@ -103,8 +114,27 @@ export function LandingHero({
           </motion.div>
         </motion.div>
 
-        <motion.div className="relative" {...rise(0.35)}>
-          <InkCup />
+        <motion.div className="relative" style={reduce ? undefined : { y: mediaY }} {...rise(0.35)}>
+          <div
+            className="landing-hero-media overflow-hidden"
+            style={{ borderColor: "var(--ink-faint)", backgroundColor: "var(--paper-card)" }}
+          >
+            <video
+              className="h-full w-full object-cover"
+              src="/puer-pub-ceremony.mp4"
+              poster="/puer-pub-ceremony-poster.jpg"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+            />
+            <div className="landing-hero-media-overlay" aria-hidden="true" />
+            <div className="absolute bottom-4 left-4 right-4 rounded-2xl border bg-[rgba(250,247,241,0.9)] p-4 backdrop-blur">
+              <p className="landing-eyebrow">Ближайшая запись</p>
+              <p className="mt-2 text-sm font-semibold">Оставьте номер — подберём свободное время</p>
+            </div>
+          </div>
         </motion.div>
       </div>
 

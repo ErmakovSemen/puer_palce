@@ -146,6 +146,47 @@
   color: #a3341f;
 }
 
+.landing-hero-media {
+  position: relative;
+  width: min(100%, 25rem);
+  aspect-ratio: 9 / 16;
+  margin-inline: auto;
+  border: 1px solid;
+  border-radius: 1.5rem;
+  box-shadow: 0 30px 80px -45px rgba(34, 26, 21, 0.8);
+}
+
+.landing-hero-media-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(34, 26, 21, 0.02), rgba(34, 26, 21, 0.16)),
+    radial-gradient(circle at 50% 8%, rgba(244, 240, 232, 0.28), transparent 34%);
+}
+
+.landing-feature-carousel {
+  scrollbar-width: none;
+}
+
+.landing-feature-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .landing-hero-media {
+    width: min(100%, 18rem);
+    max-height: 46vh;
+  }
+}
+
+@media (max-width: 640px) {
+  .landing-btn {
+    width: 100%;
+    padding: 0.9rem 1.25rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing *,
   .landing *::before,

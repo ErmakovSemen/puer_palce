@@ -412,7 +412,7 @@ export default function Admin() {
             <TabsTrigger value="tea-types" data-testid="tab-tea-types" className="min-w-max">Типы чая</TabsTrigger>
             <TabsTrigger value="quiz" data-testid="tab-quiz" className="min-w-max">Квиз подбора</TabsTrigger>
             <TabsTrigger value="waitlist" data-testid="tab-waitlist" className="min-w-max">Лист ожидания</TabsTrigger>
-            <TabsTrigger value="ceremony-bookings" data-testid="tab-ceremony-bookings" className="min-w-max">Заявки с лендинга</TabsTrigger>
+            <TabsTrigger value="ceremony-bookings" data-testid="tab-ceremony-bookings" className="min-w-max">Расписание</TabsTrigger>
           </TabsList>
 
           <TabsContent value="products">

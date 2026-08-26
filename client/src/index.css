@@ -603,3 +603,58 @@
 .animate-fade-out {
   animation: fadeOut 0.8s ease-out forwards;
 }
+
+.admin-calendar {
+  --fc-border-color: hsl(var(--border));
+  --fc-page-bg-color: hsl(var(--card));
+  --fc-neutral-bg-color: hsl(var(--muted));
+  --fc-today-bg-color: hsl(var(--accent) / 0.65);
+  --fc-now-indicator-color: hsl(var(--destructive));
+  color: hsl(var(--foreground));
+}
+
+.admin-calendar .fc {
+  font-family: var(--font-sans);
+}
+
+.admin-calendar .fc-toolbar {
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin-calendar .fc-toolbar-title {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+}
+
+.admin-calendar .fc-button {
+  background: hsl(var(--background));
+  border: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  border-radius: 0.5rem;
+  box-shadow: none;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.7rem;
+}
+
+.admin-calendar .fc-button:hover,
+.admin-calendar .fc-button-primary:not(:disabled).fc-button-active {
+  background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+
+.admin-calendar .fc-event {
+  border-radius: 0.45rem;
+  cursor: grab;
+  padding: 0.1rem 0.2rem;
+}
+
+.admin-calendar .fc-event:active {
+  cursor: grabbing;
+}
+
+.admin-calendar .fc-timegrid-slot {
+  height: 2.5rem;
+}

@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 export default function ProductFiltersExample() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedType, setSelectedType] = useState("all");
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedEffects, setSelectedEffects] = useState<string[]>([]);
 
   return (
@@ -11,10 +11,11 @@ export default function ProductFiltersExample() {
       <ProductFilters
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
-        selectedType={selectedType}
-        onTypeChange={setSelectedType}
+        selectedTypes={selectedTypes}
+        onTypesChange={setSelectedTypes}
         selectedEffects={selectedEffects}
         onEffectsChange={setSelectedEffects}
+        onQuizClick={() => console.log('Quiz clicked')}
       />
     </div>
   );
