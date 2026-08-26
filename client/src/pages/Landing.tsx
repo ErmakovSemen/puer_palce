@@ -7,6 +7,7 @@ import { LandingDetails } from "@/components/landing/LandingDetails";
 import { LandingVenue } from "@/components/landing/LandingVenue";
 import { BookingForm } from "@/components/landing/BookingForm";
 import { LandingFooter, LandingMobileBookingCta, LandingNav } from "@/components/landing/LandingChrome";
+import { METRIKA_GOALS, trackEvent } from "@/lib/metrics";
 import "@/styles/landing.css";
 
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref"];
@@ -56,14 +57,19 @@ export default function Landing() {
     target.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const handleBookingCtaClick = (source: "navigation" | "hero" | "mobile") => {
+    trackEvent(METRIKA_GOALS.ceremonyBookingCtaClick, { source, variant: config.variant });
+    scrollTo(bookingRef);
+  };
+
   return (
     <div className="landing landing-grain relative min-h-screen">
-      <LandingNav ctaLabel={config.hero.primaryCta} onBookClick={() => scrollTo(bookingRef)} />
+      <LandingNav ctaLabel={config.hero.primaryCta} onBookClick={() => handleBookingCtaClick("navigation")} />
 
       <main className="relative z-10">
         <LandingHero
           config={config}
-          onBookClick={() => scrollTo(bookingRef)}
+          onBookClick={() => handleBookingCtaClick("hero")}
           onDirectionsClick={() => scrollTo(venueRef)}
         />
         <LandingDetails config={config} />
@@ -72,7 +78,7 @@ export default function Landing() {
         <LandingVenue ref={venueRef} />
       </main>
 
-      <LandingMobileBookingCta onBookClick={() => scrollTo(bookingRef)} />
+      <LandingMobileBookingCta onBookClick={() => handleBookingCtaClick("mobile")} />
       <LandingFooter />
     </div>
   );

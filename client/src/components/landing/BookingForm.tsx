@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
 import { Check, Loader2, Minus, Plus, Send } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { METRIKA_GOALS, trackEvent } from "@/lib/metrics";
 import type { LandingConfig } from "@/lib/landingConfigs";
 import { venue } from "@/lib/landingConfigs";
 import { Reveal, SectionHeading } from "./primitives";
@@ -73,7 +74,11 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
         });
         return res.json();
       },
-      onSuccess: () => {
+      onSuccess: (_data, values) => {
+        trackEvent(METRIKA_GOALS.ceremonyBookingSubmitted, {
+          variant: config.variant,
+          guests: config.form.showGuests ? Number(values.guests) : 1,
+        });
         setDone(true);
         form.reset();
       },

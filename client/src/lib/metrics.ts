@@ -6,6 +6,11 @@ declare global {
 
 const YANDEX_METRIKA_ID = 104973108;
 
+export const METRIKA_GOALS = {
+  ceremonyBookingCtaClick: "ceremony_booking_cta_click",
+  ceremonyBookingSubmitted: "ceremony_booking_submitted",
+} as const;
+
 export function trackEvent(goalName: string, params?: Record<string, any>) {
   try {
     if (typeof window !== 'undefined' && window.ym) {
