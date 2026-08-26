@@ -4,7 +4,7 @@ declare global {
   }
 }
 
-const YANDEX_METRIKA_ID = 104973108;
+const YANDEX_METRIKA_ID = 111989121;
 
 export const METRIKA_GOALS = {
   ceremonyBookingCtaClick: "ceremony_booking_cta_click",
