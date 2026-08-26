@@ -149,6 +149,47 @@ app.use((req, res, next) => {
     // Add analytics column to users for A/B test assignment persistence
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS analytics TEXT`);
     log('Database migration: users.analytics column ensured');
+
+    // Моно-лендинг и админское расписание используют отдельные таблицы.
+    // Проверка идемпотентна, поэтому безопасна для существующей продовой базы.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS source TEXT`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ceremony_bookings (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        telegram TEXT,
+        email TEXT,
+        comment TEXT,
+        guests INTEGER NOT NULL DEFAULT 1,
+        preferred_date TEXT,
+        preferred_time TEXT,
+        variant TEXT NOT NULL DEFAULT 'ceremony',
+        source TEXT NOT NULL DEFAULT 'mono_landing',
+        utm TEXT,
+        status TEXT NOT NULL DEFAULT 'new',
+        consent BOOLEAN NOT NULL DEFAULT false,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ceremony_bookings_status_idx ON ceremony_bookings(status)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS ceremony_bookings_preferred_date_idx ON ceremony_bookings(preferred_date)`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS calendar_events (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT,
+        start_at TEXT NOT NULL,
+        end_at TEXT NOT NULL,
+        event_type TEXT NOT NULL DEFAULT 'event',
+        status TEXT NOT NULL DEFAULT 'published',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS calendar_events_start_at_idx ON calendar_events(start_at)`);
+    log('Database migration: landing booking and calendar tables ensured');
     
     // Media table for Video Gallery feature
     await pool.query(`
