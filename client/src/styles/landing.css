@@ -1,0 +1,162 @@
+/**
+ * Токены моно-лендинга. Всё скоупится внутрь .landing, поэтому страница
+ * выглядит одинаково независимо от тёмной темы основного сайта.
+ */
+.landing {
+  --paper: #f4f0e8;
+  --paper-deep: #ebe4d6;
+  --paper-card: #faf7f1;
+  --ink: #221a15;
+  --ink-soft: #6a5b4e;
+  --ink-faint: rgba(34, 26, 21, 0.13);
+  --shu: #7a3b22;
+  --gold: #c08a3e;
+  --jade: #4e7c63;
+
+  background-color: var(--paper);
+  color: var(--ink);
+  color-scheme: light;
+  font-family: "Montserrat", system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+.landing ::selection {
+  background: var(--shu);
+  color: var(--paper);
+}
+
+.landing-display {
+  font-family: "Playfair Display", Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+}
+
+.landing-han {
+  font-family: "Noto Serif SC", "Playfair Display", serif;
+}
+
+.landing-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* Волокно бумаги: очень слабый шум поверх фона */
+.landing-grain::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+}
+
+.landing-rule {
+  height: 1px;
+  background: linear-gradient(90deg, var(--ink-faint), transparent);
+}
+
+/* Кнопки */
+.landing-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  border-radius: 999px;
+  padding: 1rem 2rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.25s, color 0.25s, box-shadow 0.25s;
+}
+
+.landing-btn-primary {
+  background: var(--shu);
+  color: var(--paper);
+  box-shadow: 0 10px 30px -14px rgba(122, 59, 34, 0.9);
+}
+
+.landing-btn-primary:hover {
+  background: #8f4728;
+  transform: translateY(-2px);
+  box-shadow: 0 18px 40px -18px rgba(122, 59, 34, 0.95);
+}
+
+.landing-btn-ghost {
+  border: 1px solid var(--ink-faint);
+  color: var(--ink);
+}
+
+.landing-btn-ghost:hover {
+  border-color: var(--shu);
+  color: var(--shu);
+  transform: translateY(-2px);
+}
+
+.landing-btn:disabled {
+  opacity: 0.55;
+  transform: none;
+  cursor: not-allowed;
+}
+
+.landing :is(a, button, input, textarea, select):focus-visible {
+  outline: 2px solid var(--shu);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Поля формы */
+.landing-field {
+  width: 100%;
+  background: var(--paper-card);
+  border: 1px solid var(--ink-faint);
+  border-radius: 10px;
+  padding: 0.9rem 1rem;
+  font-size: 1rem;
+  color: var(--ink);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.landing-field::placeholder {
+  color: rgba(106, 91, 78, 0.6);
+}
+
+.landing-field:focus {
+  border-color: var(--shu);
+  box-shadow: 0 0 0 3px rgba(122, 59, 34, 0.12);
+  outline: none;
+}
+
+.landing-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.landing-error {
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: #a3341f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing *,
+  .landing *::before,
+  .landing *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Пар над гайванью слегка колышется */
+@keyframes landing-steam {
+  0%, 100% { transform: translateX(0) scaleY(1); opacity: 0.5; }
+  50% { transform: translateX(3px) scaleY(1.04); opacity: 0.75; }
+}

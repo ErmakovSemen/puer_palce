@@ -1,4 +1,4 @@
-import type { DbOrder } from "@shared/schema";
+import type { DbOrder, CeremonyBooking } from "@shared/schema";
 import type { CartBreakdown } from "@shared/pricing";
 import type { AbAssignment } from "@shared/pricing";
 
@@ -274,5 +274,66 @@ export async function sendFailedReceiptSmsNotification(
     console.log(`[Telegram] ✅ Sent failed SMS notification for order #${orderNumber}`);
   } else {
     console.error(`[Telegram] ⚠️ Failed to send notification for order #${orderNumber}`);
+  }
+}
+
+const CEREMONY_VARIANT_LABELS: Record<string, string> = {
+  ceremony: "Чайная церемония",
+  tea: "Покупка чая",
+  gift: "Подарочный набор",
+};
+
+export async function sendCeremonyBookingNotification(
+  booking: CeremonyBooking,
+  isNewUser: boolean
+): Promise<void> {
+  const variantLabel = CEREMONY_VARIANT_LABELS[booking.variant] ?? booking.variant;
+
+  let message = `<b>🍵 НОВАЯ ЗАПИСЬ НА ЧАЙНУЮ ЦЕРЕМОНИЮ</b>\n\n`;
+  message += `<b>Заявка:</b> #${booking.id}\n`;
+  message += `<b>Имя:</b> ${escapeHtml(booking.name)}\n`;
+  message += `<b>Телефон:</b> ${escapeHtml(booking.phone)}\n`;
+
+  if (booking.telegram) {
+    message += `<b>Telegram:</b> ${escapeHtml(booking.telegram)}\n`;
+  }
+  if (booking.email) {
+    message += `<b>Email:</b> ${escapeHtml(booking.email)}\n`;
+  }
+
+  message += `<b>Гостей:</b> ${booking.guests}\n`;
+
+  if (booking.preferredDate || booking.preferredTime) {
+    const when = [booking.preferredDate, booking.preferredTime].filter(Boolean).join(", ");
+    message += `<b>Желаемое время:</b> ${escapeHtml(when)}\n`;
+  }
+
+  if (booking.comment) {
+    message += `\n<b>Комментарий:</b>\n${escapeHtml(booking.comment)}\n`;
+  }
+
+  message += `\n<b>Клиент:</b> ${isNewUser ? "новый (создан в базе)" : "уже есть в базе"}\n`;
+  message += `<b>Источник:</b> моно-лендинг — ${escapeHtml(variantLabel)}\n`;
+
+  if (booking.utm) {
+    try {
+      const utm = JSON.parse(booking.utm) as Record<string, string>;
+      const parts = Object.entries(utm)
+        .filter(([, value]) => Boolean(value))
+        .map(([key, value]) => `${escapeHtml(key)}=${escapeHtml(value)}`);
+      if (parts.length > 0) {
+        message += `<b>Метки:</b> ${parts.join(", ")}\n`;
+      }
+    } catch {
+      // Некорректный JSON в utm — просто не показываем метки
+    }
+  }
+
+  const success = await sendTelegramMessage(message);
+
+  if (success) {
+    console.log(`[Telegram] ✅ Sent ceremony booking notification #${booking.id}`);
+  } else {
+    console.error(`[Telegram] ⚠️ Failed to send ceremony booking notification #${booking.id}`);
   }
 }

@@ -16,6 +16,7 @@ export const users = pgTable("users", {
   customDiscount: integer("custom_discount"), // Индивидуальная скидка в процентах (nullable)
   walletBalance: integer("wallet_balance").notNull().default(0), // Баланс кошелька в копейках
   analytics: text("analytics"), // JSON: A/B test assignments {testId: variantId}
+  source: text("source"), // Откуда пришёл пользователь: 'mono_landing:ceremony' и т.п.
 });
 
 export const insertUserSchema = createInsertSchema(users, {
@@ -834,3 +835,44 @@ export const insertAppWaitlistSchema = createInsertSchema(appWaitlist, {
 
 export type InsertAppWaitlist = z.infer<typeof insertAppWaitlistSchema>;
 export type AppWaitlist = typeof appWaitlist.$inferSelect;
+
+// Ceremony Bookings — заявки с моно-лендинга на чайную церемонию
+export const ceremonyBookings = pgTable("ceremony_bookings", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  telegram: text("telegram"),
+  email: text("email"),
+  comment: text("comment"),
+  guests: integer("guests").notNull().default(1),
+  preferredDate: text("preferred_date"),
+  preferredTime: text("preferred_time"),
+  variant: text("variant").notNull().default("ceremony"),
+  source: text("source").notNull().default("mono_landing"),
+  utm: text("utm"), // JSON: {utm_source, utm_medium, utm_campaign, utm_content, ref}
+  status: text("status").notNull().default("new"), // new | confirmed | done | cancelled
+  consent: boolean("consent").notNull().default(false),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertCeremonyBookingSchema = createInsertSchema(ceremonyBookings, {
+  name: z.string().min(2, "Введите имя (минимум 2 символа)"),
+  phone: z.string().min(10, "Введите корректный номер телефона"),
+  telegram: z.string().max(64).optional().nullable(),
+  email: z.string().email("Введите корректный email").optional().nullable(),
+  comment: z.string().max(1000).optional().nullable(),
+  guests: z.number().int().min(1, "Минимум 1 гость").max(20, "Больше 20 гостей — напишите нам напрямую"),
+  preferredDate: z.string().max(32).optional().nullable(),
+  preferredTime: z.string().max(32).optional().nullable(),
+  variant: z.string().max(32).optional(),
+  utm: z.string().max(2000).optional().nullable(),
+  consent: z.literal(true, { errorMap: () => ({ message: "Необходимо согласие на обработку данных" }) }),
+}).omit({ id: true, createdAt: true, userId: true, source: true, status: true });
+
+export const updateCeremonyBookingSchema = z.object({
+  status: z.enum(["new", "confirmed", "done", "cancelled"]),
+});
+
+export type InsertCeremonyBooking = z.infer<typeof insertCeremonyBookingSchema>;
+export type CeremonyBooking = typeof ceremonyBookings.$inferSelect;

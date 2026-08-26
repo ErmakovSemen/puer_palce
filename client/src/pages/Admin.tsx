@@ -8,6 +8,7 @@ import AdminUserManagement from "@/components/AdminUserManagement";
 import AdminOrderManagement from "@/components/AdminOrderManagement";
 import AdminSiteSettings from "@/components/AdminSiteSettings";
 import AdminStats from "@/components/AdminStats";
+import AdminCeremonyBookings from "@/components/AdminCeremonyBookings";
 import AdminBannerManagement from "@/components/AdminBannerManagement";
 import AdminTVDisplay from "@/components/AdminTVDisplay";
 import AdminExperiments from "@/components/AdminExperiments";
@@ -411,6 +412,7 @@ export default function Admin() {
             <TabsTrigger value="tea-types" data-testid="tab-tea-types" className="min-w-max">Типы чая</TabsTrigger>
             <TabsTrigger value="quiz" data-testid="tab-quiz" className="min-w-max">Квиз подбора</TabsTrigger>
             <TabsTrigger value="waitlist" data-testid="tab-waitlist" className="min-w-max">Лист ожидания</TabsTrigger>
+            <TabsTrigger value="ceremony-bookings" data-testid="tab-ceremony-bookings" className="min-w-max">Заявки с лендинга</TabsTrigger>
           </TabsList>
 
           <TabsContent value="products">
@@ -634,6 +636,10 @@ export default function Admin() {
                 <p className="text-muted-foreground">Загрузка конфигурации квиза...</p>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="ceremony-bookings">
+            <AdminCeremonyBookings adminFetch={adminFetch} enabled={!!adminPassword} />
           </TabsContent>
 
           <TabsContent value="waitlist">

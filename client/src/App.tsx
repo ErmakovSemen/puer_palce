@@ -14,6 +14,7 @@ import OrderError from "@/pages/OrderError";
 import Leaderboard from "@/pages/Leaderboard";
 import TVDisplay from "@/pages/TVDisplay";
 import AppWaitlist from "@/pages/AppWaitlist";
+import Landing from "@/pages/Landing";
 import { useDesignMode } from "@/hooks/use-design-mode";
 import { AuthProvider } from "@/hooks/use-auth";
 import { FirstOrderPromo } from "@/components/FirstOrderPromo";
@@ -32,6 +33,8 @@ function Router() {
       <Route path="/order/success" component={OrderSuccess} />
       <Route path="/order/error" component={OrderError} />
       <Route path="/app-waitlist" component={AppWaitlist} />
+      <Route path="/l/:variant" component={Landing} />
+      <Route path="/ceremony" component={Landing} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -40,7 +43,11 @@ function Router() {
 function AppContent() {
   useDesignMode(); // Apply design mode class to body
   const [location] = useLocation();
-  const hidePromo = location === "/app-waitlist" || location.startsWith("/admin");
+  const hidePromo =
+    location === "/app-waitlist" ||
+    location === "/ceremony" ||
+    location.startsWith("/l/") ||
+    location.startsWith("/admin");
   
   return (
     <>

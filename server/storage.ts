@@ -241,6 +241,7 @@ export class MemStorage implements IStorage {
       phoneVerified: false,
       xp: 0,
       firstOrderDiscountUsed: false,
+      source: null,
     };
     this.users.set(id, user);
     return user;

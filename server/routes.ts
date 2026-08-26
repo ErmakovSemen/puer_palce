@@ -3,16 +3,16 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema, updateOrderStatusSchema, insertCartItemSchema, updateCartItemSchema, updateSiteSettingsSchema, insertSavedAddressSchema } from "@shared/schema";
 import multer from "multer";
-import { randomUUID } from "crypto";
+import { randomUUID, randomBytes } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
 import { setupAuth, hashPassword } from "./auth";
 import { normalizePhone } from "./utils";
-import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification, sendPaymentStatusNotification } from "./telegram";
+import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification, sendPaymentStatusNotification, sendCeremonyBookingNotification } from "./telegram";
 import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
 import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
 import { db } from "./db";
-import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema } from "@shared/schema";
+import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema, ceremonyBookings, insertCeremonyBookingSchema, updateCeremonyBookingSchema } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
@@ -25,6 +25,43 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
+
+// Простой in-memory троттлинг публичной формы лендинга
+const LANDING_RATE_WINDOW_MS = 10 * 60 * 1000;
+const LANDING_RATE_MAX = 5;
+const landingSubmissions = new Map<string, number[]>();
+
+function getClientIp(req: any): string {
+  const forwarded = req.headers?.["x-forwarded-for"];
+  if (typeof forwarded === "string" && forwarded.length > 0) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || "unknown";
+}
+
+function isLandingRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const recent = (landingSubmissions.get(ip) ?? []).filter((ts: number) => now - ts < LANDING_RATE_WINDOW_MS);
+
+  if (recent.length >= LANDING_RATE_MAX) {
+    landingSubmissions.set(ip, recent);
+    return true;
+  }
+
+  recent.push(now);
+  landingSubmissions.set(ip, recent);
+
+  // Не даём мапе расти бесконечно
+  if (landingSubmissions.size > 5000) {
+    Array.from(landingSubmissions.entries()).forEach(([key, stamps]: [string, number[]]) => {
+      if (stamps.every((ts: number) => now - ts >= LANDING_RATE_WINDOW_MS)) {
+        landingSubmissions.delete(key);
+      }
+    });
+  }
+
+  return false;
+}
 
 // Admin authentication middleware
 function requireAdminAuth(req: any, res: any, next: any) {
@@ -4232,6 +4269,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Waitlist fetch error:", error);
       return res.status(500).json({ error: "Не удалось загрузить список" });
+    }
+  });
+
+  // ============================================================
+  // Моно-лендинг: запись на чайную церемонию
+  // ============================================================
+
+  // Public: создать заявку с лендинга
+  app.post("/api/landing/booking", async (req, res) => {
+    try {
+      // Honeypot: боты заполняют скрытое поле, живые люди — нет
+      if (typeof req.body?.website === "string" && req.body.website.trim() !== "") {
+        return res.status(201).json({ ok: true });
+      }
+
+      const ip = getClientIp(req);
+      if (isLandingRateLimited(ip)) {
+        return res.status(429).json({ error: "Слишком много заявок. Попробуйте позже или напишите нам в Telegram." });
+      }
+
+      const parsed = insertCeremonyBookingSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Проверьте заполнение формы" });
+      }
+
+      const data = parsed.data;
+      const normalizedPhone = normalizePhone(data.phone);
+      const variant = data.variant ?? "ceremony";
+
+      // Пользователь попадает в общую базу с пометкой источника
+      let user = await storage.getUserByPhone(normalizedPhone);
+      const isNewUser = !user;
+
+      if (!user) {
+        const email = data.email || undefined;
+        const emailTaken = email ? await storage.getUserByEmail(email) : undefined;
+
+        user = await storage.createUser({
+          name: data.name,
+          phone: normalizedPhone,
+          email: emailTaken ? undefined : email,
+          password: await hashPassword(randomBytes(24).toString("hex")),
+        });
+
+        await db
+          .update(usersTable)
+          .set({ source: `mono_landing:${variant}` })
+          .where(eq(usersTable.id, user.id));
+      }
+
+      const [booking] = await db
+        .insert(ceremonyBookings)
+        .values({
+          ...data,
+          phone: normalizedPhone,
+          variant,
+          userId: user.id,
+          source: "mono_landing",
+          status: "new",
+        })
+        .returning();
+
+      // Отбивка в рабочий чат — тем же ботом, что и заказы.
+      // Падение Telegram не должно ронять заявку.
+      try {
+        await sendCeremonyBookingNotification(booking, isNewUser);
+      } catch (notifyError) {
+        console.error("Ceremony booking notification error:", notifyError);
+      }
+
+      return res.status(201).json({ ok: true, bookingId: booking.id });
+    } catch (error) {
+      console.error("Ceremony booking insert error:", error);
+      return res.status(500).json({ error: "Не удалось сохранить заявку" });
+    }
+  });
+
+  // Admin: список заявок с лендинга
+  app.get("/api/admin/ceremony-bookings", requireAdminAuth, async (_req, res) => {
+    try {
+      const entries = await db.select().from(ceremonyBookings).orderBy(desc(ceremonyBookings.id));
+      return res.json(entries);
+    } catch (error) {
+      console.error("Ceremony bookings fetch error:", error);
+      return res.status(500).json({ error: "Не удалось загрузить заявки" });
+    }
+  });
+
+  // Admin: смена статуса заявки
+  app.patch("/api/admin/ceremony-bookings/:id", requireAdminAuth, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) {
+        return res.status(400).json({ error: "Некорректный идентификатор заявки" });
+      }
+
+      const parsed = updateCeremonyBookingSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Некорректный статус" });
+      }
+
+      const [updated] = await db
+        .update(ceremonyBookings)
+        .set({ status: parsed.data.status })
+        .where(eq(ceremonyBookings.id, id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: "Заявка не найдена" });
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      console.error("Ceremony booking update error:", error);
+      return res.status(500).json({ error: "Не удалось обновить заявку" });
     }
   });
 
