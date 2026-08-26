@@ -97,7 +97,14 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
               <Reveal delay={0.15}>
                 <p className="mt-5 text-sm leading-relaxed" style={{ color: "var(--ink-soft)" }}>
                   Не любите формы? Напишите прямо в{" "}
-                  <a href={venue.telegramHref} target="_blank" rel="noreferrer" className="underline underline-offset-4" style={{ color: "var(--shu)" }}>
+                  <a
+                    href={venue.telegramHref}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-4"
+                    style={{ color: "var(--shu)" }}
+                    onClick={() => trackEvent(METRIKA_GOALS.ceremonyMessengerClick, { source: "booking_form" })}
+                  >
                     Telegram
                   </a>{" "}
                   или позвоните{" "}
@@ -136,6 +143,7 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
                       target="_blank"
                       rel="noreferrer"
                       className="landing-btn landing-btn-ghost mt-8"
+                      onClick={() => trackEvent(METRIKA_GOALS.ceremonyMessengerClick, { source: "booking_success" })}
                     >
                       <Send className="h-4 w-4" aria-hidden="true" />
                       Написать в Telegram

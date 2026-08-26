@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { Clock, Mail, MapPin, Phone, Send } from "lucide-react";
 import { SiVk } from "react-icons/si";
 import { venue } from "@/lib/landingConfigs";
+import { METRIKA_GOALS, trackEvent } from "@/lib/metrics";
 import { OpenBadge, Reveal, SectionHeading, staggerContainer, staggerItem } from "./primitives";
 
 const contacts = [
@@ -106,6 +107,7 @@ export const LandingVenue = forwardRef<HTMLElement>((_props, ref) => {
                     href={href}
                     target={href.startsWith("http") ? "_blank" : undefined}
                     rel={href.startsWith("http") ? "noreferrer" : undefined}
+                    onClick={label === "Telegram" ? () => trackEvent(METRIKA_GOALS.ceremonyMessengerClick, { source: "contacts" }) : undefined}
                     className="group flex h-full items-center gap-3 rounded-2xl p-4 transition-transform duration-300 hover:-translate-y-1 sm:flex-col sm:items-start sm:justify-between sm:gap-6 sm:p-5"
                     style={{ backgroundColor: "var(--paper-card)", border: "1px solid var(--ink-faint)" }}
                   >

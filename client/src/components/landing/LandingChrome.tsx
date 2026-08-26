@@ -1,6 +1,7 @@
 import { motion, useScroll, useSpring } from "framer-motion";
 import { CalendarCheck, Phone } from "lucide-react";
 import { venue } from "@/lib/landingConfigs";
+import { METRIKA_GOALS, trackEvent } from "@/lib/metrics";
 
 /** Верхняя панель: полоса прогресса чтения, телефон и постоянная кнопка записи. */
 export function LandingNav({ ctaLabel, onBookClick }: { ctaLabel: string; onBookClick: () => void }) {
@@ -76,7 +77,13 @@ export function LandingFooter() {
           </div>
 
           <nav className="flex flex-col gap-2 text-sm">
-            <a href={venue.telegramHref} target="_blank" rel="noreferrer" className="hover:underline underline-offset-4">
+            <a
+              href={venue.telegramHref}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:underline underline-offset-4"
+              onClick={() => trackEvent(METRIKA_GOALS.ceremonyMessengerClick, { source: "footer" })}
+            >
               Telegram {venue.telegram}
             </a>
             <a href={venue.vkHref} target="_blank" rel="noreferrer" className="hover:underline underline-offset-4">

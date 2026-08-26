@@ -9,6 +9,7 @@ const YANDEX_METRIKA_ID = 111989121;
 export const METRIKA_GOALS = {
   ceremonyBookingCtaClick: "ceremony_booking_cta_click",
   ceremonyBookingSubmitted: "ceremony_booking_submitted",
+  ceremonyMessengerClick: "ceremony_messenger_click",
 } as const;
 
 export function trackEvent(goalName: string, params?: Record<string, any>) {
