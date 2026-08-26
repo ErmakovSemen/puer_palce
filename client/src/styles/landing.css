@@ -173,6 +173,19 @@
   display: none;
 }
 
+.landing-mobile-booking {
+  position: fixed;
+  z-index: 60;
+  right: 1rem;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 1rem;
+}
+
+.landing-mobile-booking .landing-btn {
+  width: 100%;
+  box-shadow: 0 16px 34px -16px rgba(122, 59, 34, 0.95);
+}
+
 @media (max-width: 1023px) {
   .landing-hero-media {
     width: min(100%, 18rem);
@@ -181,6 +194,10 @@
 }
 
 @media (max-width: 640px) {
+  .landing main {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
   .landing-btn {
     width: 100%;
     padding: 0.9rem 1.25rem;

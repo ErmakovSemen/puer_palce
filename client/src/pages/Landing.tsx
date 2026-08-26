@@ -6,7 +6,7 @@ import { CeremonyRitual } from "@/components/landing/CeremonyRitual";
 import { LandingDetails } from "@/components/landing/LandingDetails";
 import { LandingVenue } from "@/components/landing/LandingVenue";
 import { BookingForm } from "@/components/landing/BookingForm";
-import { LandingFooter, LandingNav } from "@/components/landing/LandingChrome";
+import { LandingFooter, LandingMobileBookingCta, LandingNav } from "@/components/landing/LandingChrome";
 import "@/styles/landing.css";
 
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref"];
@@ -72,6 +72,7 @@ export default function Landing() {
         <LandingVenue ref={venueRef} />
       </main>
 
+      <LandingMobileBookingCta onBookClick={() => scrollTo(bookingRef)} />
       <LandingFooter />
     </div>
   );

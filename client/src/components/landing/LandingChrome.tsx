@@ -1,5 +1,5 @@
 import { motion, useScroll, useSpring } from "framer-motion";
-import { Phone } from "lucide-react";
+import { CalendarCheck, Phone } from "lucide-react";
 import { venue } from "@/lib/landingConfigs";
 
 /** Верхняя панель: полоса прогресса чтения, телефон и постоянная кнопка записи. */
@@ -46,6 +46,18 @@ export function LandingNav({ ctaLabel, onBookClick }: { ctaLabel: string; onBook
         aria-hidden="true"
       />
     </header>
+  );
+}
+
+/** Постоянный CTA для телефона: на длинной странице запись всегда в одном нажатии. */
+export function LandingMobileBookingCta({ onBookClick }: { onBookClick: () => void }) {
+  return (
+    <div className="landing-mobile-booking sm:hidden">
+      <button type="button" onClick={onBookClick} className="landing-btn landing-btn-primary">
+        <CalendarCheck className="h-4 w-4" aria-hidden="true" />
+        Записаться на церемонию
+      </button>
+    </div>
   );
 }
 

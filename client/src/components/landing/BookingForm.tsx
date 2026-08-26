@@ -194,10 +194,10 @@ export const BookingForm = forwardRef<HTMLElement, { config: LandingConfig; utm:
                         </div>
                         <div>
                           <label className="landing-label" htmlFor="booking-time">
-                            Время
+                            Время (по желанию)
                           </label>
                           <select id="booking-time" className="landing-field" {...form.register("preferredTime")}>
-                            <option value="">Подберём вместе</option>
+                            <option value="">Не выбирать</option>
                             {TIME_SLOTS.map((slot) => (
                               <option key={slot} value={slot}>
                                 {slot}
