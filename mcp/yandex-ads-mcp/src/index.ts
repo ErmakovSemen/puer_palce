@@ -29,11 +29,16 @@ function toError(error: unknown) {
   return { content: [{ type: "text" as const, text: `Ошибка: ${message}` }], isError: true };
 }
 
-async function requestJson(url: string, init: RequestInit, token: string): Promise<Json> {
+async function requestJson(
+  url: string,
+  init: RequestInit,
+  token: string,
+  authorizationScheme: "Bearer" | "OAuth" = "Bearer",
+): Promise<Json> {
   const response = await fetch(url, {
     ...init,
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `${authorizationScheme} ${token}`,
       ...(init.headers ?? {}),
     },
   });
@@ -81,7 +86,7 @@ function createServer() {
     async () => {
       try {
         const { token } = config();
-        return toText(await requestJson(`${METRICA_API}/management/v1/counters`, { method: "GET" }, token));
+        return toText(await requestJson(`${METRICA_API}/management/v1/counters`, { method: "GET" }, token, "OAuth"));
       } catch (error) {
         return toError(error);
       }
@@ -110,7 +115,7 @@ function createServer() {
         const params = new URLSearchParams({ ids, date1: dateFrom, date2: dateTo, metrics: metrics.join(",") });
         if (dimensions.length) params.set("dimensions", dimensions.join(","));
         if (filters) params.set("filters", filters);
-        return toText(await requestJson(`${METRICA_API}/stat/v1/data?${params}`, { method: "GET" }, token));
+        return toText(await requestJson(`${METRICA_API}/stat/v1/data?${params}`, { method: "GET" }, token, "OAuth"));
       } catch (error) {
         return toError(error);
       }
