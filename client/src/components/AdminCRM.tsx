@@ -22,6 +22,9 @@ type CrmContact = {
   telegram: string | null;
   source: string;
   stage: Stage;
+  workStatus: "new" | "in_progress" | "waiting" | "done";
+  ownerId: number | null;
+  ownerName: string | null;
   tags: string[];
   notes: string | null;
   lastContactAt: string | null;
@@ -160,7 +163,7 @@ export default function AdminCRM({ adminFetch, enabled }: { adminFetch: AdminFet
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            {isLoading ? <p className="p-6 text-sm text-muted-foreground">Загружаем CRM...</p> : filtered.length === 0 ? <p className="p-6 text-sm text-muted-foreground">Контактов пока нет. Перенесите записи или добавьте первый лид.</p> : <div className="divide-y">{filtered.map((contact) => <button key={contact.id} onClick={() => setSelected(contact)} className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/50"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary font-serif text-sm font-semibold">{contact.name.slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate font-medium">{contact.name}</span><Badge variant="outline" className={STAGES[contact.stage].className}>{STAGES[contact.stage].label}</Badge></div><p className="mt-0.5 truncate text-xs text-muted-foreground">{contact.telegram || contact.phone || contact.source} · касание: {formatDate(contact.lastContactAt)}</p></div><div className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex"><CheckCircle2 className="h-4 w-4" />{contact.tasks.filter((task) => task.status === "open").length}</div></button>)}</div>}
+            {isLoading ? <p className="p-6 text-sm text-muted-foreground">Загружаем CRM...</p> : filtered.length === 0 ? <p className="p-6 text-sm text-muted-foreground">Контактов пока нет. Перенесите записи или добавьте первый лид.</p> : <div className="divide-y">{filtered.map((contact) => <button key={contact.id} onClick={() => setSelected(contact)} className="flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/50"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary font-serif text-sm font-semibold">{contact.name.slice(0, 1).toUpperCase()}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2"><span className="truncate font-medium">{contact.name}</span><Badge variant="outline" className={STAGES[contact.stage].className}>{STAGES[contact.stage].label}</Badge></div><p className="mt-0.5 truncate text-xs text-muted-foreground">{contact.ownerName ? `${contact.ownerName} · ${contact.workStatus === "in_progress" ? "в работе" : contact.workStatus}` : "не назначен"} · {contact.telegram || contact.phone || contact.source}</p></div><div className="hidden items-center gap-1 text-xs text-muted-foreground sm:flex"><CheckCircle2 className="h-4 w-4" />{contact.tasks.filter((task) => task.status === "open").length}</div></button>)}</div>}
           </CardContent>
         </Card>
 

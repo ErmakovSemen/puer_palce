@@ -12,7 +12,7 @@ import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotificat
 import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
 import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
 import { db } from "./db";
-import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema, ceremonyBookings, insertCeremonyBookingSchema, updateCeremonyBookingSchema, calendarEvents, insertCalendarEventSchema, updateCalendarEventSchema, crmContacts, crmTasks, crmActivities, insertCrmContactSchema, updateCrmContactSchema, insertCrmTaskSchema } from "@shared/schema";
+import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema, ceremonyBookings, insertCeremonyBookingSchema, updateCeremonyBookingSchema, calendarEvents, insertCalendarEventSchema, updateCalendarEventSchema, crmAdmins, crmContacts, crmTasks, crmActivities, insertCrmContactSchema, updateCrmContactSchema, insertCrmTaskSchema } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
@@ -4304,12 +4304,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // CRM: контакты, задачи и история касаний
   // ============================================================
 
+  app.get("/api/admin/crm/admins", requireAdminAuth, async (_req, res) => {
+    try {
+      return res.json(await db.select().from(crmAdmins).orderBy(crmAdmins.name));
+    } catch (error) {
+      console.error("CRM admins fetch error:", error);
+      return res.status(500).json({ error: "Не удалось загрузить команду" });
+    }
+  });
+
+  app.post("/api/admin/crm/admins", requireAdminAuth, async (req, res) => {
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    if (name.length < 2 || name.length > 80) return res.status(400).json({ error: "Укажите имя администратора" });
+    try {
+      const [admin] = await db.insert(crmAdmins).values({ name }).returning();
+      return res.status(201).json(admin);
+    } catch (error) {
+      return res.status(409).json({ error: "Администратор с таким именем уже есть" });
+    }
+  });
+
   app.get("/api/admin/crm/contacts", requireAdminAuth, async (_req, res) => {
     try {
-      const [contacts, tasks, activities] = await Promise.all([
+      const [contacts, tasks, activities, admins] = await Promise.all([
         db.select().from(crmContacts).orderBy(desc(crmContacts.updatedAt)),
         db.select().from(crmTasks).orderBy(desc(crmTasks.createdAt)),
         db.select().from(crmActivities).orderBy(desc(crmActivities.createdAt)),
+        db.select().from(crmAdmins),
       ]);
 
       const tasksByContact = new Map<number, typeof tasks>();
@@ -4317,8 +4338,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const task of tasks) tasksByContact.set(task.contactId, [...(tasksByContact.get(task.contactId) ?? []), task]);
       for (const activity of activities) activitiesByContact.set(activity.contactId, [...(activitiesByContact.get(activity.contactId) ?? []), activity]);
 
+      const adminNames = new Map(admins.map((admin) => [admin.id, admin.name]));
       return res.json(contacts.map((contact) => ({
         ...contact,
+        ownerName: contact.ownerId ? adminNames.get(contact.ownerId) ?? null : null,
         tasks: tasksByContact.get(contact.id) ?? [],
         activities: (activitiesByContact.get(contact.id) ?? []).slice(0, 12),
       })));
@@ -4331,9 +4354,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Полный каталог аккаунтов. Пароли и технические данные авторизации намеренно не выдаются.
   app.get("/api/admin/crm/users", requireAdminAuth, async (_req, res) => {
     try {
-      const [allUsers, allOrders] = await Promise.all([
+      const [allUsers, allOrders, contacts, admins] = await Promise.all([
         db.select().from(usersTable),
         db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt)),
+        db.select().from(crmContacts),
+        db.select().from(crmAdmins),
       ]);
       const ordersByUser = new Map<string, typeof allOrders>();
       for (const order of allOrders) {
@@ -4341,6 +4366,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ordersByUser.set(order.userId, [...(ordersByUser.get(order.userId) ?? []), order]);
       }
 
+      const contactsByUser = new Map(contacts.filter((contact) => contact.userId).map((contact) => [contact.userId!, contact]));
+      const adminNames = new Map(admins.map((admin) => [admin.id, admin.name]));
       return res.json(allUsers.map(({ password, ...user }) => {
         const orders = ordersByUser.get(user.id) ?? [];
         const successful = orders.filter((order) => order.status === "paid" || order.status === "completed");
@@ -4351,11 +4378,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalSpent: successful.reduce((sum, order) => sum + order.total, 0),
           lastOrderAt: lastOrder?.createdAt ?? null,
           lastOrderStatus: lastOrder?.status ?? null,
+          crmContactId: contactsByUser.get(user.id)?.id ?? null,
+          ownerId: contactsByUser.get(user.id)?.ownerId ?? null,
+          ownerName: contactsByUser.get(user.id)?.ownerId ? adminNames.get(contactsByUser.get(user.id)!.ownerId!) ?? null : null,
+          workStatus: contactsByUser.get(user.id)?.workStatus ?? null,
         };
       }));
     } catch (error) {
       console.error("CRM users fetch error:", error);
       return res.status(500).json({ error: "Не удалось загрузить базу пользователей" });
+    }
+  });
+
+  app.post("/api/admin/crm/users/:userId/take", requireAdminAuth, async (req, res) => {
+    const ownerId = Number(req.body?.ownerId);
+    if (!Number.isInteger(ownerId)) return res.status(400).json({ error: "Выберите ответственного" });
+    try {
+      const [user, admin] = await Promise.all([
+        db.query.users.findFirst({ where: eq(usersTable.id, req.params.userId) }),
+        db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, ownerId) }),
+      ]);
+      if (!user) return res.status(404).json({ error: "Пользователь не найден" });
+      if (!admin) return res.status(404).json({ error: "Администратор не найден" });
+      const now = new Date().toISOString();
+      const [contact] = await db.insert(crmContacts).values({
+        userId: user.id, name: user.name || user.phone, phone: user.phone, email: user.email,
+        source: user.source || "account", stage: user.xp > 0 ? "active" : "lead", workStatus: "in_progress", ownerId, lastContactAt: now, updatedAt: now,
+      }).onConflictDoUpdate({ target: crmContacts.userId, set: { ownerId, workStatus: "in_progress", updatedAt: now } }).returning();
+      await db.insert(crmActivities).values({ contactId: contact.id, kind: "note", body: `Взял(а) в работу: ${admin.name}.` });
+      return res.json(contact);
+    } catch (error) {
+      console.error("CRM take user error:", error);
+      return res.status(500).json({ error: "Не удалось взять клиента в работу" });
     }
   });
 

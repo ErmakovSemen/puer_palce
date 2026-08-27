@@ -894,6 +894,13 @@ export const calendarEvents = pgTable("calendar_events", {
 
 // CRM — рабочая база клиентов и потенциальных гостей. Контакт может существовать
 // без аккаунта: это нужно для лидов из соцсетей и внешних источников.
+export const crmAdmins = pgTable("crm_admins", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const crmContacts = pgTable("crm_contacts", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").unique().references(() => users.id, { onDelete: "set null" }),
@@ -903,6 +910,8 @@ export const crmContacts = pgTable("crm_contacts", {
   telegram: text("telegram"),
   source: text("source").notNull().default("manual"),
   stage: text("stage").notNull().default("lead"), // lead | active | regular | at_risk | inactive
+  workStatus: text("work_status").notNull().default("new"), // new | in_progress | waiting | done
+  ownerId: integer("owner_id").references(() => crmAdmins.id, { onDelete: "set null" }),
   tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
   notes: text("notes"),
   lastContactAt: text("last_contact_at"),
@@ -936,6 +945,8 @@ export const insertCrmContactSchema = createInsertSchema(crmContacts, {
   telegram: z.string().max(64).optional().nullable(),
   source: z.string().max(80).optional(),
   stage: z.enum(["lead", "active", "regular", "at_risk", "inactive"]).optional(),
+  workStatus: z.enum(["new", "in_progress", "waiting", "done"]).optional(),
+  ownerId: z.number().int().positive().nullable().optional(),
   tags: z.array(z.string().min(1).max(40)).max(20).optional(),
   notes: z.string().max(2000).optional().nullable(),
 }).omit({ id: true, userId: true, lastContactAt: true, lastVisitAt: true, createdAt: true, updatedAt: true });
@@ -952,6 +963,7 @@ export const insertCrmTaskSchema = createInsertSchema(crmTasks, {
 }).omit({ id: true, status: true, createdAt: true });
 
 export type CrmContact = typeof crmContacts.$inferSelect;
+export type CrmAdmin = typeof crmAdmins.$inferSelect;
 export type CrmTask = typeof crmTasks.$inferSelect;
 export type CrmActivity = typeof crmActivities.$inferSelect;
 export type InsertCrmContact = z.infer<typeof insertCrmContactSchema>;
