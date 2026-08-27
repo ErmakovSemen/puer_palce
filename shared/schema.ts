@@ -892,6 +892,70 @@ export const calendarEvents = pgTable("calendar_events", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+// CRM — рабочая база клиентов и потенциальных гостей. Контакт может существовать
+// без аккаунта: это нужно для лидов из соцсетей и внешних источников.
+export const crmContacts = pgTable("crm_contacts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").unique().references(() => users.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  phone: text("phone"),
+  email: text("email"),
+  telegram: text("telegram"),
+  source: text("source").notNull().default("manual"),
+  stage: text("stage").notNull().default("lead"), // lead | active | regular | at_risk | inactive
+  tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
+  notes: text("notes"),
+  lastContactAt: text("last_contact_at"),
+  lastVisitAt: text("last_visit_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const crmTasks = pgTable("crm_tasks", {
+  id: serial("id").primaryKey(),
+  contactId: integer("contact_id").notNull().references(() => crmContacts.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  kind: text("kind").notNull().default("follow_up"), // follow_up | confirm_booking | retention
+  dueAt: text("due_at"),
+  status: text("status").notNull().default("open"), // open | done
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const crmActivities = pgTable("crm_activities", {
+  id: serial("id").primaryKey(),
+  contactId: integer("contact_id").notNull().references(() => crmContacts.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull().default("note"), // note | booking | purchase | message
+  body: text("body").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertCrmContactSchema = createInsertSchema(crmContacts, {
+  name: z.string().min(2, "Укажите имя"),
+  phone: z.string().max(32).optional().nullable(),
+  email: z.string().email("Введите корректный email").optional().nullable(),
+  telegram: z.string().max(64).optional().nullable(),
+  source: z.string().max(80).optional(),
+  stage: z.enum(["lead", "active", "regular", "at_risk", "inactive"]).optional(),
+  tags: z.array(z.string().min(1).max(40)).max(20).optional(),
+  notes: z.string().max(2000).optional().nullable(),
+}).omit({ id: true, userId: true, lastContactAt: true, lastVisitAt: true, createdAt: true, updatedAt: true });
+
+export const updateCrmContactSchema = insertCrmContactSchema.partial().extend({
+  lastContactAt: z.string().nullable().optional(),
+  lastVisitAt: z.string().nullable().optional(),
+});
+
+export const insertCrmTaskSchema = createInsertSchema(crmTasks, {
+  title: z.string().min(2, "Укажите задачу").max(200),
+  kind: z.enum(["follow_up", "confirm_booking", "retention"]).optional(),
+  dueAt: z.string().nullable().optional(),
+}).omit({ id: true, status: true, createdAt: true });
+
+export type CrmContact = typeof crmContacts.$inferSelect;
+export type CrmTask = typeof crmTasks.$inferSelect;
+export type CrmActivity = typeof crmActivities.$inferSelect;
+export type InsertCrmContact = z.infer<typeof insertCrmContactSchema>;
+
 export const insertCalendarEventSchema = createInsertSchema(calendarEvents, {
   title: z.string().min(2, "Введите название события").max(160, "Название слишком длинное"),
   description: z.string().max(1000).optional().nullable(),

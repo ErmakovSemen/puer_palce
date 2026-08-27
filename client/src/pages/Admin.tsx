@@ -13,6 +13,8 @@ import AdminBannerManagement from "@/components/AdminBannerManagement";
 import AdminTVDisplay from "@/components/AdminTVDisplay";
 import AdminExperiments from "@/components/AdminExperiments";
 import AdminMedia from "@/components/AdminMedia";
+import AdminCRM from "@/components/AdminCRM";
+import AdminCustomerDirectory from "@/components/AdminCustomerDirectory";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -398,22 +400,39 @@ export default function Admin() {
           </div>
         </div>
 
-        <Tabs defaultValue="products">
-          <TabsList className="w-full max-w-5xl mb-8 flex flex-wrap gap-1 h-auto justify-start">
-            <TabsTrigger value="products" data-testid="tab-products" className="min-w-max">Товары</TabsTrigger>
-            <TabsTrigger value="orders" data-testid="tab-orders" className="min-w-max">Заказы</TabsTrigger>
-            <TabsTrigger value="users" data-testid="tab-users" className="min-w-max">Пользователи</TabsTrigger>
-            <TabsTrigger value="stats" data-testid="tab-stats" className="min-w-max">Статистика</TabsTrigger>
-            <TabsTrigger value="banners" data-testid="tab-banners" className="min-w-max">Баннеры</TabsTrigger>
-            <TabsTrigger value="experiments" data-testid="tab-experiments" className="min-w-max">Эксперименты</TabsTrigger>
-            <TabsTrigger value="tv-display" data-testid="tab-tv-display" className="min-w-max">ТВ-дисплей</TabsTrigger>
-            <TabsTrigger value="media" data-testid="tab-media" className="min-w-max">Истории</TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings" className="min-w-max">Настройки</TabsTrigger>
-            <TabsTrigger value="tea-types" data-testid="tab-tea-types" className="min-w-max">Типы чая</TabsTrigger>
-            <TabsTrigger value="quiz" data-testid="tab-quiz" className="min-w-max">Квиз подбора</TabsTrigger>
-            <TabsTrigger value="waitlist" data-testid="tab-waitlist" className="min-w-max">Лист ожидания</TabsTrigger>
-            <TabsTrigger value="ceremony-bookings" data-testid="tab-ceremony-bookings" className="min-w-max">Расписание</TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="crm" className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
+          <aside className="h-fit lg:sticky lg:top-6">
+            <TabsList className="h-auto w-full flex-row flex-wrap justify-start gap-1 bg-transparent p-0 lg:flex-col lg:items-stretch">
+              <TabsTrigger value="crm" data-testid="tab-crm" className="justify-start">CRM</TabsTrigger>
+              <TabsTrigger value="clients" data-testid="tab-clients" className="justify-start">База клиентов</TabsTrigger>
+              <TabsTrigger value="ceremony-bookings" data-testid="tab-ceremony-bookings" className="justify-start">Расписание</TabsTrigger>
+              <TabsTrigger value="orders" data-testid="tab-orders" className="justify-start">Заказы</TabsTrigger>
+              <TabsTrigger value="products" data-testid="tab-products" className="justify-start">Товары</TabsTrigger>
+              <TabsTrigger value="stats" data-testid="tab-stats" className="justify-start">Статистика</TabsTrigger>
+            </TabsList>
+            <details className="mt-3 border-t pt-3">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-muted-foreground">Дополнительно</summary>
+              <TabsList className="mt-1 h-auto w-full flex-row flex-wrap justify-start gap-1 bg-transparent p-0 lg:flex-col lg:items-stretch">
+                <TabsTrigger value="users" data-testid="tab-users" className="justify-start">Аккаунты и лояльность</TabsTrigger>
+                <TabsTrigger value="banners" data-testid="tab-banners" className="justify-start">Баннеры</TabsTrigger>
+                <TabsTrigger value="tv-display" data-testid="tab-tv-display" className="justify-start">ТВ-дисплей</TabsTrigger>
+                <TabsTrigger value="media" data-testid="tab-media" className="justify-start">Истории</TabsTrigger>
+                <TabsTrigger value="settings" data-testid="tab-settings" className="justify-start">Настройки</TabsTrigger>
+                <TabsTrigger value="tea-types" data-testid="tab-tea-types" className="justify-start">Типы чая</TabsTrigger>
+                <TabsTrigger value="quiz" data-testid="tab-quiz" className="justify-start">Квиз подбора</TabsTrigger>
+                <TabsTrigger value="waitlist" data-testid="tab-waitlist" className="justify-start">Лист ожидания</TabsTrigger>
+                <TabsTrigger value="experiments" data-testid="tab-experiments" className="justify-start">Эксперименты</TabsTrigger>
+              </TabsList>
+            </details>
+          </aside>
+          <main className="min-w-0">
+          <TabsContent value="crm" className="mt-0">
+            <AdminCRM adminFetch={adminFetch} enabled={!!adminPassword} />
+          </TabsContent>
+
+          <TabsContent value="clients" className="mt-0">
+            <AdminCustomerDirectory adminFetch={adminFetch} enabled={!!adminPassword} />
+          </TabsContent>
 
           <TabsContent value="products">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6">
@@ -832,6 +851,7 @@ export default function Admin() {
               )}
             </div>
           </TabsContent>
+          </main>
         </Tabs>
       </div>
 

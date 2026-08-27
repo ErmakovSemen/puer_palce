@@ -12,7 +12,7 @@ import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotificat
 import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
 import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
 import { db } from "./db";
-import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema, ceremonyBookings, insertCeremonyBookingSchema, updateCeremonyBookingSchema, calendarEvents, insertCalendarEventSchema, updateCalendarEventSchema } from "@shared/schema";
+import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema, ceremonyBookings, insertCeremonyBookingSchema, updateCeremonyBookingSchema, calendarEvents, insertCalendarEventSchema, updateCalendarEventSchema, crmContacts, crmTasks, crmActivities, insertCrmContactSchema, updateCrmContactSchema, insertCrmTaskSchema } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
@@ -4301,6 +4301,168 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================================
+  // CRM: контакты, задачи и история касаний
+  // ============================================================
+
+  app.get("/api/admin/crm/contacts", requireAdminAuth, async (_req, res) => {
+    try {
+      const [contacts, tasks, activities] = await Promise.all([
+        db.select().from(crmContacts).orderBy(desc(crmContacts.updatedAt)),
+        db.select().from(crmTasks).orderBy(desc(crmTasks.createdAt)),
+        db.select().from(crmActivities).orderBy(desc(crmActivities.createdAt)),
+      ]);
+
+      const tasksByContact = new Map<number, typeof tasks>();
+      const activitiesByContact = new Map<number, typeof activities>();
+      for (const task of tasks) tasksByContact.set(task.contactId, [...(tasksByContact.get(task.contactId) ?? []), task]);
+      for (const activity of activities) activitiesByContact.set(activity.contactId, [...(activitiesByContact.get(activity.contactId) ?? []), activity]);
+
+      return res.json(contacts.map((contact) => ({
+        ...contact,
+        tasks: tasksByContact.get(contact.id) ?? [],
+        activities: (activitiesByContact.get(contact.id) ?? []).slice(0, 12),
+      })));
+    } catch (error) {
+      console.error("CRM contacts fetch error:", error);
+      return res.status(500).json({ error: "Не удалось загрузить CRM" });
+    }
+  });
+
+  // Полный каталог аккаунтов. Пароли и технические данные авторизации намеренно не выдаются.
+  app.get("/api/admin/crm/users", requireAdminAuth, async (_req, res) => {
+    try {
+      const [allUsers, allOrders] = await Promise.all([
+        db.select().from(usersTable),
+        db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt)),
+      ]);
+      const ordersByUser = new Map<string, typeof allOrders>();
+      for (const order of allOrders) {
+        if (!order.userId) continue;
+        ordersByUser.set(order.userId, [...(ordersByUser.get(order.userId) ?? []), order]);
+      }
+
+      return res.json(allUsers.map(({ password, ...user }) => {
+        const orders = ordersByUser.get(user.id) ?? [];
+        const successful = orders.filter((order) => order.status === "paid" || order.status === "completed");
+        const lastOrder = successful[0];
+        return {
+          ...user,
+          orderCount: successful.length,
+          totalSpent: successful.reduce((sum, order) => sum + order.total, 0),
+          lastOrderAt: lastOrder?.createdAt ?? null,
+          lastOrderStatus: lastOrder?.status ?? null,
+        };
+      }));
+    } catch (error) {
+      console.error("CRM users fetch error:", error);
+      return res.status(500).json({ error: "Не удалось загрузить базу пользователей" });
+    }
+  });
+
+  app.post("/api/admin/crm/contacts", requireAdminAuth, async (req, res) => {
+    const parsed = insertCrmContactSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Проверьте контакт" });
+
+    try {
+      const now = new Date().toISOString();
+      const [contact] = await db.insert(crmContacts).values({ ...parsed.data, updatedAt: now }).returning();
+      await db.insert(crmActivities).values({ contactId: contact.id, kind: "note", body: "Контакт добавлен в CRM." });
+      return res.status(201).json(contact);
+    } catch (error) {
+      console.error("CRM contact create error:", error);
+      return res.status(500).json({ error: "Не удалось создать контакт" });
+    }
+  });
+
+  app.patch("/api/admin/crm/contacts/:id", requireAdminAuth, async (req, res) => {
+    const id = Number(req.params.id);
+    const parsed = updateCrmContactSchema.safeParse(req.body);
+    if (!Number.isInteger(id) || !parsed.success) return res.status(400).json({ error: "Проверьте изменения" });
+
+    try {
+      const [contact] = await db.update(crmContacts).set({ ...parsed.data, updatedAt: new Date().toISOString() }).where(eq(crmContacts.id, id)).returning();
+      if (!contact) return res.status(404).json({ error: "Контакт не найден" });
+      return res.json(contact);
+    } catch (error) {
+      console.error("CRM contact update error:", error);
+      return res.status(500).json({ error: "Не удалось обновить контакт" });
+    }
+  });
+
+  app.post("/api/admin/crm/contacts/:id/tasks", requireAdminAuth, async (req, res) => {
+    const contactId = Number(req.params.id);
+    const parsed = insertCrmTaskSchema.safeParse({ ...req.body, contactId });
+    if (!Number.isInteger(contactId) || !parsed.success) return res.status(400).json({ error: "Проверьте задачу" });
+
+    try {
+      const [task] = await db.insert(crmTasks).values(parsed.data).returning();
+      return res.status(201).json(task);
+    } catch (error) {
+      console.error("CRM task create error:", error);
+      return res.status(500).json({ error: "Не удалось создать задачу" });
+    }
+  });
+
+  app.patch("/api/admin/crm/tasks/:id", requireAdminAuth, async (req, res) => {
+    const id = Number(req.params.id);
+    const status = req.body?.status;
+    if (!Number.isInteger(id) || !["open", "done"].includes(status)) return res.status(400).json({ error: "Некорректный статус задачи" });
+
+    try {
+      const [task] = await db.update(crmTasks).set({ status }).where(eq(crmTasks.id, id)).returning();
+      if (!task) return res.status(404).json({ error: "Задача не найдена" });
+      return res.json(task);
+    } catch (error) {
+      console.error("CRM task update error:", error);
+      return res.status(500).json({ error: "Не удалось обновить задачу" });
+    }
+  });
+
+  app.post("/api/admin/crm/contacts/:id/activities", requireAdminAuth, async (req, res) => {
+    const contactId = Number(req.params.id);
+    const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+    if (!Number.isInteger(contactId) || body.length < 1 || body.length > 1000) return res.status(400).json({ error: "Введите короткую заметку" });
+
+    try {
+      const [activity] = await db.insert(crmActivities).values({ contactId, kind: "note", body }).returning();
+      await db.update(crmContacts).set({ lastContactAt: new Date().toISOString(), updatedAt: new Date().toISOString() }).where(eq(crmContacts.id, contactId));
+      return res.status(201).json(activity);
+    } catch (error) {
+      console.error("CRM activity create error:", error);
+      return res.status(500).json({ error: "Не удалось сохранить заметку" });
+    }
+  });
+
+  // Одноразовое заполнение CRM уже существующими заявками лендинга.
+  app.post("/api/admin/crm/sync-bookings", requireAdminAuth, async (_req, res) => {
+    try {
+      const bookings = await db.select().from(ceremonyBookings).orderBy(desc(ceremonyBookings.createdAt));
+      let synced = 0;
+      for (const booking of bookings) {
+        if (!booking.userId) continue;
+        const now = new Date().toISOString();
+        await db.insert(crmContacts).values({
+          userId: booking.userId,
+          name: booking.name,
+          phone: booking.phone,
+          email: booking.email,
+          telegram: booking.telegram,
+          source: booking.source,
+          stage: booking.status === "done" ? "active" : "lead",
+          lastContactAt: booking.createdAt,
+          lastVisitAt: booking.status === "done" ? booking.createdAt : null,
+          updatedAt: now,
+        }).onConflictDoNothing();
+        synced += 1;
+      }
+      return res.json({ ok: true, synced });
+    } catch (error) {
+      console.error("CRM bookings sync error:", error);
+      return res.status(500).json({ error: "Не удалось перенести записи в CRM" });
+    }
+  });
+
+  // ============================================================
   // Моно-лендинг: запись на чайную церемонию
   // ============================================================
 
@@ -4362,6 +4524,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: "new",
         })
         .returning();
+
+      const now = new Date().toISOString();
+      const [contact] = await db
+        .insert(crmContacts)
+        .values({
+          userId: user.id,
+          name: data.name,
+          phone: normalizedPhone,
+          email: data.email || null,
+          telegram: data.telegram || null,
+          source: "mono_landing",
+          stage: "lead",
+          lastContactAt: now,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: crmContacts.userId,
+          set: {
+            name: data.name,
+            phone: normalizedPhone,
+            email: data.email || null,
+            telegram: data.telegram || null,
+            stage: "lead",
+            lastContactAt: now,
+            updatedAt: now,
+          },
+        })
+        .returning();
+
+      await Promise.all([
+        db.insert(crmActivities).values({
+          contactId: contact.id,
+          kind: "booking",
+          body: `Новая заявка на церемонию: ${data.guests} ${data.guests === 1 ? "гость" : "гостей"}.`,
+        }),
+        db.insert(crmTasks).values({
+          contactId: contact.id,
+          title: "Подтвердить запись на церемонию",
+          kind: "confirm_booking",
+          dueAt: now,
+        }),
+      ]);
 
       // Отбивка в рабочий чат — тем же ботом, что и заказы.
       // Падение Telegram не должно ронять заявку.
