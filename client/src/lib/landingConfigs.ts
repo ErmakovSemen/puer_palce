@@ -34,10 +34,10 @@ export const venue = {
   mapsHref: "https://yandex.ru/maps/org/puer_pab/4433170848/",
   mapsEmbed:
     "https://yandex.ru/map-widget/v1/?ll=38.513699%2C55.774811&mode=search&text=%D0%BF%D1%83%D1%8D%D1%80%20%D0%BF%D0%B0%D0%B1&z=16",
-  /** TODO: подтвердить точный график. Используется и для бейджа «сейчас открыто». */
+  /** Используется и для бейджа «сейчас открыто». */
   hours: {
     label: "Ежедневно",
-    open: "12:00",
+    open: "10:00",
     close: "22:00",
   },
 } as const;
