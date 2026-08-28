@@ -176,8 +176,62 @@ app.use((req, res, next) => {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS ceremony_bookings_status_idx ON ceremony_bookings(status)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS ceremony_bookings_preferred_date_idx ON ceremony_bookings(preferred_date)`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS crm_admins (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS crm_contacts (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR UNIQUE REFERENCES users(id) ON DELETE SET NULL,
+        name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        telegram TEXT,
+        external_id TEXT UNIQUE,
+        profile_url TEXT,
+        source TEXT NOT NULL DEFAULT 'manual',
+        stage TEXT NOT NULL DEFAULT 'lead',
+        work_status TEXT NOT NULL DEFAULT 'new',
+        pipeline_stage TEXT NOT NULL DEFAULT 'new',
+        owner_id INTEGER REFERENCES crm_admins(id) ON DELETE SET NULL,
+        tags TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+        notes TEXT,
+        last_contact_at TEXT,
+        last_visit_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS crm_tasks (
+        id SERIAL PRIMARY KEY,
+        contact_id INTEGER NOT NULL REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'follow_up',
+        due_at TEXT,
+        status TEXT NOT NULL DEFAULT 'open',
+        reminder_sent_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS crm_activities (
+        id SERIAL PRIMARY KEY,
+        contact_id INTEGER NOT NULL REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL DEFAULT 'note',
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
     await pool.query(`ALTER TABLE crm_contacts ADD COLUMN IF NOT EXISTS inbox_status TEXT NOT NULL DEFAULT 'none'`);
     await pool.query(`CREATE INDEX IF NOT EXISTS crm_contacts_inbox_status_idx ON crm_contacts(inbox_status, updated_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS crm_contacts_pipeline_stage_idx ON crm_contacts(pipeline_stage, owner_id)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS crm_tasks_contact_status_idx ON crm_tasks(contact_id, status, due_at)`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS calendar_events (
         id SERIAL PRIMARY KEY,
