@@ -289,7 +289,8 @@ export async function sendCeremonyBookingNotification(
 ): Promise<void> {
   const variantLabel = CEREMONY_VARIANT_LABELS[booking.variant] ?? booking.variant;
 
-  let message = `<b>🍵 НОВАЯ ЗАПИСЬ НА ЧАЙНУЮ ЦЕРЕМОНИЮ</b>\n\n`;
+  const header = booking.variant === "gift" ? "🍵 НОВЫЙ ЗАКАЗ НАБОРА" : "🍵 НОВАЯ ЗАПИСЬ НА ЧАЙНУЮ ЦЕРЕМОНИЮ";
+  let message = `<b>${header}</b>\n\n`;
   message += `<b>Заявка:</b> #${booking.id}\n`;
   message += `<b>Имя:</b> ${escapeHtml(booking.name)}\n`;
   message += `<b>Телефон:</b> ${escapeHtml(booking.phone)}\n`;
@@ -301,7 +302,7 @@ export async function sendCeremonyBookingNotification(
     message += `<b>Email:</b> ${escapeHtml(booking.email)}\n`;
   }
 
-  message += `<b>Гостей:</b> ${booking.guests}\n`;
+  if (booking.variant !== "gift") message += `<b>Гостей:</b> ${booking.guests}\n`;
 
   if (booking.preferredDate || booking.preferredTime) {
     const when = [booking.preferredDate, booking.preferredTime].filter(Boolean).join(", ");

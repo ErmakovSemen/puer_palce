@@ -15,6 +15,7 @@ import Leaderboard from "@/pages/Leaderboard";
 import TVDisplay from "@/pages/TVDisplay";
 import AppWaitlist from "@/pages/AppWaitlist";
 import Landing from "@/pages/Landing";
+import SetsLanding from "@/pages/SetsLanding";
 import { useDesignMode } from "@/hooks/use-design-mode";
 import { AuthProvider } from "@/hooks/use-auth";
 import { FirstOrderPromo } from "@/components/FirstOrderPromo";
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/app-waitlist" component={AppWaitlist} />
       <Route path="/l/:variant" component={Landing} />
       <Route path="/ceremony" component={Landing} />
+      <Route path="/sets" component={SetsLanding} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -46,6 +48,7 @@ function AppContent() {
   const hidePromo =
     location === "/app-waitlist" ||
     location === "/ceremony" ||
+    location === "/sets" ||
     location.startsWith("/l/") ||
     location.startsWith("/admin");
   

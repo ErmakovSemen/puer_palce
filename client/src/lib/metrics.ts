@@ -10,6 +10,9 @@ export const METRIKA_GOALS = {
   ceremonyBookingCtaClick: "ceremony_booking_cta_click",
   ceremonyBookingSubmitted: "ceremony_booking_submitted",
   ceremonyMessengerClick: "ceremony_messenger_click",
+  setsCtaClick: "sets_cta_click",
+  setsAddedToCart: "sets_added_to_cart",
+  setsOrderSubmitted: "sets_order_submitted",
 } as const;
 
 export function trackEvent(goalName: string, params?: Record<string, any>) {

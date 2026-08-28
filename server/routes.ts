@@ -91,6 +91,44 @@ function isoToMoscowDateTime(iso: string) {
   };
 }
 
+function parseCsv(text: string): Record<string, string>[] {
+  const source = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const firstLine = source.slice(0, source.indexOf("\n") === -1 ? source.length : source.indexOf("\n"));
+  const delimiter = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = "";
+  let quoted = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '"') {
+      if (quoted && source[index + 1] === '"') { value += '"'; index += 1; } else quoted = !quoted;
+    } else if (char === delimiter && !quoted) {
+      row.push(value.trim());
+      value = "";
+    } else if (char === "\n" && !quoted) {
+      row.push(value.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      value = "";
+    } else value += char;
+  }
+  row.push(value.trim());
+  if (row.some(Boolean)) rows.push(row);
+  if (rows.length < 2) return [];
+  const headers = rows[0].map((header) => header.toLowerCase().trim().replace(/[._-]+/g, " "));
+  return rows.slice(1).map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
+}
+
+function firstCsvValue(row: Record<string, string>, candidates: string[]) {
+  for (const candidate of candidates) {
+    const value = row[candidate];
+    if (value?.trim()) return value.trim();
+  }
+  return "";
+}
+
 // Admin authentication middleware
 function requireAdminAuth(req: any, res: any, next: any) {
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123"; // Default for development
@@ -4324,6 +4362,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/admin/crm/import", requireAdminAuth, upload.single("file"), async (req, res) => {
+    if (!req.file) return res.status(400).json({ error: "Выберите CSV-файл" });
+    const source = typeof req.body.source === "string" && req.body.source.trim() ? req.body.source.trim().slice(0, 80) : "TargetHunter";
+    const tags = typeof req.body.tags === "string" ? req.body.tags.split(",").map((tag: string) => tag.trim()).filter(Boolean).slice(0, 20) : [];
+    const ownerId = req.body.ownerId ? Number(req.body.ownerId) : null;
+    const dryRun = req.body.dryRun === "true";
+    if (ownerId && !Number.isInteger(ownerId)) return res.status(400).json({ error: "Некорректный ответственный" });
+
+    try {
+      if (ownerId) {
+        const admin = await db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, ownerId) });
+        if (!admin) return res.status(400).json({ error: "Ответственный не найден" });
+      }
+      const rows = parseCsv(req.file.buffer.toString("utf8"));
+      if (!rows.length) return res.status(400).json({ error: "В CSV нет строк. Нужны заголовки и хотя бы один лид." });
+      if (rows.length > 5_000) return res.status(400).json({ error: "За раз можно импортировать до 5 000 лидов" });
+
+      const existing = await db.select({ externalId: crmContacts.externalId }).from(crmContacts);
+      const existingIds = new Set(existing.map((contact) => contact.externalId).filter(Boolean));
+      let created = 0;
+      let skipped = 0;
+      let invalid = 0;
+      let excluded = 0;
+      const now = new Date().toISOString();
+
+      for (const row of rows) {
+        const externalId = firstCsvValue(row, ["vk id", "vkid", "id", "id пользователя", "user id", "user id vk"]);
+        const profileUrl = firstCsvValue(row, ["ссылка", "ссылка на страницу", "profile url", "url", "profile", "vk"]);
+        const firstName = firstCsvValue(row, ["имя", "first name", "first_name", "name"]);
+        const lastName = firstCsvValue(row, ["фамилия", "last name", "last_name"]);
+        const name = [firstName, lastName].filter(Boolean).join(" ") || (externalId ? `VK ${externalId}` : "");
+        const isBanned = firstCsvValue(row, ["забанен"]).toLowerCase() === "да";
+        if (isBanned) { excluded += 1; continue; }
+        if (!name || (!externalId && !profileUrl)) { invalid += 1; continue; }
+        const normalizedExternalId = externalId || `url:${profileUrl.toLowerCase()}`;
+        if (existingIds.has(normalizedExternalId)) { skipped += 1; continue; }
+        const city = firstCsvValue(row, ["город"]);
+        const age = firstCsvValue(row, ["возраст"]);
+        const lastSeen = firstCsvValue(row, ["последний заход"]);
+        const canMessage = firstCsvValue(row, ["можно написать в лс"]);
+        const notes = [
+          "Импортировано из TargetHunter.",
+          city && `Город: ${city}.`,
+          age && `Возраст: ${age}.`,
+          lastSeen && `Последняя активность VK: ${lastSeen}.`,
+          canMessage && `Личные сообщения: ${canMessage.toLowerCase() === "да" ? "доступны" : "недоступны"}.`,
+        ].filter(Boolean).join(" ");
+        if (!dryRun) {
+          await db.insert(crmContacts).values({
+            name,
+            externalId: normalizedExternalId,
+            profileUrl: profileUrl || null,
+            source,
+            tags,
+            notes,
+            stage: "lead",
+            workStatus: ownerId ? "in_progress" : "new",
+            pipelineStage: ownerId ? "taken" : "new",
+            ownerId,
+            updatedAt: now,
+          });
+        }
+        existingIds.add(normalizedExternalId);
+        created += 1;
+      }
+      return res.status(dryRun ? 200 : 201).json({ created, skipped, invalid, excluded, total: rows.length, dryRun });
+    } catch (error) {
+      console.error("CRM import error:", error);
+      return res.status(500).json({ error: "Не удалось импортировать лиды" });
+    }
+  });
+
   app.get("/api/admin/crm/contacts", requireAdminAuth, async (_req, res) => {
     try {
       const [contacts, tasks, activities, admins] = await Promise.all([
@@ -4403,8 +4513,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const now = new Date().toISOString();
       const [contact] = await db.insert(crmContacts).values({
         userId: user.id, name: user.name || user.phone, phone: user.phone, email: user.email,
-        source: user.source || "account", stage: user.xp > 0 ? "active" : "lead", workStatus: "in_progress", ownerId, lastContactAt: now, updatedAt: now,
-      }).onConflictDoUpdate({ target: crmContacts.userId, set: { ownerId, workStatus: "in_progress", updatedAt: now } }).returning();
+        source: user.source || "account", stage: user.xp > 0 ? "active" : "lead", workStatus: "in_progress", pipelineStage: "taken", inboxStatus: "taken", ownerId, lastContactAt: now, updatedAt: now,
+      }).onConflictDoUpdate({ target: crmContacts.userId, set: { ownerId, workStatus: "in_progress", pipelineStage: "taken", inboxStatus: "taken", updatedAt: now } }).returning();
       await db.insert(crmActivities).values({ contactId: contact.id, kind: "note", body: `Взял(а) в работу: ${admin.name}.` });
       return res.json(contact);
     } catch (error) {
@@ -4428,13 +4538,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/admin/crm/contacts/bulk", requireAdminAuth, async (req, res) => {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isInteger).slice(0, 100) : [];
+    const ownerId = req.body?.ownerId === null ? null : Number(req.body?.ownerId);
+    if (!ids.length || (ownerId !== null && !Number.isInteger(ownerId))) return res.status(400).json({ error: "Выберите лиды и ответственного" });
+    try {
+      if (ownerId !== null) {
+        const admin = await db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, ownerId) });
+        if (!admin) return res.status(400).json({ error: "Ответственный не найден" });
+      }
+      const pipelineStage = typeof req.body?.pipelineStage === "string" ? req.body.pipelineStage : undefined;
+      const allowedStages = ["new", "taken", "first_contact", "dialog", "booked", "visited", "lost"];
+      if (pipelineStage && !allowedStages.includes(pipelineStage)) return res.status(400).json({ error: "Некорректный этап" });
+      const now = new Date().toISOString();
+      for (const id of ids) {
+        const [contact] = await db.update(crmContacts).set({
+          ownerId,
+          workStatus: ownerId === null ? "new" : "in_progress",
+          pipelineStage: pipelineStage ?? (ownerId === null ? "new" : "taken"),
+          inboxStatus: ownerId === null ? "new" : "taken",
+          updatedAt: now,
+        }).where(eq(crmContacts.id, id)).returning();
+        if (contact && ownerId !== null) await db.insert(crmActivities).values({ contactId: contact.id, kind: "note", body: "Лид назначен в работу." });
+      }
+      return res.json({ updated: ids.length });
+    } catch (error) {
+      console.error("CRM bulk update error:", error);
+      return res.status(500).json({ error: "Не удалось обновить лиды" });
+    }
+  });
+
   app.patch("/api/admin/crm/contacts/:id", requireAdminAuth, async (req, res) => {
     const id = Number(req.params.id);
     const parsed = updateCrmContactSchema.safeParse(req.body);
     if (!Number.isInteger(id) || !parsed.success) return res.status(400).json({ error: "Проверьте изменения" });
 
     try {
-      const [contact] = await db.update(crmContacts).set({ ...parsed.data, updatedAt: new Date().toISOString() }).where(eq(crmContacts.id, id)).returning();
+      const changes = { ...parsed.data };
+      if (changes.ownerId !== undefined && changes.inboxStatus === undefined) {
+        changes.inboxStatus = changes.ownerId === null ? "new" : "taken";
+      }
+      const [contact] = await db.update(crmContacts).set({ ...changes, updatedAt: new Date().toISOString() }).where(eq(crmContacts.id, id)).returning();
       if (!contact) return res.status(404).json({ error: "Контакт не найден" });
       return res.json(contact);
     } catch (error) {
@@ -4503,6 +4647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           telegram: booking.telegram,
           source: booking.source,
           stage: booking.status === "done" ? "active" : "lead",
+          inboxStatus: booking.status === "done" ? "none" : "new",
           lastContactAt: booking.createdAt,
           lastVisitAt: booking.status === "done" ? booking.createdAt : null,
           updatedAt: now,
@@ -4541,6 +4686,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = parsed.data;
       const normalizedPhone = normalizePhone(data.phone);
       const variant = data.variant ?? "ceremony";
+      const isGiftOrder = variant === "gift";
 
       if (variant === "ceremony" && data.guests > 4) {
         return res.status(400).json({ error: "Для церемонии можно записать до 4 гостей. Если вас больше — напишите нам в Telegram." });
@@ -4590,6 +4736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           telegram: data.telegram || null,
           source: "mono_landing",
           stage: "lead",
+          inboxStatus: "new",
           lastContactAt: now,
           updatedAt: now,
         })
@@ -4601,6 +4748,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: data.email || null,
             telegram: data.telegram || null,
             stage: "lead",
+            inboxStatus: "new",
             lastContactAt: now,
             updatedAt: now,
           },
@@ -4611,11 +4759,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         db.insert(crmActivities).values({
           contactId: contact.id,
           kind: "booking",
-          body: `Новая заявка на церемонию: ${data.guests} ${data.guests === 1 ? "гость" : "гостей"}.`,
+          body: isGiftOrder ? `Новая заявка на набор чая. ${data.comment ?? ""}` : `Новая заявка на церемонию: ${data.guests} ${data.guests === 1 ? "гость" : "гостей"}.`,
         }),
         db.insert(crmTasks).values({
           contactId: contact.id,
-          title: "Подтвердить запись на церемонию",
+          title: isGiftOrder ? "Подтвердить заказ набора" : "Подтвердить запись на церемонию",
           kind: "confirm_booking",
           dueAt: now,
         }),

@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { storage } from "./storage";
 import { pool } from "./db";
+import { startCrmReminderScheduler } from "./services/crmReminders";
 
 const app = express();
 
@@ -175,6 +176,8 @@ app.use((req, res, next) => {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS ceremony_bookings_status_idx ON ceremony_bookings(status)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS ceremony_bookings_preferred_date_idx ON ceremony_bookings(preferred_date)`);
+    await pool.query(`ALTER TABLE crm_contacts ADD COLUMN IF NOT EXISTS inbox_status TEXT NOT NULL DEFAULT 'none'`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS crm_contacts_inbox_status_idx ON crm_contacts(inbox_status, updated_at DESC)`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS calendar_events (
         id SERIAL PRIMARY KEY,
@@ -225,6 +228,7 @@ app.use((req, res, next) => {
   }
   
   const server = await registerRoutes(app);
+  startCrmReminderScheduler();
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

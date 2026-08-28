@@ -908,9 +908,13 @@ export const crmContacts = pgTable("crm_contacts", {
   phone: text("phone"),
   email: text("email"),
   telegram: text("telegram"),
+  externalId: text("external_id").unique(),
+  profileUrl: text("profile_url"),
   source: text("source").notNull().default("manual"),
   stage: text("stage").notNull().default("lead"), // lead | active | regular | at_risk | inactive
   workStatus: text("work_status").notNull().default("new"), // new | in_progress | waiting | done
+  pipelineStage: text("pipeline_stage").notNull().default("new"), // new | taken | first_contact | dialog | booked | visited | lost
+  inboxStatus: text("inbox_status").notNull().default("none"), // none | new | taken
   ownerId: integer("owner_id").references(() => crmAdmins.id, { onDelete: "set null" }),
   tags: text("tags").array().notNull().default(sql`ARRAY[]::text[]`),
   notes: text("notes"),
@@ -927,6 +931,7 @@ export const crmTasks = pgTable("crm_tasks", {
   kind: text("kind").notNull().default("follow_up"), // follow_up | confirm_booking | retention
   dueAt: text("due_at"),
   status: text("status").notNull().default("open"), // open | done
+  reminderSentAt: text("reminder_sent_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
@@ -943,9 +948,13 @@ export const insertCrmContactSchema = createInsertSchema(crmContacts, {
   phone: z.string().max(32).optional().nullable(),
   email: z.string().email("Введите корректный email").optional().nullable(),
   telegram: z.string().max(64).optional().nullable(),
+  externalId: z.string().max(128).optional().nullable(),
+  profileUrl: z.string().url("Введите корректную ссылку").max(500).optional().nullable(),
   source: z.string().max(80).optional(),
   stage: z.enum(["lead", "active", "regular", "at_risk", "inactive"]).optional(),
   workStatus: z.enum(["new", "in_progress", "waiting", "done"]).optional(),
+  pipelineStage: z.enum(["new", "taken", "first_contact", "dialog", "booked", "visited", "lost"]).optional(),
+  inboxStatus: z.enum(["none", "new", "taken"]).optional(),
   ownerId: z.number().int().positive().nullable().optional(),
   tags: z.array(z.string().min(1).max(40)).max(20).optional(),
   notes: z.string().max(2000).optional().nullable(),
@@ -958,9 +967,9 @@ export const updateCrmContactSchema = insertCrmContactSchema.partial().extend({
 
 export const insertCrmTaskSchema = createInsertSchema(crmTasks, {
   title: z.string().min(2, "Укажите задачу").max(200),
-  kind: z.enum(["follow_up", "confirm_booking", "retention"]).optional(),
+  kind: z.enum(["follow_up", "confirm_booking", "retention", "call", "message"]).optional(),
   dueAt: z.string().nullable().optional(),
-}).omit({ id: true, status: true, createdAt: true });
+}).omit({ id: true, status: true, reminderSentAt: true, createdAt: true });
 
 export type CrmContact = typeof crmContacts.$inferSelect;
 export type CrmAdmin = typeof crmAdmins.$inferSelect;

@@ -241,6 +241,7 @@ export default function Home() {
     const type = params.get('type');
     const effect = params.get('effect');
     const productId = params.get('product');
+    const openCart = params.get('cart');
     
     if (type) {
       setSelectedTypes(type.split(',').filter(Boolean));
@@ -254,6 +255,10 @@ export default function Home() {
       if (!isNaN(pid)) {
         setSelectedProductId(pid);
       }
+    }
+    if (openCart === '1') {
+      setIsCartOpen(true);
+      updateUrlParams({ cart: null });
     }
   }, []);
 
