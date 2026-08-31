@@ -67,6 +67,13 @@ const bundles: BundleSpec[] = [
 const priceFor = (product: Product, grams: number) =>
   product.pricePerGram * grams;
 const BOX_IMAGE = "/sets-box-concept-v1.png";
+const formatRussianPhone = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  const local = (digits.startsWith("7") || digits.startsWith("8") ? digits.slice(1) : digits).slice(0, 10);
+  if (!local) return digits ? "+7" : "";
+  const groups = [local.slice(0, 3), local.slice(3, 6), local.slice(6, 8), local.slice(8, 10)].filter(Boolean);
+  return `+7 ${groups[0] || ""}${groups[1] ? ` ${groups[1]}` : ""}${groups[2] ? `-${groups[2]}` : ""}${groups[3] ? `-${groups[3]}` : ""}`;
+};
 
 export default function SetsLanding() {
   const { data: products = [], isLoading } = useQuery<Product[]>({
@@ -102,6 +109,7 @@ export default function SetsLanding() {
   );
 
   useEffect(() => {
+    trackEvent(METRIKA_GOALS.setsLandingViewed);
     document.title = "Наборы чая - Пуэр Паб";
     const meta = document.querySelector<HTMLMetaElement>(
       'meta[name="description"]',
@@ -118,6 +126,7 @@ export default function SetsLanding() {
 
   const openOrder = (bundle: ResolvedBundle) => {
     trackEvent(METRIKA_GOALS.setsCtaClick, { bundle: bundle.id });
+    trackEvent(METRIKA_GOALS.setsAddedToCart, { bundle: bundle.id });
     setSelectedBundle(bundle);
     setSubmitted(false);
     setFormError("");
@@ -200,7 +209,7 @@ export default function SetsLanding() {
               а мы поможем с каждым шагом.
             </p>
             <div className="sets-primary-wrap">
-              <a className="sets-primary" href="#sets">
+              <a className="sets-primary" href="#sets" onClick={() => trackEvent(METRIKA_GOALS.setsHeroCtaClick)}>
                 <ShoppingBag size={18} />
                 Выбрать набор
               </a>
@@ -378,13 +387,14 @@ export default function SetsLanding() {
                   Телефон
                   <Input
                     required
-                    minLength={10}
                     type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
                     placeholder="+7 999 123-45-67"
+                    maxLength={18}
                     value={form.phone}
-                    onChange={(event) =>
-                      setForm({ ...form, phone: event.target.value })
-                    }
+                    onFocus={() => !form.phone && setForm({ ...form, phone: "+7" })}
+                    onChange={(event) => setForm({ ...form, phone: formatRussianPhone(event.target.value) })}
                   />
                 </Label>
                 <Label className="grid gap-1.5 text-sm">

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'puer-pub-v5';
+const CACHE_NAME = 'puer-pub-v6';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
@@ -43,6 +43,12 @@ self.addEventListener('message', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Analytics, fonts, and other third-party resources must bypass the app cache.
+  // Their opaque responses cannot be safely cached or converted to offline fallbacks.
+  if (url.origin !== self.location.origin) {
+    return;
+  }
 
   if (request.mode === 'navigate' || request.destination === 'document') {
     event.respondWith(
