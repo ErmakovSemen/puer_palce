@@ -1,29 +1,81 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { quizConfigSchema, insertProductSchema, orderSchema, updateSettingsSchema, insertTeaTypeSchema, updateOrderStatusSchema, insertCartItemSchema, updateCartItemSchema, updateSiteSettingsSchema, insertSavedAddressSchema } from "@shared/schema";
+import {
+  quizConfigSchema,
+  insertProductSchema,
+  orderSchema,
+  updateSettingsSchema,
+  insertTeaTypeSchema,
+  updateOrderStatusSchema,
+  insertCartItemSchema,
+  updateCartItemSchema,
+  updateSiteSettingsSchema,
+  insertSavedAddressSchema,
+} from "@shared/schema";
 import multer from "multer";
 import { randomUUID, randomBytes } from "crypto";
 import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
 import { setupAuth, hashPassword } from "./auth";
 import { normalizePhone } from "./utils";
-import { getTelegramUpdates, sendOrderNotification as sendTelegramOrderNotification, sendFailedReceiptSmsNotification, sendPaymentStatusNotification, sendCeremonyBookingNotification } from "./telegram";
-import { handleWebhookUpdate, setWebhook, getWebhookInfo } from "./services/telegramBot";
-import { createMagicLink, getUserTelegramProfile, unlinkTelegram } from "./services/magicLink";
+import {
+  getTelegramUpdates,
+  sendOrderNotification as sendTelegramOrderNotification,
+  sendFailedReceiptSmsNotification,
+  sendPaymentStatusNotification,
+  sendCeremonyBookingNotification,
+} from "./telegram";
+import {
+  handleWebhookUpdate,
+  setWebhook,
+  getWebhookInfo,
+} from "./services/telegramBot";
+import {
+  createMagicLink,
+  getUserTelegramProfile,
+  unlinkTelegram,
+} from "./services/magicLink";
 import { db } from "./db";
-import { users as usersTable, orders as ordersTable, walletTransactions, pendingTelegramOrders as pendingTelegramOrdersTable, telegramCart as telegramCartTable, appWaitlist, insertAppWaitlistSchema, ceremonyBookings, insertCeremonyBookingSchema, updateCeremonyBookingSchema, calendarEvents, insertCalendarEventSchema, updateCalendarEventSchema, crmAdmins, crmContacts, crmTasks, crmActivities, insertCrmContactSchema, updateCrmContactSchema, insertCrmTaskSchema } from "@shared/schema";
+import {
+  users as usersTable,
+  orders as ordersTable,
+  walletTransactions,
+  xpTransactions,
+  pendingTelegramOrders as pendingTelegramOrdersTable,
+  telegramCart as telegramCartTable,
+  appWaitlist,
+  insertAppWaitlistSchema,
+  ceremonyBookings,
+  insertCeremonyBookingSchema,
+  updateCeremonyBookingSchema,
+  calendarEvents,
+  insertCalendarEventSchema,
+  updateCalendarEventSchema,
+  crmAdmins,
+  crmContacts,
+  crmTasks,
+  crmActivities,
+  insertCrmContactSchema,
+  updateCrmContactSchema,
+  insertCrmTaskSchema,
+} from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
-import { BULK_DISCOUNT, calculateCartBreakdown, getAbMultiplierFromExperiments, getAbAssignmentFromExperiments } from "@shared/pricing";
+import {
+  BULK_DISCOUNT,
+  calculateCartBreakdown,
+  getAbMultiplierFromExperiments,
+  getAbAssignmentFromExperiments,
+} from "@shared/pricing";
 import type { AbAssignment, CartBreakdown } from "@shared/pricing";
 import type { OrderDiscountPercents } from "./telegram";
 
 // Configure multer for memory storage
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
 // Простой in-memory троттлинг публичной формы лендинга
@@ -41,7 +93,9 @@ function getClientIp(req: any): string {
 
 function isLandingRateLimited(ip: string): boolean {
   const now = Date.now();
-  const recent = (landingSubmissions.get(ip) ?? []).filter((ts: number) => now - ts < LANDING_RATE_WINDOW_MS);
+  const recent = (landingSubmissions.get(ip) ?? []).filter(
+    (ts: number) => now - ts < LANDING_RATE_WINDOW_MS,
+  );
 
   if (recent.length >= LANDING_RATE_MAX) {
     landingSubmissions.set(ip, recent);
@@ -53,21 +107,28 @@ function isLandingRateLimited(ip: string): boolean {
 
   // Не даём мапе расти бесконечно
   if (landingSubmissions.size > 5000) {
-    Array.from(landingSubmissions.entries()).forEach(([key, stamps]: [string, number[]]) => {
-      if (stamps.every((ts: number) => now - ts >= LANDING_RATE_WINDOW_MS)) {
-        landingSubmissions.delete(key);
-      }
-    });
+    Array.from(landingSubmissions.entries()).forEach(
+      ([key, stamps]: [string, number[]]) => {
+        if (stamps.every((ts: number) => now - ts >= LANDING_RATE_WINDOW_MS)) {
+          landingSubmissions.delete(key);
+        }
+      },
+    );
   }
 
   return false;
 }
 
 function addHours(iso: string, hours: number): string {
-  return new Date(new Date(iso).getTime() + hours * 60 * 60 * 1000).toISOString();
+  return new Date(
+    new Date(iso).getTime() + hours * 60 * 60 * 1000,
+  ).toISOString();
 }
 
-function dateTimeToIso(date?: string | null, time?: string | null): string | null {
+function dateTimeToIso(
+  date?: string | null,
+  time?: string | null,
+): string | null {
   if (!date) return null;
   return new Date(`${date}T${time || "12:00"}:00+03:00`).toISOString();
 }
@@ -84,7 +145,8 @@ function isoToMoscowDateTime(iso: string) {
     hour12: false,
   }).formatToParts(date);
 
-  const value = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const value = (type: string) =>
+    parts.find((part) => part.type === type)?.value ?? "";
   return {
     preferredDate: `${value("year")}-${value("month")}-${value("day")}`,
     preferredTime: `${value("hour")}:${value("minute")}`,
@@ -92,9 +154,18 @@ function isoToMoscowDateTime(iso: string) {
 }
 
 function parseCsv(text: string): Record<string, string>[] {
-  const source = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const firstLine = source.slice(0, source.indexOf("\n") === -1 ? source.length : source.indexOf("\n"));
-  const delimiter = (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const source = text
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  const firstLine = source.slice(
+    0,
+    source.indexOf("\n") === -1 ? source.length : source.indexOf("\n"),
+  );
+  const delimiter =
+    (firstLine.match(/;/g)?.length ?? 0) > (firstLine.match(/,/g)?.length ?? 0)
+      ? ";"
+      : ",";
   const rows: string[][] = [];
   let row: string[] = [];
   let value = "";
@@ -103,7 +174,10 @@ function parseCsv(text: string): Record<string, string>[] {
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index];
     if (char === '"') {
-      if (quoted && source[index + 1] === '"') { value += '"'; index += 1; } else quoted = !quoted;
+      if (quoted && source[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else quoted = !quoted;
     } else if (char === delimiter && !quoted) {
       row.push(value.trim());
       value = "";
@@ -117,8 +191,19 @@ function parseCsv(text: string): Record<string, string>[] {
   row.push(value.trim());
   if (row.some(Boolean)) rows.push(row);
   if (rows.length < 2) return [];
-  const headers = rows[0].map((header) => header.toLowerCase().trim().replace(/[._-]+/g, " "));
-  return rows.slice(1).map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""])));
+  const headers = rows[0].map((header) =>
+    header
+      .toLowerCase()
+      .trim()
+      .replace(/[._-]+/g, " "),
+  );
+  return rows
+    .slice(1)
+    .map((values) =>
+      Object.fromEntries(
+        headers.map((header, index) => [header, values[index] ?? ""]),
+      ),
+    );
 }
 
 function firstCsvValue(row: Record<string, string>, candidates: string[]) {
@@ -133,12 +218,12 @@ function firstCsvValue(row: Record<string, string>, candidates: string[]) {
 function requireAdminAuth(req: any, res: any, next: any) {
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123"; // Default for development
   const providedPassword = req.headers["x-admin-password"];
-  
+
   if (providedPassword !== adminPassword) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  
+
   next();
 }
 
@@ -154,50 +239,58 @@ function requireAuth(req: any, res: any, next: any) {
 // Helper function to escape XML special characters
 function escapeXml(unsafe: string): string {
   return unsafe
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 // Receipt fallback system - Tinkoff RECEIPT webhooks may be delayed or missed
 // This polls GetState API as backup, but checks DB before sending to prevent duplicates
 async function checkAndSendReceiptFallback(
-  orderId: number, 
-  paymentId: string, 
-  customerPhone: string, 
-  attemptNumber: number
+  orderId: number,
+  paymentId: string,
+  customerPhone: string,
+  attemptNumber: number,
 ): Promise<boolean> {
   try {
-    console.log(`[Receipt Fallback #${attemptNumber}] Checking receipt for order ${orderId}`);
-    
+    console.log(
+      `[Receipt Fallback #${attemptNumber}] Checking receipt for order ${orderId}`,
+    );
+
     // CRITICAL: Check if SMS already sent using the flag
     const existingOrder = await db.query.orders.findFirst({
       where: eq(ordersTable.id, orderId),
-      columns: { receiptUrl: true, receiptSmsSent: true }
+      columns: { receiptUrl: true, receiptSmsSent: true },
     });
-    
+
     if (existingOrder?.receiptSmsSent) {
-      console.log(`[Receipt Fallback #${attemptNumber}] SMS already sent for order ${orderId}, stopping`);
+      console.log(
+        `[Receipt Fallback #${attemptNumber}] SMS already sent for order ${orderId}, stopping`,
+      );
       return true; // Already done, stop fallback
     }
-    
+
     const tinkoffClient = getTinkoffClient();
     const paymentState = await tinkoffClient.getState(paymentId);
-    
+
     // Extract receipt URL from GetState response
     let receiptUrl: string | null = null;
-    
-    if (paymentState.Receipts && Array.isArray(paymentState.Receipts) && paymentState.Receipts.length > 0) {
+
+    if (
+      paymentState.Receipts &&
+      Array.isArray(paymentState.Receipts) &&
+      paymentState.Receipts.length > 0
+    ) {
       const receiptWithUrl = paymentState.Receipts.find((r: any) => r.Url);
       if (receiptWithUrl) {
         receiptUrl = receiptWithUrl.Url;
       }
     }
-    
+
     if (!receiptUrl) {
-      if (typeof paymentState.Receipt === 'string') {
+      if (typeof paymentState.Receipt === "string") {
         receiptUrl = paymentState.Receipt;
       } else if (paymentState.Receipt?.Url) {
         receiptUrl = paymentState.Receipt.Url;
@@ -205,34 +298,53 @@ async function checkAndSendReceiptFallback(
         receiptUrl = paymentState.ReceiptUrl;
       }
     }
-    
+
     if (receiptUrl) {
-      console.log(`[Receipt Fallback #${attemptNumber}] Receipt URL found:`, receiptUrl);
-      
+      console.log(
+        `[Receipt Fallback #${attemptNumber}] Receipt URL found:`,
+        receiptUrl,
+      );
+
       // ATOMIC: Try to claim SMS sending rights with conditional update
       // Only updates if receiptSmsSent is still false (prevents race conditions)
-      const updateResult = await db.update(ordersTable)
+      const updateResult = await db
+        .update(ordersTable)
         .set({ receiptUrl: receiptUrl, receiptSmsSent: true })
-        .where(and(eq(ordersTable.id, orderId), eq(ordersTable.receiptSmsSent, false)));
-      
+        .where(
+          and(
+            eq(ordersTable.id, orderId),
+            eq(ordersTable.receiptSmsSent, false),
+          ),
+        );
+
       // Check if we won the race (row was updated)
       if (updateResult.rowCount === 0) {
-        console.log(`[Receipt Fallback #${attemptNumber}] SMS already sent (lost race), stopping`);
+        console.log(
+          `[Receipt Fallback #${attemptNumber}] SMS already sent (lost race), stopping`,
+        );
         return true;
       }
-      
-      console.log(`[Receipt Fallback #${attemptNumber}] Won SMS race - sending SMS`);
-      
+
+      console.log(
+        `[Receipt Fallback #${attemptNumber}] Won SMS race - sending SMS`,
+      );
+
       // Send SMS
       try {
         const normalizedPhone = normalizePhone(customerPhone);
         await sendReceiptSms(normalizedPhone, receiptUrl, orderId);
-        console.log(`[Receipt Fallback #${attemptNumber}] ✅ SMS sent for order ${orderId}`);
+        console.log(
+          `[Receipt Fallback #${attemptNumber}] ✅ SMS sent for order ${orderId}`,
+        );
         return true;
       } catch (error) {
-        console.error(`[Receipt Fallback #${attemptNumber}] SMS failed for order ${orderId}:`, error);
+        console.error(
+          `[Receipt Fallback #${attemptNumber}] SMS failed for order ${orderId}:`,
+          error,
+        );
         // Reset flag so next timer can retry
-        await db.update(ordersTable)
+        await db
+          .update(ordersTable)
           .set({ receiptSmsSent: false })
           .where(eq(ordersTable.id, orderId));
         const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}`;
@@ -240,11 +352,16 @@ async function checkAndSendReceiptFallback(
         return false; // Return false so next timer can retry
       }
     } else {
-      console.log(`[Receipt Fallback #${attemptNumber}] Receipt not ready for order ${orderId}`);
+      console.log(
+        `[Receipt Fallback #${attemptNumber}] Receipt not ready for order ${orderId}`,
+      );
       return false;
     }
   } catch (error) {
-    console.error(`[Receipt Fallback #${attemptNumber}] Error for order ${orderId}:`, error);
+    console.error(
+      `[Receipt Fallback #${attemptNumber}] Error for order ${orderId}:`,
+      error,
+    );
     return false;
   }
 }
@@ -267,7 +384,9 @@ function cancelTelegramNotifyTimer(orderId: number): PendingNotifyData | null {
   if (entry) {
     clearTimeout(entry.timer);
     pendingTelegramNotifyData.delete(orderId);
-    console.log(`[Telegram Notify] Cancelled pending timer for order ${orderId}`);
+    console.log(
+      `[Telegram Notify] Cancelled pending timer for order ${orderId}`,
+    );
   }
   return entry ?? null;
 }
@@ -279,122 +398,192 @@ function scheduleTelegramNotifyDeferred(
   abInfo: AbAssignment | null,
 ): void {
   cancelTelegramNotifyTimer(orderId);
-  const timer = setTimeout(async () => {
-    pendingTelegramNotifyData.delete(orderId);
-    try {
-      const latestOrder = await db.query.orders.findFirst({ where: eq(ordersTable.id, orderId) });
-      if (latestOrder) {
-        await sendTelegramOrderNotification(latestOrder, breakdown, percents, abInfo);
-        console.log(`[Telegram Notify] Deferred notification sent for order ${orderId} (status: ${latestOrder.paymentStatus ?? 'null'})`);
+  const timer = setTimeout(
+    async () => {
+      pendingTelegramNotifyData.delete(orderId);
+      try {
+        const latestOrder = await db.query.orders.findFirst({
+          where: eq(ordersTable.id, orderId),
+        });
+        if (latestOrder) {
+          await sendTelegramOrderNotification(
+            latestOrder,
+            breakdown,
+            percents,
+            abInfo,
+          );
+          console.log(
+            `[Telegram Notify] Deferred notification sent for order ${orderId} (status: ${latestOrder.paymentStatus ?? "null"})`,
+          );
+        }
+      } catch (err) {
+        console.error(
+          `[Telegram Notify] Failed deferred notification for order ${orderId}:`,
+          err,
+        );
       }
-    } catch (err) {
-      console.error(`[Telegram Notify] Failed deferred notification for order ${orderId}:`, err);
-    }
-  }, 5 * 60 * 1000);
-  pendingTelegramNotifyData.set(orderId, { timer, breakdown, percents, abInfo });
-  console.log(`[Telegram Notify] Deferred notification scheduled for order ${orderId} in 5 min`);
+    },
+    5 * 60 * 1000,
+  );
+  pendingTelegramNotifyData.set(orderId, {
+    timer,
+    breakdown,
+    percents,
+    abInfo,
+  });
+  console.log(
+    `[Telegram Notify] Deferred notification scheduled for order ${orderId} in 5 min`,
+  );
 }
 
 // Cancel all pending fallback timers for an order (called when webhook delivers receipt)
 function cancelReceiptFallback(orderId: number): void {
   const timers = activeFallbackTimers.get(orderId);
   if (timers) {
-    timers.forEach(t => clearTimeout(t));
+    timers.forEach((t) => clearTimeout(t));
     activeFallbackTimers.delete(orderId);
-    console.log(`[Receipt Fallback] Cancelled pending timers for order ${orderId}`);
+    console.log(
+      `[Receipt Fallback] Cancelled pending timers for order ${orderId}`,
+    );
   }
 }
 
 // Schedule fallback receipt checks (only runs if RECEIPT webhook doesn't arrive first)
-function scheduleReceiptFallback(orderId: number, paymentId: string, customerPhone: string): void {
+function scheduleReceiptFallback(
+  orderId: number,
+  paymentId: string,
+  customerPhone: string,
+): void {
   // Cancel any existing timers for this order first (prevent duplicate scheduling)
   cancelReceiptFallback(orderId);
-  
+
   // Delays: 3min, 7min, 12min after CONFIRMED (giving webhook time to arrive first)
   const delays = [3, 7, 12]; // minutes
-  
-  console.log(`[Receipt Fallback] Scheduled for order ${orderId} at: +3min, +7min, +12min`);
-  
+
+  console.log(
+    `[Receipt Fallback] Scheduled for order ${orderId} at: +3min, +7min, +12min`,
+  );
+
   const timers: NodeJS.Timeout[] = [];
-  
+
   delays.forEach((delayMinutes, index) => {
-    const timer = setTimeout(async () => {
-      const attemptNumber = index + 1;
-      const success = await checkAndSendReceiptFallback(orderId, paymentId, customerPhone, attemptNumber);
-      
-      if (success) {
-        console.log(`[Receipt Fallback #${attemptNumber}] Complete for order ${orderId}`);
-        // Cancel remaining timers
-        cancelReceiptFallback(orderId);
-      } else if (attemptNumber === delays.length) {
-        console.error(`[Receipt Fallback] CRITICAL: All attempts exhausted for order ${orderId}`);
-        const smsText = `Спасибо за заказ #${orderId}! Ваш чек: [см. ЛК Tinkoff]`;
-        await sendFailedReceiptSmsNotification(orderId, customerPhone, smsText);
-        activeFallbackTimers.delete(orderId);
-      }
-    }, delayMinutes * 60 * 1000);
+    const timer = setTimeout(
+      async () => {
+        const attemptNumber = index + 1;
+        const success = await checkAndSendReceiptFallback(
+          orderId,
+          paymentId,
+          customerPhone,
+          attemptNumber,
+        );
+
+        if (success) {
+          console.log(
+            `[Receipt Fallback #${attemptNumber}] Complete for order ${orderId}`,
+          );
+          // Cancel remaining timers
+          cancelReceiptFallback(orderId);
+        } else if (attemptNumber === delays.length) {
+          console.error(
+            `[Receipt Fallback] CRITICAL: All attempts exhausted for order ${orderId}`,
+          );
+          const smsText = `Спасибо за заказ #${orderId}! Ваш чек: [см. ЛК Tinkoff]`;
+          await sendFailedReceiptSmsNotification(
+            orderId,
+            customerPhone,
+            smsText,
+          );
+          activeFallbackTimers.delete(orderId);
+        }
+      },
+      delayMinutes * 60 * 1000,
+    );
     timers.push(timer);
   });
-  
+
   activeFallbackTimers.set(orderId, timers);
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup user authentication (email/password)
   setupAuth(app);
-  
+
   // Goal tracking endpoints for Yandex Metrica (form submission type goals)
   // These endpoints accept POST from forms and return minimal HTML response
   app.post("/goal/cart", (_req, res) => {
-    res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
+    res
+      .status(200)
+      .send(
+        "<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>",
+      );
   });
-  
+
   app.post("/goal/payment", (_req, res) => {
-    res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
+    res
+      .status(200)
+      .send(
+        "<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>",
+      );
   });
-  
+
   app.post("/goal/registration", (_req, res) => {
-    res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
+    res
+      .status(200)
+      .send(
+        "<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>",
+      );
   });
-  
+
   app.post("/goal/contact", (_req, res) => {
-    res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
+    res
+      .status(200)
+      .send(
+        "<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>",
+      );
   });
-  
+
   app.post("/goal/quiz", (_req, res) => {
-    res.status(200).send("<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>");
+    res
+      .status(200)
+      .send(
+        "<!DOCTYPE html><html><head><title>Goal</title></head><body>OK</body></html>",
+      );
   });
-  
+
   // Also handle GET requests for goal pages (needed for Yandex Metrica visual editor)
   app.get("/goal/cart", (_req, res) => {
-    res.status(200).send(`<!DOCTYPE html><html><head><title>Cart Goal</title></head><body>
+    res.status(200)
+      .send(`<!DOCTYPE html><html><head><title>Cart Goal</title></head><body>
       <form id="goal-cart-form" action="/goal/cart" method="POST">
         <input type="hidden" name="goal" value="cart" />
         <button type="submit">Submit</button>
       </form>
     </body></html>`);
   });
-  
+
   app.get("/goal/payment", (_req, res) => {
-    res.status(200).send(`<!DOCTYPE html><html><head><title>Payment Goal</title></head><body>
+    res.status(200)
+      .send(`<!DOCTYPE html><html><head><title>Payment Goal</title></head><body>
       <form id="goal-payment-form" action="/goal/payment" method="POST">
         <input type="hidden" name="goal" value="payment" />
         <button type="submit">Submit</button>
       </form>
     </body></html>`);
   });
-  
+
   app.get("/goal/registration", (_req, res) => {
-    res.status(200).send(`<!DOCTYPE html><html><head><title>Registration Goal</title></head><body>
+    res.status(200)
+      .send(`<!DOCTYPE html><html><head><title>Registration Goal</title></head><body>
       <form id="goal-registration-form" action="/goal/registration" method="POST">
         <input type="hidden" name="goal" value="registration" />
         <button type="submit">Submit</button>
       </form>
     </body></html>`);
   });
-  
+
   app.get("/goal/contact", (_req, res) => {
-    res.status(200).send(`<!DOCTYPE html><html><head><title>Contact Goal</title></head><body>
+    res.status(200)
+      .send(`<!DOCTYPE html><html><head><title>Contact Goal</title></head><body>
       <form id="goal-contact-form" name="contact-telegram" action="/goal/contact" method="POST">
         <input type="hidden" name="goal" value="contact" />
         <input type="hidden" name="form_name" value="contact-telegram" />
@@ -402,9 +591,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       </form>
     </body></html>`);
   });
-  
+
   app.get("/goal/quiz", (_req, res) => {
-    res.status(200).send(`<!DOCTYPE html><html><head><title>Quiz Goal</title></head><body>
+    res.status(200)
+      .send(`<!DOCTYPE html><html><head><title>Quiz Goal</title></head><body>
       <form id="goal-quiz-form" name="quiz-tea-selection" action="/goal/quiz" method="POST">
         <input type="hidden" name="goal" value="quiz" />
         <input type="hidden" name="form_name" value="quiz-tea-selection" />
@@ -412,7 +602,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       </form>
     </body></html>`);
   });
-  
+
   // Admin auth verification endpoint
   app.post("/api/auth/verify", requireAdminAuth, async (_req, res) => {
     // If middleware passes, password is correct
@@ -473,19 +663,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/tags", async (_req, res) => {
     try {
       const products = await storage.getProducts();
-      
+
       // Extract unique types
-      const types = Array.from(new Set(products.map(p => p.teaType).filter(Boolean)));
-      
+      const types = Array.from(
+        new Set(products.map((p) => p.teaType).filter(Boolean)),
+      );
+
       // Extract unique effects
       const effectsSet = new Set<string>();
-      products.forEach(p => {
+      products.forEach((p) => {
         if (p.effects) {
-          p.effects.forEach(effect => effectsSet.add(effect));
+          p.effects.forEach((effect) => effectsSet.add(effect));
         }
       });
       const effects = Array.from(effectsSet);
-      
+
       res.json({ types, effects });
     } catch (error) {
       res.status(500).json({ error: "Failed to get tags" });
@@ -556,47 +748,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to generate YML feed
   async function generateYMLFeed(baseUrl: string): Promise<string> {
     const products = await storage.getProducts();
-    
+
     // Get current date in ISO format
-    const currentDate = new Date().toISOString().split('T')[0] + ' ' + 
-                        new Date().toTimeString().split(' ')[0];
-    
+    const currentDate =
+      new Date().toISOString().split("T")[0] +
+      " " +
+      new Date().toTimeString().split(" ")[0];
+
     // Build YML catalog
     let yml = '<?xml version="1.0" encoding="UTF-8"?>\n';
     yml += `<yml_catalog date="${currentDate}">\n`;
-    yml += '  <shop>\n';
-    yml += '    <name>Пуэр Паб</name>\n';
-    yml += '    <company>Пуэр Паб</company>\n';
+    yml += "  <shop>\n";
+    yml += "    <name>Пуэр Паб</name>\n";
+    yml += "    <company>Пуэр Паб</company>\n";
     yml += `    <url>${baseUrl}</url>\n`;
-    yml += '    <currencies>\n';
+    yml += "    <currencies>\n";
     yml += '      <currency id="RUB" rate="1"/>\n';
-    yml += '    </currencies>\n';
-    yml += '    <categories>\n';
+    yml += "    </currencies>\n";
+    yml += "    <categories>\n";
     yml += '      <category id="1">Чай</category>\n';
     yml += '      <category id="2">Чайная посуда</category>\n';
-    yml += '    </categories>\n';
-    yml += '    <offers>\n';
-    
+    yml += "    </categories>\n";
+    yml += "    <offers>\n";
+
     // Add each product as an offer
-    products.forEach(product => {
-      const categoryId = product.category === 'tea' ? '1' : '2';
-      
+    products.forEach((product) => {
+      const categoryId = product.category === "tea" ? "1" : "2";
+
       // Calculate price based on category
       let price: string;
       let weightParam: string | null = null;
-      
-      if (product.category === 'teaware') {
+
+      if (product.category === "teaware") {
         // For teaware: pricePerGram is actually price per piece
         price = product.pricePerGram.toFixed(2);
       } else {
         // For tea: use minimum available quantity or 100g as base
-        const minQuantity = product.availableQuantities && product.availableQuantities.length > 0
-          ? Math.min(...product.availableQuantities.map(q => parseInt(q)))
-          : 100;
+        const minQuantity =
+          product.availableQuantities && product.availableQuantities.length > 0
+            ? Math.min(...product.availableQuantities.map((q) => parseInt(q)))
+            : 100;
         price = (product.pricePerGram * minQuantity).toFixed(2);
         weightParam = `${minQuantity}`;
       }
-      
+
       yml += `      <offer id="${product.id}" available="true">\n`;
       yml += `        <url>${baseUrl}/product/${product.id}</url>\n`;
       yml += `        <name>${escapeXml(product.name)}</name>\n`;
@@ -604,60 +799,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
       yml += `        <price>${price}</price>\n`;
       yml += `        <currencyId>RUB</currencyId>\n`;
       yml += `        <categoryId>${categoryId}</categoryId>\n`;
-      
+
       // Add images
       if (product.images && product.images.length > 0) {
-        product.images.forEach(image => {
-          const imageUrl = image.startsWith('http') ? image : `${baseUrl}${image}`;
+        product.images.forEach((image) => {
+          const imageUrl = image.startsWith("http")
+            ? image
+            : `${baseUrl}${image}`;
           yml += `        <picture>${escapeXml(imageUrl)}</picture>\n`;
         });
       }
-      
+
       // Add description
       yml += `        <description>${escapeXml(product.description)}</description>\n`;
-      
+
       // Add tea type as param
       yml += `        <param name="Тип">${escapeXml(product.teaType)}</param>\n`;
-      
+
       // Add category as param
-      const categoryName = product.category === 'tea' ? 'Чай' : 'Чайная посуда';
+      const categoryName = product.category === "tea" ? "Чай" : "Чайная посуда";
       yml += `        <param name="Категория">${escapeXml(categoryName)}</param>\n`;
-      
+
       // Add weight param for tea (indicates the weight for the listed price)
       if (weightParam) {
         yml += `        <param name="Вес">${weightParam}г</param>\n`;
       }
-      
+
       // Add effects if present
       if (product.effects && product.effects.length > 0) {
-        yml += `        <param name="Эффекты">${escapeXml(product.effects.join(', '))}</param>\n`;
+        yml += `        <param name="Эффекты">${escapeXml(product.effects.join(", "))}</param>\n`;
       }
-      
+
       // Add available quantities for tea
-      if (product.category === 'tea' && product.availableQuantities && product.availableQuantities.length > 0) {
-        yml += `        <param name="Доступные количества">${escapeXml(product.availableQuantities.join('г, '))}г</param>\n`;
+      if (
+        product.category === "tea" &&
+        product.availableQuantities &&
+        product.availableQuantities.length > 0
+      ) {
+        yml += `        <param name="Доступные количества">${escapeXml(product.availableQuantities.join("г, "))}г</param>\n`;
       }
-      
-      yml += '      </offer>\n';
+
+      yml += "      </offer>\n";
     });
-    
-    yml += '    </offers>\n';
-    yml += '  </shop>\n';
-    yml += '</yml_catalog>\n';
-    
+
+    yml += "    </offers>\n";
+    yml += "  </shop>\n";
+    yml += "</yml_catalog>\n";
+
     return yml;
   }
 
   // YML feed endpoint (for marketplaces to fetch dynamically)
   app.get("/api/yml-feed", async (req, res) => {
     try {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
       const yml = await generateYMLFeed(baseUrl);
-      
-      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
       res.send(yml);
     } catch (error) {
-      console.error('[YML Feed] Error:', error);
+      console.error("[YML Feed] Error:", error);
       res.status(500).json({ error: "Failed to generate YML feed" });
     }
   });
@@ -665,61 +866,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Export products to YML format (for file download)
   app.get("/api/products/export/yml", async (req, res) => {
     try {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
       const yml = await generateYMLFeed(baseUrl);
-      
+
       // Set headers for file download
-      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="products.yml"');
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        'attachment; filename="products.yml"',
+      );
       res.send(yml);
     } catch (error) {
-      console.error('[YML Export] Error:', error);
+      console.error("[YML Export] Error:", error);
       res.status(500).json({ error: "Failed to generate YML export" });
     }
   });
 
   // Image upload route (protected - only for admin)
-  app.post("/api/upload", requireAdminAuth, upload.array("images", 10), async (req, res) => {
-    try {
-      console.log("[Upload] Received upload request");
-      
-      if (!req.files || !Array.isArray(req.files)) {
-        console.log("[Upload] No files in request");
-        res.status(400).json({ error: "No files uploaded" });
-        return;
+  app.post(
+    "/api/upload",
+    requireAdminAuth,
+    upload.array("images", 10),
+    async (req, res) => {
+      try {
+        console.log("[Upload] Received upload request");
+
+        if (!req.files || !Array.isArray(req.files)) {
+          console.log("[Upload] No files in request");
+          res.status(400).json({ error: "No files uploaded" });
+          return;
+        }
+
+        console.log(`[Upload] Processing ${req.files.length} files`);
+        const sharp = (await import("sharp")).default;
+        const objectStorageService = new ObjectStorageService();
+        const uploadedUrls: string[] = [];
+
+        for (const file of req.files) {
+          const filename = `${randomUUID()}.webp`;
+          console.log(`[Upload] Converting and uploading file: ${filename}`);
+
+          // Convert image to WebP format with quality 80 and max dimension 1920px
+          const webpBuffer = await sharp(file.buffer)
+            .resize(1920, 1920, {
+              fit: "inside",
+              withoutEnlargement: true,
+            })
+            .webp({ quality: 80 })
+            .toBuffer();
+
+          console.log(
+            `[Upload] Original size: ${file.size} bytes, WebP size: ${webpBuffer.length} bytes`,
+          );
+          const url = await objectStorageService.uploadPublicObject(
+            webpBuffer,
+            filename,
+          );
+          console.log(`[Upload] File uploaded: ${url}`);
+          uploadedUrls.push(url);
+        }
+
+        console.log(`[Upload] Success! URLs:`, uploadedUrls);
+        res.json({ urls: uploadedUrls });
+      } catch (error) {
+        console.error("[Upload] Error:", error);
+        res.status(500).json({ error: "Failed to upload files" });
       }
-
-      console.log(`[Upload] Processing ${req.files.length} files`);
-      const sharp = (await import('sharp')).default;
-      const objectStorageService = new ObjectStorageService();
-      const uploadedUrls: string[] = [];
-
-      for (const file of req.files) {
-        const filename = `${randomUUID()}.webp`;
-        console.log(`[Upload] Converting and uploading file: ${filename}`);
-        
-        // Convert image to WebP format with quality 80 and max dimension 1920px
-        const webpBuffer = await sharp(file.buffer)
-          .resize(1920, 1920, { 
-            fit: 'inside', 
-            withoutEnlargement: true 
-          })
-          .webp({ quality: 80 })
-          .toBuffer();
-        
-        console.log(`[Upload] Original size: ${file.size} bytes, WebP size: ${webpBuffer.length} bytes`);
-        const url = await objectStorageService.uploadPublicObject(webpBuffer, filename);
-        console.log(`[Upload] File uploaded: ${url}`);
-        uploadedUrls.push(url);
-      }
-
-      console.log(`[Upload] Success! URLs:`, uploadedUrls);
-      res.json({ urls: uploadedUrls });
-    } catch (error) {
-      console.error("[Upload] Error:", error);
-      res.status(500).json({ error: "Failed to upload files" });
-    }
-  });
+    },
+  );
 
   // Serve public objects (with HEIC to WebP conversion)
   app.get("/public/:filePath(*)", async (req, res) => {
@@ -730,22 +944,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!file) {
         return res.status(404).json({ error: "File not found" });
       }
-      
+
       // Check if file is HEIC - convert to WebP for better compatibility
-      const isHeic = filePath.toLowerCase().endsWith('.heic');
+      const isHeic = filePath.toLowerCase().endsWith(".heic");
       if (isHeic) {
         try {
-          const sharp = (await import('sharp')).default;
+          const sharp = (await import("sharp")).default;
           const [buffer] = await file.download();
-          
+
           const webpBuffer = await sharp(buffer)
-            .resize(1920, 1920, { 
-              fit: 'inside', 
-              withoutEnlargement: true 
+            .resize(1920, 1920, {
+              fit: "inside",
+              withoutEnlargement: true,
             })
             .webp({ quality: 80 })
             .toBuffer();
-          
+
           res.set({
             "Content-Type": "image/webp",
             "Content-Length": webpBuffer.length,
@@ -754,11 +968,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           res.send(webpBuffer);
           return;
         } catch (conversionError) {
-          console.error("[Public] HEIC conversion failed, serving original:", conversionError);
+          console.error(
+            "[Public] HEIC conversion failed, serving original:",
+            conversionError,
+          );
           // Fallback to original file
         }
       }
-      
+
       objectStorageService.downloadObject(file, res);
     } catch (error) {
       console.error("Error searching for public object:", error);
@@ -820,7 +1037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Необходима авторизация" });
     }
-    
+
     try {
       const userId = (req.user as any).id;
       const orders = await storage.getUserOrders(userId);
@@ -836,21 +1053,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Необходима авторизация" });
     }
-    
+
     try {
       const userId = (req.user as any).id;
-      
+
       // Get user's completed/paid orders
       const userOrders = await storage.getUserOrders(userId);
-      const completedOrders = userOrders.filter((order: any) => 
-        order.status === 'paid' || order.status === 'completed'
+      const completedOrders = userOrders.filter(
+        (order: any) => order.status === "paid" || order.status === "completed",
       );
-      
+
       // If no purchases yet, return empty recommendations
       if (completedOrders.length === 0) {
         return res.json([]);
       }
-      
+
       // Extract product IDs from order items
       const purchasedProductIds = new Set<number>();
       completedOrders.forEach((order: any) => {
@@ -865,56 +1082,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("[Recommendations] Failed to parse order items:", e);
         }
       });
-      
+
       // Get all products
       const allProducts = await storage.getProducts();
-      
+
       // Get details of purchased products
-      const purchasedProducts = allProducts.filter((p: any) => 
-        purchasedProductIds.has(p.id)
+      const purchasedProducts = allProducts.filter((p: any) =>
+        purchasedProductIds.has(p.id),
       );
-      
+
       // Analyze user preferences
       const teaTypePreferences = new Map<string, number>();
       const effectPreferences = new Map<string, number>();
-      let categoryPreference = 'tea';
-      
+      let categoryPreference = "tea";
+
       purchasedProducts.forEach((product: any) => {
         // Count tea types
         if (product.teaType) {
           teaTypePreferences.set(
-            product.teaType, 
-            (teaTypePreferences.get(product.teaType) || 0) + 1
+            product.teaType,
+            (teaTypePreferences.get(product.teaType) || 0) + 1,
           );
         }
-        
+
         // Count effects
         if (product.effects && Array.isArray(product.effects)) {
           product.effects.forEach((effect: string) => {
-            effectPreferences.set(effect, (effectPreferences.get(effect) || 0) + 1);
+            effectPreferences.set(
+              effect,
+              (effectPreferences.get(effect) || 0) + 1,
+            );
           });
         }
-        
+
         // Track category
         if (product.category) {
           categoryPreference = product.category;
         }
       });
-      
+
       // Score and rank products
       const scoredProducts = allProducts
-        .filter((p: any) => 
-          !purchasedProductIds.has(p.id) && // Exclude already purchased
-          !p.outOfStock // Exclude out of stock
+        .filter(
+          (p: any) =>
+            !purchasedProductIds.has(p.id) && // Exclude already purchased
+            !p.outOfStock, // Exclude out of stock
         )
         .map((product: any) => {
           let score = 0;
-          
+
           // Same tea type gets high score
           if (product.teaType && teaTypePreferences.has(product.teaType)) {
             score += (teaTypePreferences.get(product.teaType) || 0) * 10;
           }
-          
+
           // Matching effects get points
           if (product.effects && Array.isArray(product.effects)) {
             product.effects.forEach((effect: string) => {
@@ -923,21 +1144,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             });
           }
-          
+
           // Same category gets bonus
           if (product.category === categoryPreference) {
             score += 3;
           }
-          
+
           return { ...product, score };
         })
         .filter((p: any) => p.score > 0) // Only include products with some relevance
         .sort((a: any, b: any) => b.score - a.score) // Sort by score descending
         .slice(0, 6); // Top 6 recommendations
-      
+
       // Remove score from response
-      const recommendations = scoredProducts.map(({ score, ...product }) => product);
-      
+      const recommendations = scoredProducts.map(
+        ({ score, ...product }) => product,
+      );
+
       res.json(recommendations);
     } catch (error) {
       console.error("[Recommendations] Failed to get recommendations:", error);
@@ -953,9 +1176,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("[Order] Order validated:", {
         customer: orderData.name,
         itemCount: orderData.items.length,
-        total: orderData.total
+        total: orderData.total,
       });
-      
+
       // Get userId and user if authenticated
       let userId: string | null = null;
       let user: any = null;
@@ -965,7 +1188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           user = await storage.getUser(userId);
         }
       }
-      
+
       // Backend security check: Recalculate total using canonical pricing logic
       // This prevents manipulation of discounts
       const products = await storage.getProducts();
@@ -990,7 +1213,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       const abMultiplier = abAssignment?.multiplier ?? 1;
       if (abMultiplier !== 1) {
-        console.log("[Order] A/B price multiplier applied:", abMultiplier, "for identifier:", identifier, "variant:", abAssignment?.variantId);
+        console.log(
+          "[Order] A/B price multiplier applied:",
+          abMultiplier,
+          "for identifier:",
+          identifier,
+          "variant:",
+          abAssignment?.variantId,
+        );
       }
 
       // Map order items to PricingItem using server-authoritative product data
@@ -1014,9 +1244,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const level4MinXP = siteSettings?.loyaltyLevel4MinXP ?? 15000;
         const level3MinXP = siteSettings?.loyaltyLevel3MinXP ?? 7000;
         const level2MinXP = siteSettings?.loyaltyLevel2MinXP ?? 3000;
-        if (xp >= level4MinXP) loyaltyDiscountPercent = siteSettings?.loyaltyLevel4Discount ?? 15;
-        else if (xp >= level3MinXP) loyaltyDiscountPercent = siteSettings?.loyaltyLevel3Discount ?? 10;
-        else if (xp >= level2MinXP) loyaltyDiscountPercent = siteSettings?.loyaltyLevel2Discount ?? 5;
+        if (xp >= level4MinXP)
+          loyaltyDiscountPercent = siteSettings?.loyaltyLevel4Discount ?? 15;
+        else if (xp >= level3MinXP)
+          loyaltyDiscountPercent = siteSettings?.loyaltyLevel3Discount ?? 10;
+        else if (xp >= level2MinXP)
+          loyaltyDiscountPercent = siteSettings?.loyaltyLevel2Discount ?? 5;
       }
 
       // Run canonical breakdown (same order of discounts as CartDrawer)
@@ -1038,15 +1271,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const usedFirstOrderDiscount = breakdown.firstOrderDiscountAmount > 0;
 
       if (breakdown.firstOrderDiscountAmount > 0) {
-        console.log("[Order] First order discount applied:", breakdown.firstOrderDiscountAmount, `(${firstOrderDiscountPercent}%)`);
+        console.log(
+          "[Order] First order discount applied:",
+          breakdown.firstOrderDiscountAmount,
+          `(${firstOrderDiscountPercent}%)`,
+        );
       }
 
       // Log mismatch only when outside rounding tolerance (indicates stale client data)
       if (Math.abs(calculatedTotal - orderData.total) > 1) {
         console.warn(
-          "[Order] Total mismatch - calculated:", calculatedTotal,
-          "received:", orderData.total,
-          "abMultiplier:", abMultiplier,
+          "[Order] Total mismatch - calculated:",
+          calculatedTotal,
+          "received:",
+          orderData.total,
+          "abMultiplier:",
+          abMultiplier,
         );
       }
 
@@ -1055,10 +1295,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Validate total is not negative
       if (finalTotal < 0) {
-        res.status(400).json({ error: "Итоговая сумма заказа не может быть отрицательной" });
+        res
+          .status(400)
+          .json({ error: "Итоговая сумма заказа не может быть отрицательной" });
         return;
       }
-      
+
       // Save order to database with calculated total
       const savedOrder = await storage.createOrder({
         userId,
@@ -1072,25 +1314,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         usedFirstOrderDiscount,
       });
       console.log("[Order] Order saved to database, ID:", savedOrder.id);
-      
+
       // Mark first order discount as used if applicable
       if (usedFirstOrderDiscount && userId) {
         await storage.markFirstOrderDiscountUsed(userId);
-        console.log("[Order] First order discount marked as used for user:", userId);
+        console.log(
+          "[Order] First order discount marked as used for user:",
+          userId,
+        );
       }
-      
+
       // Clear custom discount if it was used
       if (breakdown.customDiscountAmount > 0 && userId) {
-        await db.update(usersTable).set({ customDiscount: null }).where(eq(usersTable.id, userId));
+        await db
+          .update(usersTable)
+          .set({ customDiscount: null })
+          .where(eq(usersTable.id, userId));
         console.log("[Order] Custom discount cleared for user:", userId);
       }
-      
+
       // Clear cart for authenticated users
       if (userId) {
         await storage.clearCart(userId);
         console.log("[Order] Cart cleared for user:", userId);
       }
-      
+
       // Save address if requested (for authenticated users only)
       if (orderData.saveAddress && userId && orderData.address) {
         try {
@@ -1109,7 +1357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Don't block order creation if address saving fails
         }
       }
-      
+
       // Send email notification
       try {
         await sendOrderNotification(orderData);
@@ -1117,19 +1365,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (emailError) {
         console.error("[Order] Email sending failed:", emailError);
         // Return 502 for external service failures
-        res.status(502).json({ error: "Не удалось отправить уведомление. Попробуйте позже." });
+        res
+          .status(502)
+          .json({
+            error: "Не удалось отправить уведомление. Попробуйте позже.",
+          });
         return;
       }
-      
+
       // Schedule Telegram notification: immediately if payment confirmed, else after 5 min
-      scheduleTelegramNotifyDeferred(savedOrder.id, breakdown, {
-        firstOrder: firstOrderDiscountPercent,
-        loyalty: loyaltyDiscountPercent,
-        custom: user?.customDiscount ?? undefined,
-      }, abAssignment ?? null);
-      
-      res.status(201).json({ 
-        success: true, 
+      scheduleTelegramNotifyDeferred(
+        savedOrder.id,
+        breakdown,
+        {
+          firstOrder: firstOrderDiscountPercent,
+          loyalty: loyaltyDiscountPercent,
+          custom: user?.customDiscount ?? undefined,
+        },
+        abAssignment ?? null,
+      );
+
+      res.status(201).json({
+        success: true,
         message: "Заказ успешно оформлен",
         orderId: savedOrder.id,
       });
@@ -1151,14 +1408,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: "Phone number is required" });
         return;
       }
-      
+
       // Pass phone as-is to searchUserByPhone (it will handle partial searches)
       const user = await storage.searchUserByPhone(phone);
       if (!user) {
         res.status(404).json({ error: "User not found" });
         return;
       }
-      
+
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
       res.json(userWithoutPassword);
@@ -1171,15 +1428,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/admin/users/:id", requireAdminAuth, async (req, res) => {
     try {
       const userId = req.params.id;
-      
+
       const user = await storage.getUser(userId);
       if (!user) {
         res.status(404).json({ error: "User not found" });
         return;
       }
-      
+
       await db.delete(usersTable).where(eq(usersTable.id, userId));
-      
+
       console.log(`[Admin] User deleted: ${userId} (${user.phone})`);
       res.json({ success: true, message: "User deleted successfully" });
     } catch (error) {
@@ -1196,13 +1453,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Укажите номер телефона" });
       }
       if (!password || typeof password !== "string" || password.length < 4) {
-        return res.status(400).json({ error: "Пароль должен быть не менее 4 символов" });
+        return res
+          .status(400)
+          .json({ error: "Пароль должен быть не менее 4 символов" });
       }
 
       const normalizedPhone = normalizePhone(phone);
       const existing = await storage.getUserByPhone(normalizedPhone);
       if (existing) {
-        return res.status(409).json({ error: "Пользователь с таким телефоном уже существует" });
+        return res
+          .status(409)
+          .json({ error: "Пользователь с таким телефоном уже существует" });
       }
 
       const user = await storage.createUser({
@@ -1213,7 +1474,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await storage.markPhoneVerified(user.id);
 
-      console.log(`[Admin] Created user manually: ${normalizedPhone} (id=${user.id})`);
+      console.log(
+        `[Admin] Created user manually: ${normalizedPhone} (id=${user.id})`,
+      );
       res.status(201).json({
         id: user.id,
         phone: user.phone,
@@ -1242,7 +1505,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(usersTable)
         .orderBy(desc(usersTable.id))
         .limit(10);
-      
+
       res.json(recentUsers);
     } catch (error) {
       console.error("[Admin] Get recent users error:", error);
@@ -1265,39 +1528,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.params.id;
       const { xp, reason, description } = req.body;
-      
-      if (typeof xp !== 'number' || xp < 0) {
+
+      if (typeof xp !== "number" || xp < 0) {
         res.status(400).json({ error: "Invalid XP value" });
         return;
       }
-      
-      const validReasons = ["online_order", "offline_purchase", "manual_adjustment", "bonus"];
-      const validatedReason = reason && validReasons.includes(reason) ? reason : "manual_adjustment";
-      
+
+      const validReasons = [
+        "online_order",
+        "offline_purchase",
+        "manual_adjustment",
+        "bonus",
+      ];
+      const validatedReason =
+        reason && validReasons.includes(reason) ? reason : "manual_adjustment";
+
       const user = await storage.getUser(userId);
       if (!user) {
         res.status(404).json({ error: "User not found" });
         return;
       }
-      
+
       const xpDiff = xp - user.xp;
       const updatedUser = await storage.updateUserXP(userId, xp);
       if (!updatedUser) {
         res.status(404).json({ error: "User not found" });
         return;
       }
-      
+
       if (xpDiff !== 0) {
         await storage.createXpTransaction({
           userId,
           amount: xpDiff,
           reason: validatedReason,
-          description: description || (xpDiff > 0 ? `Ручное начисление: +${xpDiff} XP` : `Ручная корректировка: ${xpDiff} XP`),
+          description:
+            description ||
+            (xpDiff > 0
+              ? `Ручное начисление: +${xpDiff} XP`
+              : `Ручная корректировка: ${xpDiff} XP`),
           orderId: null,
           createdBy: "admin",
         });
       }
-      
+
       const { password, ...userWithoutPassword } = updatedUser;
       res.json(userWithoutPassword);
     } catch (error) {
@@ -1309,32 +1582,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/xp-transactions", requireAdminAuth, async (req, res) => {
     try {
       const { userId, amount, reason, description } = req.body;
-      
-      if (!userId || typeof amount !== 'number') {
+
+      if (!userId || typeof amount !== "number") {
         res.status(400).json({ error: "userId and amount are required" });
         return;
       }
-      
-      const validReasons = ["online_order", "offline_purchase", "manual_adjustment", "bonus"];
-      const validatedReason = reason && validReasons.includes(reason) ? reason : "offline_purchase";
-      
+
+      const validReasons = [
+        "online_order",
+        "offline_purchase",
+        "manual_adjustment",
+        "bonus",
+      ];
+      const validatedReason =
+        reason && validReasons.includes(reason) ? reason : "offline_purchase";
+
       const user = await storage.getUser(userId);
       if (!user) {
         res.status(404).json({ error: "User not found" });
         return;
       }
-      
+
       await storage.addUserXP(userId, amount);
-      
+
       const transaction = await storage.createXpTransaction({
         userId,
         amount,
         reason: validatedReason,
-        description: description || `Начисление бонусов: ${amount > 0 ? '+' : ''}${amount} XP`,
+        description:
+          description ||
+          `Начисление бонусов: ${amount > 0 ? "+" : ""}${amount} XP`,
         orderId: null,
         createdBy: "admin",
       });
-      
+
       res.json(transaction);
     } catch (error) {
       console.error("[Admin] Create XP transaction error:", error);
@@ -1370,7 +1651,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const phone = req.query.phone as string;
       if (!phone) {
-        return res.status(400).json({ error: "Укажите параметр ?phone=+79001234567" });
+        return res
+          .status(400)
+          .json({ error: "Укажите параметр ?phone=+79001234567" });
       }
 
       const { normalizePhone } = await import("./utils");
@@ -1378,7 +1661,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       try {
         normalizedPhone = normalizePhone(phone);
       } catch {
-        return res.status(400).json({ error: "Неверный формат номера телефона" });
+        return res
+          .status(400)
+          .json({ error: "Неверный формат номера телефона" });
       }
 
       // Find user
@@ -1388,7 +1673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           phone: normalizedPhone,
           userFound: false,
           telegramLinked: false,
-          diagnosis: "Пользователь с таким номером не найден в базе данных"
+          diagnosis: "Пользователь с таким номером не найден в базе данных",
         });
       }
 
@@ -1397,7 +1682,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { eq } = await import("drizzle-orm");
       const { db } = await import("./db");
 
-      const [profile] = await db.select()
+      const [profile] = await db
+        .select()
         .from(telegramProfiles)
         .where(eq(telegramProfiles.userId, user.id))
         .limit(1);
@@ -1409,7 +1695,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: user.id,
           userName: user.name,
           telegramLinked: false,
-          diagnosis: "Пользователь найден, но Telegram не привязан. Пользователь должен пройти привязку через бота."
+          diagnosis:
+            "Пользователь найден, но Telegram не привязан. Пользователь должен пройти привязку через бота.",
         });
       }
 
@@ -1422,7 +1709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ chat_id: profile.chatId }),
-          }
+          },
         );
         const testData = await testResponse.json();
         botReachable = testData.ok === true;
@@ -1441,11 +1728,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         telegramFirstName: profile.firstName || null,
         linkedAt: profile.createdAt,
         botCanReachUser: botReachable,
-        diagnosis: botReachable === false
-          ? "⚠️ Бот не может достучаться до пользователя (возможно, заблокировал бота)"
-          : botReachable === true
-          ? "✓ Telegram привязан, бот может отправлять сообщения"
-          : "Telegram привязан, статус доступности бота неизвестен"
+        diagnosis:
+          botReachable === false
+            ? "⚠️ Бот не может достучаться до пользователя (возможно, заблокировал бота)"
+            : botReachable === true
+              ? "✓ Telegram привязан, бот может отправлять сообщения"
+              : "Telegram привязан, статус доступности бота неизвестен",
       });
     } catch (error) {
       console.error("[Admin] Telegram check error:", error);
@@ -1457,24 +1745,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const XLSX = await import("xlsx");
       const transactions = await storage.getXpTransactions(10000, 0);
-      
-      const data = transactions.map(t => ({
-        "Дата": new Date(t.createdAt).toLocaleString("ru-RU"),
+
+      const data = transactions.map((t) => ({
+        Дата: new Date(t.createdAt).toLocaleString("ru-RU"),
         "Сумма XP": t.amount,
-        "Причина": t.reason === "online_order" ? "Онлайн-заказ" :
-                   t.reason === "offline_purchase" ? "Офлайн-покупка" :
-                   t.reason === "manual_adjustment" ? "Ручная корректировка" :
-                   t.reason === "bonus" ? "Бонус" : t.reason,
-        "Описание": t.description,
-        "Телефон": t.user?.phone || "",
-        "Имя": t.user?.name || "",
-        "Email": t.user?.email || "",
+        Причина:
+          t.reason === "online_order"
+            ? "Онлайн-заказ"
+            : t.reason === "offline_purchase"
+              ? "Офлайн-покупка"
+              : t.reason === "manual_adjustment"
+                ? "Ручная корректировка"
+                : t.reason === "bonus"
+                  ? "Бонус"
+                  : t.reason,
+        Описание: t.description,
+        Телефон: t.user?.phone || "",
+        Имя: t.user?.name || "",
+        Email: t.user?.email || "",
         "Текущий XP": t.user?.xp || 0,
       }));
-      
+
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.json_to_sheet(data);
-      
+
       ws["!cols"] = [
         { wch: 20 },
         { wch: 12 },
@@ -1485,13 +1779,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { wch: 25 },
         { wch: 12 },
       ];
-      
+
       XLSX.utils.book_append_sheet(wb, ws, "Программа лояльности");
-      
+
       const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
-      
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename="loyalty_export_${new Date().toISOString().split('T')[0]}.xlsx"`);
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      );
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="loyalty_export_${new Date().toISOString().split("T")[0]}.xlsx"`,
+      );
       res.send(buffer);
     } catch (error) {
       console.error("[Admin] Export loyalty error:", error);
@@ -1499,37 +1799,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/users/:id/custom-discount", requireAdminAuth, async (req, res) => {
-    try {
-      const userId = req.params.id;
-      const { discount } = req.body;
-      
-      // Validate discount value (0-100 or null)
-      if (discount !== null && (typeof discount !== 'number' || discount < 0 || discount > 100)) {
-        res.status(400).json({ error: "Скидка должна быть числом от 0 до 100 или null" });
-        return;
+  app.patch(
+    "/api/admin/users/:id/custom-discount",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const userId = req.params.id;
+        const { discount } = req.body;
+
+        // Validate discount value (0-100 or null)
+        if (
+          discount !== null &&
+          (typeof discount !== "number" || discount < 0 || discount > 100)
+        ) {
+          res
+            .status(400)
+            .json({ error: "Скидка должна быть числом от 0 до 100 или null" });
+          return;
+        }
+
+        // Update custom discount
+        const [updatedUser] = await db
+          .update(usersTable)
+          .set({ customDiscount: discount })
+          .where(eq(usersTable.id, userId))
+          .returning();
+
+        if (!updatedUser) {
+          res.status(404).json({ error: "Пользователь не найден" });
+          return;
+        }
+
+        // Remove password from response
+        const { password, ...userWithoutPassword } = updatedUser;
+        res.json(userWithoutPassword);
+      } catch (error) {
+        console.error("[Admin] Update custom discount error:", error);
+        res.status(500).json({ error: "Не удалось установить скидку" });
       }
-      
-      // Update custom discount
-      const [updatedUser] = await db
-        .update(usersTable)
-        .set({ customDiscount: discount })
-        .where(eq(usersTable.id, userId))
-        .returning();
-      
-      if (!updatedUser) {
-        res.status(404).json({ error: "Пользователь не найден" });
-        return;
-      }
-      
-      // Remove password from response
-      const { password, ...userWithoutPassword } = updatedUser;
-      res.json(userWithoutPassword);
-    } catch (error) {
-      console.error("[Admin] Update custom discount error:", error);
-      res.status(500).json({ error: "Не удалось установить скидку" });
-    }
-  });
+    },
+  );
 
   // Admin orders management routes
   app.get("/api/admin/orders", requireAdminAuth, async (req, res) => {
@@ -1537,7 +1846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const statusFilter = req.query.status as string | undefined;
       const offset = parseInt(req.query.offset as string) || 0;
       const limit = parseInt(req.query.limit as string) || 10;
-      
+
       const orders = await storage.getOrders(statusFilter, offset, limit);
       res.json(orders);
     } catch (error) {
@@ -1546,125 +1855,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/orders/:id/status", requireAdminAuth, async (req, res) => {
-    try {
-      const orderId = parseInt(req.params.id);
-      const statusData = updateOrderStatusSchema.parse(req.body);
-      
-      // Get the order before updating to check conditions for XP award
-      const orderBeforeUpdate = await storage.getOrder(orderId);
-      if (!orderBeforeUpdate) {
-        res.status(404).json({ error: "Order not found" });
-        return;
-      }
-      
-      // Update order status atomically - only if current status matches expected
-      // This prevents race conditions when multiple admins complete the same order
-      const shouldAwardXP = statusData.status === "completed" && 
-                            orderBeforeUpdate.status !== "completed" && 
-                            orderBeforeUpdate.userId;
-      
-      const updatedOrder = await storage.updateOrderStatus(
-        orderId, 
-        statusData.status,
-        shouldAwardXP ? orderBeforeUpdate.status : undefined
-      );
-      
-      if (!updatedOrder) {
-        // Order not found OR status has already changed (race condition prevented)
-        res.status(404).json({ error: "Order not found or status has already been changed" });
-        return;
-      }
-      
-      // Award XP only if the atomic update succeeded
-      if (shouldAwardXP && orderBeforeUpdate.userId) {
-        const xpToAward = Math.floor(orderBeforeUpdate.total);
-        await storage.addUserXP(orderBeforeUpdate.userId, xpToAward);
-        await storage.createXpTransaction({
-          userId: orderBeforeUpdate.userId,
-          amount: xpToAward,
-          reason: "online_order",
-          description: `Заказ #${orderId}: +${xpToAward} XP`,
+  app.patch(
+    "/api/admin/orders/:id/status",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const orderId = parseInt(req.params.id);
+        const statusData = updateOrderStatusSchema.parse(req.body);
+
+        // Get the order before updating to check conditions for XP award
+        const orderBeforeUpdate = await storage.getOrder(orderId);
+        if (!orderBeforeUpdate) {
+          res.status(404).json({ error: "Order not found" });
+          return;
+        }
+
+        // Update order status atomically - only if current status matches expected
+        // This prevents race conditions when multiple admins complete the same order
+        const shouldAwardXP =
+          statusData.status === "completed" &&
+          orderBeforeUpdate.status !== "completed" &&
+          orderBeforeUpdate.userId;
+
+        const updatedOrder = await storage.updateOrderStatus(
           orderId,
-          createdBy: "system",
-        });
-        console.log(`[Admin] Order #${orderId} completed: Awarded ${xpToAward} XP to user ${orderBeforeUpdate.userId}`);
+          statusData.status,
+          shouldAwardXP ? orderBeforeUpdate.status : undefined,
+        );
+
+        if (!updatedOrder) {
+          // Order not found OR status has already changed (race condition prevented)
+          res
+            .status(404)
+            .json({
+              error: "Order not found or status has already been changed",
+            });
+          return;
+        }
+
+        // Award XP only if the atomic update succeeded
+        if (shouldAwardXP && orderBeforeUpdate.userId) {
+          const xpToAward = Math.floor(orderBeforeUpdate.total);
+          await storage.addUserXP(orderBeforeUpdate.userId, xpToAward);
+          await storage.createXpTransaction({
+            userId: orderBeforeUpdate.userId,
+            amount: xpToAward,
+            reason: "online_order",
+            description: `Заказ #${orderId}: +${xpToAward} XP`,
+            orderId,
+            createdBy: "system",
+          });
+          console.log(
+            `[Admin] Order #${orderId} completed: Awarded ${xpToAward} XP to user ${orderBeforeUpdate.userId}`,
+          );
+        }
+
+        // Restore first order discount if order is cancelled and it was used
+        const shouldRestoreDiscount =
+          statusData.status === "cancelled" &&
+          orderBeforeUpdate.usedFirstOrderDiscount &&
+          orderBeforeUpdate.userId;
+
+        if (shouldRestoreDiscount && orderBeforeUpdate.userId) {
+          await storage.restoreFirstOrderDiscount(orderBeforeUpdate.userId);
+          console.log(
+            `[Admin] Order #${orderId} cancelled: Restored first order discount for user ${orderBeforeUpdate.userId}`,
+          );
+        }
+
+        res.json(updatedOrder);
+      } catch (error) {
+        console.error("[Admin] Update order status error:", error);
+        if (error instanceof Error && error.name === "ZodError") {
+          res.status(400).json({ error: "Invalid status value" });
+        } else {
+          res.status(500).json({ error: "Failed to update order status" });
+        }
       }
-      
-      // Restore first order discount if order is cancelled and it was used
-      const shouldRestoreDiscount = statusData.status === "cancelled" && 
-                                     orderBeforeUpdate.usedFirstOrderDiscount && 
-                                     orderBeforeUpdate.userId;
-      
-      if (shouldRestoreDiscount && orderBeforeUpdate.userId) {
-        await storage.restoreFirstOrderDiscount(orderBeforeUpdate.userId);
-        console.log(`[Admin] Order #${orderId} cancelled: Restored first order discount for user ${orderBeforeUpdate.userId}`);
-      }
-      
-      res.json(updatedOrder);
-    } catch (error) {
-      console.error("[Admin] Update order status error:", error);
-      if (error instanceof Error && error.name === "ZodError") {
-        res.status(400).json({ error: "Invalid status value" });
-      } else {
-        res.status(500).json({ error: "Failed to update order status" });
-      }
-    }
-  });
+    },
+  );
 
   // Sync order with Tinkoff - for manual recovery when webhook fails
   app.post("/api/admin/orders/:id/sync", requireAdminAuth, async (req, res) => {
     try {
       const orderId = parseInt(req.params.id);
       const { paymentId, receiptUrl: manualReceiptUrl } = req.body; // Optional overrides
-      
-      console.log(`[Admin] Manual sync requested for order ${orderId}, paymentId override:`, paymentId, ', receiptUrl override:', manualReceiptUrl);
-      
+
+      console.log(
+        `[Admin] Manual sync requested for order ${orderId}, paymentId override:`,
+        paymentId,
+        ", receiptUrl override:",
+        manualReceiptUrl,
+      );
+
       // Get order from database
       const order = await db.query.orders.findFirst({
         where: eq(ordersTable.id, orderId),
       });
-      
+
       if (!order) {
         res.status(404).json({ error: "Order not found" });
         return;
       }
-      
+
       // Determine which payment ID to use
       const paymentIdToUse = paymentId || order.paymentId;
-      
+
       if (!paymentIdToUse) {
-        res.status(400).json({ 
-          error: "No payment ID available. Order has no paymentId and none was provided in request." 
+        res.status(400).json({
+          error:
+            "No payment ID available. Order has no paymentId and none was provided in request.",
         });
         return;
       }
-      
-      console.log(`[Admin] Syncing order ${orderId} with Tinkoff using PaymentId: ${paymentIdToUse}`);
-      
+
+      console.log(
+        `[Admin] Syncing order ${orderId} with Tinkoff using PaymentId: ${paymentIdToUse}`,
+      );
+
       // Get payment state from Tinkoff
       const tinkoffClient = getTinkoffClient();
       const paymentState = await tinkoffClient.getState(paymentIdToUse);
-      
-      console.log(`[Admin] Received payment state:`, JSON.stringify(paymentState, null, 2));
-      
+
+      console.log(
+        `[Admin] Received payment state:`,
+        JSON.stringify(paymentState, null, 2),
+      );
+
       // Extract payment status
       const tinkoffStatus = paymentState.Status;
-      
+
       // Extract receipt URL from response
       let receiptUrl: string | null = null;
-      
+
       // Try Receipts array first (primary location for fiscal receipts)
-      if (paymentState.Receipts && Array.isArray(paymentState.Receipts) && paymentState.Receipts.length > 0) {
+      if (
+        paymentState.Receipts &&
+        Array.isArray(paymentState.Receipts) &&
+        paymentState.Receipts.length > 0
+      ) {
         const receiptWithUrl = paymentState.Receipts.find((r: any) => r.Url);
         if (receiptWithUrl) {
           receiptUrl = receiptWithUrl.Url;
         }
       }
-      
+
       // Fallback to legacy fields if Receipts array not available
       if (!receiptUrl) {
-        if (typeof paymentState.Receipt === 'string') {
+        if (typeof paymentState.Receipt === "string") {
           receiptUrl = paymentState.Receipt;
         } else if (paymentState.Receipt?.Url) {
           receiptUrl = paymentState.Receipt.Url;
@@ -1672,14 +2010,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           receiptUrl = paymentState.ReceiptUrl;
         }
       }
-      
+
       console.log(`[Admin] Extracted receipt URL from Tinkoff:`, receiptUrl);
       console.log(`[Admin] Tinkoff status:`, tinkoffStatus);
-      
+
       // Use manual receipt URL if provided, otherwise use Tinkoff's response, otherwise keep existing
-      const finalReceiptUrl = manualReceiptUrl || receiptUrl || order.receiptUrl;
+      const finalReceiptUrl =
+        manualReceiptUrl || receiptUrl || order.receiptUrl;
       console.log(`[Admin] Final receipt URL to use:`, finalReceiptUrl);
-      
+
       // Determine order status based on payment status
       let orderStatus: string = order.status;
       if (tinkoffStatus === "CONFIRMED") {
@@ -1687,13 +2026,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (tinkoffStatus === "REJECTED") {
         orderStatus = "cancelled";
       }
-      
+
       // Send SMS with receipt if available and payment is confirmed
       // Use ATOMIC update to claim SMS rights
       let smsSent = false;
       if (finalReceiptUrl && tinkoffStatus === "CONFIRMED") {
         // ATOMIC: Try to claim SMS sending rights with conditional update
-        const updateResult = await db.update(ordersTable)
+        const updateResult = await db
+          .update(ordersTable)
           .set({
             paymentId: paymentIdToUse,
             paymentStatus: tinkoffStatus,
@@ -1701,12 +2041,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             receiptUrl: finalReceiptUrl,
             receiptSmsSent: true,
           })
-          .where(and(eq(ordersTable.id, orderId), eq(ordersTable.receiptSmsSent, false)));
-        
+          .where(
+            and(
+              eq(ordersTable.id, orderId),
+              eq(ordersTable.receiptSmsSent, false),
+            ),
+          );
+
         if (updateResult.rowCount === 0) {
           // Lost race - SMS already sent, just update other fields
-          console.log(`[Admin] SMS already sent for order ${orderId}, skipping (lost race)`);
-          await db.update(ordersTable)
+          console.log(
+            `[Admin] SMS already sent for order ${orderId}, skipping (lost race)`,
+          );
+          await db
+            .update(ordersTable)
             .set({
               paymentId: paymentIdToUse,
               paymentStatus: tinkoffStatus,
@@ -1720,18 +2068,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const normalizedPhone = normalizePhone(order.phone);
             await sendReceiptSms(normalizedPhone, finalReceiptUrl, orderId);
             smsSent = true;
-            console.log(`[Admin] Receipt SMS sent successfully to ${normalizedPhone}`);
+            console.log(
+              `[Admin] Receipt SMS sent successfully to ${normalizedPhone}`,
+            );
           } catch (error) {
             console.error(`[Admin] Failed to send receipt SMS:`, error);
             // Reset flag so retry can work
-            await db.update(ordersTable)
+            await db
+              .update(ordersTable)
               .set({ receiptSmsSent: false })
               .where(eq(ordersTable.id, orderId));
           }
         }
       } else {
         // No receipt or not confirmed - just update order
-        await db.update(ordersTable)
+        await db
+          .update(ordersTable)
           .set({
             paymentId: paymentIdToUse,
             paymentStatus: tinkoffStatus,
@@ -1740,24 +2092,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
           .where(eq(ordersTable.id, orderId));
       }
-      
+
       console.log(`[Admin] Order ${orderId} updated in database`);
-      
+
       // Award XP if payment is confirmed and user is authenticated
       let xpAwarded = false;
-      if (tinkoffStatus === "CONFIRMED" && order.userId && orderStatus !== order.status) {
+      if (
+        tinkoffStatus === "CONFIRMED" &&
+        order.userId &&
+        orderStatus !== order.status
+      ) {
         const siteSettings = await storage.getSiteSettings();
         const xpMultiplier = siteSettings?.xpMultiplier ?? 1;
         const xpToAdd = Math.floor(order.total * xpMultiplier);
-        await db.update(usersTable)
+        await db
+          .update(usersTable)
           .set({
             xp: sql`${usersTable.xp} + ${xpToAdd}`,
           })
           .where(eq(usersTable.id, order.userId));
         xpAwarded = true;
-        console.log(`[Admin] Added ${xpToAdd} XP to user ${order.userId} (x${xpMultiplier})`);
+        console.log(
+          `[Admin] Added ${xpToAdd} XP to user ${order.userId} (x${xpMultiplier})`,
+        );
       }
-      
+
       res.json({
         success: true,
         orderId,
@@ -1770,9 +2129,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("[Admin] Order sync error:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: "Failed to sync order with Tinkoff",
-        details: error instanceof Error ? error.message : "Unknown error"
+        details: error instanceof Error ? error.message : "Unknown error",
       });
     }
   });
@@ -1793,28 +2152,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const { productId, quantity } = req.body;
-      
+
       // Server-side calculation of pricePerUnit based on product data
       const products = await storage.getProducts();
-      const product = products.find(p => p.id === productId);
+      const product = products.find((p) => p.id === productId);
       if (!product) {
         res.status(404).json({ error: "Product not found" });
         return;
       }
-      
+
       // Check if item already exists in cart to calculate total quantity
       const existingCartItems = await storage.getCartItems(userId);
-      const existingItem = existingCartItems.find(item => item.productId === productId);
+      const existingItem = existingCartItems.find(
+        (item) => item.productId === productId,
+      );
       const totalQuantity = (existingItem?.quantity || 0) + quantity;
-      
+
       const isTea = product.category === "tea";
-      const calculatedPricePerUnit = (isTea && totalQuantity >= 100)
-        ? product.pricePerGram * (1 - BULK_DISCOUNT)
-        : product.pricePerGram;
-      
+      const calculatedPricePerUnit =
+        isTea && totalQuantity >= 100
+          ? product.pricePerGram * (1 - BULK_DISCOUNT)
+          : product.pricePerGram;
+
       if (existingItem) {
         // Update existing item with new total quantity and recalculated price
-        const updatedItem = await storage.updateCartItem(existingItem.id, totalQuantity, userId, calculatedPricePerUnit);
+        const updatedItem = await storage.updateCartItem(
+          existingItem.id,
+          totalQuantity,
+          userId,
+          calculatedPricePerUnit,
+        );
         res.json(updatedItem);
       } else {
         // Add new item
@@ -1842,15 +2209,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const userId = req.user.id;
       const { quantity, pricePerUnit } = updateCartItemSchema.parse(req.body);
-      
+
       // Get current cart item to find productId
       const cartItems = await storage.getCartItems(userId);
-      const currentItem = cartItems.find(item => item.id === id);
+      const currentItem = cartItems.find((item) => item.id === id);
       if (!currentItem) {
         res.status(404).json({ error: "Cart item not found" });
         return;
       }
-      
+
       // Use provided pricePerUnit from client (includes A/B test multiplier),
       // or fallback to server-side calculation if not provided
       let finalPricePerUnit: number;
@@ -1859,17 +2226,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         const product = currentItem.product;
         const isTea = product.category === "tea";
-        finalPricePerUnit = (isTea && quantity >= 100)
-          ? product.pricePerGram * (1 - BULK_DISCOUNT)
-          : product.pricePerGram;
+        finalPricePerUnit =
+          isTea && quantity >= 100
+            ? product.pricePerGram * (1 - BULK_DISCOUNT)
+            : product.pricePerGram;
       }
-      
-      const updatedItem = await storage.updateCartItem(id, quantity, userId, finalPricePerUnit);
+
+      const updatedItem = await storage.updateCartItem(
+        id,
+        quantity,
+        userId,
+        finalPricePerUnit,
+      );
       if (!updatedItem) {
         res.status(404).json({ error: "Cart item not found" });
         return;
       }
-      
+
       res.json(updatedItem);
     } catch (error) {
       console.error("[Cart] Update cart item error:", error);
@@ -1886,12 +2259,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const userId = req.user.id;
       const removed = await storage.removeFromCart(id, userId);
-      
+
       if (!removed) {
         res.status(404).json({ error: "Cart item not found" });
         return;
       }
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("[Cart] Remove cart item error:", error);
@@ -1929,14 +2302,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId,
       });
-      
+
       const newAddress = await storage.createSavedAddress(addressData);
-      
+
       if (!newAddress) {
-        res.status(400).json({ error: "Достигнут лимит сохранённых адресов (максимум 10)" });
+        res
+          .status(400)
+          .json({ error: "Достигнут лимит сохранённых адресов (максимум 10)" });
         return;
       }
-      
+
       res.status(201).json(newAddress);
     } catch (error) {
       console.error("[Addresses] Create address error:", error);
@@ -1953,12 +2328,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       const userId = req.user.id;
       const deleted = await storage.deleteSavedAddress(id, userId);
-      
+
       if (!deleted) {
         res.status(404).json({ error: "Адрес не найден" });
         return;
       }
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("[Addresses] Delete address error:", error);
@@ -1966,23 +2341,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/addresses/:id/default", requireAuth, async (req: any, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const userId = req.user.id;
-      const updatedAddress = await storage.setDefaultAddress(id, userId);
-      
-      if (!updatedAddress) {
-        res.status(404).json({ error: "Адрес не найден" });
-        return;
+  app.patch(
+    "/api/addresses/:id/default",
+    requireAuth,
+    async (req: any, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const userId = req.user.id;
+        const updatedAddress = await storage.setDefaultAddress(id, userId);
+
+        if (!updatedAddress) {
+          res.status(404).json({ error: "Адрес не найден" });
+          return;
+        }
+
+        res.json(updatedAddress);
+      } catch (error) {
+        console.error("[Addresses] Set default address error:", error);
+        res.status(500).json({ error: "Ошибка установки адреса по умолчанию" });
       }
-      
-      res.json(updatedAddress);
-    } catch (error) {
-      console.error("[Addresses] Set default address error:", error);
-      res.status(500).json({ error: "Ошибка установки адреса по умолчанию" });
-    }
-  });
+    },
+  );
 
   // Site Settings routes
   app.get("/api/site-settings", async (_req, res) => {
@@ -2008,7 +2387,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/telegram/get-chat-id", async (_req, res) => {
     try {
       const updates = await getTelegramUpdates();
-      
+
       if (updates.length === 0) {
         res.send(`
           <html>
@@ -2038,17 +2417,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const chats = updates
-        .filter(update => update.message?.chat)
-        .map(update => ({
+        .filter((update) => update.message?.chat)
+        .map((update) => ({
           chatId: update.message!.chat.id,
           chatType: update.message!.chat.type,
-          chatTitle: update.message!.chat.title || 'Private chat',
-          lastMessage: update.message!.text || '(no text)',
-          from: update.message!.from?.first_name || 'Unknown'
+          chatTitle: update.message!.chat.title || "Private chat",
+          lastMessage: update.message!.text || "(no text)",
+          from: update.message!.from?.first_name || "Unknown",
         }));
 
       const uniqueChats = Array.from(
-        new Map(chats.map(chat => [chat.chatId, chat])).values()
+        new Map(chats.map((chat) => [chat.chatId, chat])).values(),
       );
 
       let html = `
@@ -2107,7 +2486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             <div class="error">
               <h2>Ошибка</h2>
               <p>Проверьте что TELEGRAM_BOT_TOKEN добавлен в секреты Replit</p>
-              <p>Ошибка: ${error instanceof Error ? error.message : 'Unknown error'}</p>
+              <p>Ошибка: ${error instanceof Error ? error.message : "Unknown error"}</p>
             </div>
           </body>
         </html>
@@ -2123,7 +2502,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const thirtyDaysAgoStr = thirtyDaysAgo.toISOString();
 
       // 1. Overall user statistics
-      const totalUsersResult = await db.execute(sql`SELECT COUNT(*) as count FROM users`);
+      const totalUsersResult = await db.execute(
+        sql`SELECT COUNT(*) as count FROM users`,
+      );
       const totalUsers = Number(totalUsersResult.rows[0]?.count || 0);
 
       const activeUsersResult = await db.execute(sql`
@@ -2148,7 +2529,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const avgOrder = Number(orderStats?.avg_order || 0);
 
       // 3. Conversion rate (users who made at least one order)
-      const conversionRate = totalUsers > 0 ? (activeUsers / totalUsers) * 100 : 0;
+      const conversionRate =
+        totalUsers > 0 ? (activeUsers / totalUsers) * 100 : 0;
 
       // 4. New customers by day (users who made their first order in last 30 days)
       const newCustomersResult = await db.execute(sql`
@@ -2162,7 +2544,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         GROUP BY DATE(created_at)
         ORDER BY date ASC
       `);
-      
+
       // 5. Daily orders and revenue for last 30 days
       const dailyOrdersResult = await db.execute(sql`
         SELECT 
@@ -2222,7 +2604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         FROM orders
         WHERE created_at >= ${thirtyDaysAgoStr}
       `);
-      
+
       // Custom discounts currently granted (snapshot, not time-based)
       // This shows how many users currently have admin-granted custom discounts
       const customDiscountResult = await db.execute(sql`
@@ -2249,7 +2631,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ) as repeat_users
       `);
       const repeatCustomers = Number(repeatCustomersResult.rows[0]?.count || 0);
-      const repeatRate = activeUsers > 0 ? (repeatCustomers / activeUsers) * 100 : 0;
+      const repeatRate =
+        activeUsers > 0 ? (repeatCustomers / activeUsers) * 100 : 0;
 
       res.json({
         overview: {
@@ -2286,8 +2669,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           count: Number(row.count),
         })),
         discounts: {
-          firstOrderUsed: Number(firstOrderDiscountResult.rows[0]?.first_order_used || 0),
-          customDiscountGranted: Number(customDiscountResult.rows[0]?.count || 0),
+          firstOrderUsed: Number(
+            firstOrderDiscountResult.rows[0]?.first_order_used || 0,
+          ),
+          customDiscountGranted: Number(
+            customDiscountResult.rows[0]?.count || 0,
+          ),
           loyaltyEligible: verifiedUsers,
         },
       });
@@ -2298,7 +2685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============ Info Banners Routes ============
-  
+
   // Public: Get active banners for display on site
   app.get("/api/banners", async (_req, res) => {
     try {
@@ -2343,7 +2730,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { insertInfoBannerSchema } = await import("@shared/schema");
       const parsed = insertInfoBannerSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: "Invalid banner data", details: parsed.error.issues });
+        res
+          .status(400)
+          .json({ error: "Invalid banner data", details: parsed.error.issues });
         return;
       }
       const banner = await storage.createInfoBanner(parsed.data);
@@ -2361,7 +2750,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { updateInfoBannerSchema } = await import("@shared/schema");
       const parsed = updateInfoBannerSchema.safeParse(req.body);
       if (!parsed.success) {
-        res.status(400).json({ error: "Invalid banner data", details: parsed.error.issues });
+        res
+          .status(400)
+          .json({ error: "Invalid banner data", details: parsed.error.issues });
         return;
       }
       const banner = await storage.updateInfoBanner(id, parsed.data);
@@ -2440,34 +2831,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const slides = await storage.getTvSlides(true);
 
       // Collect unique months needed across all leaderboard slides
-      const leaderboardSlides = slides.filter(s => s.type === "leaderboard");
-      const monthsNeeded = new Set<string | null>(leaderboardSlides.map(s => s.leaderboardMonth ?? null));
+      const leaderboardSlides = slides.filter((s) => s.type === "leaderboard");
+      const monthsNeeded = new Set<string | null>(
+        leaderboardSlides.map((s) => s.leaderboardMonth ?? null),
+      );
 
       // Fetch leaderboard for each unique month in parallel
-      const monthLeaderboards = new Map<string | null, import("@shared/schema").LeaderboardEntry[]>();
+      const monthLeaderboards = new Map<
+        string | null,
+        import("@shared/schema").LeaderboardEntry[]
+      >();
       await Promise.all(
         Array.from(monthsNeeded).map(async (m) => {
           const data = await storage.getMonthlyLeaderboard(m ?? undefined);
           monthLeaderboards.set(m, data);
-        })
+        }),
       );
 
       // Build per-slide leaderboard map
-      const leaderboardsBySlide: Record<number, import("@shared/schema").LeaderboardEntry[]> = {};
+      const leaderboardsBySlide: Record<
+        number,
+        import("@shared/schema").LeaderboardEntry[]
+      > = {};
       for (const slide of leaderboardSlides) {
-        leaderboardsBySlide[slide.id] = monthLeaderboards.get(slide.leaderboardMonth ?? null) || [];
+        leaderboardsBySlide[slide.id] =
+          monthLeaderboards.get(slide.leaderboardMonth ?? null) || [];
       }
 
       // For backward compat, expose first leaderboard slide's data as top-level `leaderboard`
       const firstLeaderboardSlide = leaderboardSlides[0];
       const leaderboard = firstLeaderboardSlide
-        ? (leaderboardsBySlide[firstLeaderboardSlide.id] || [])
+        ? leaderboardsBySlide[firstLeaderboardSlide.id] || []
         : [];
 
       res.set("Cache-Control", "no-store, no-cache, must-revalidate");
       res.set("Pragma", "no-cache");
       res.set("Expires", "0");
-      res.json({ slides, leaderboard, leaderboardsBySlide, timestamp: Date.now() });
+      res.json({
+        slides,
+        leaderboard,
+        leaderboardsBySlide,
+        timestamp: Date.now(),
+      });
     } catch (error) {
       console.error("[TV Display] Error fetching display data:", error);
       res.status(500).json({ error: "Failed to fetch display data" });
@@ -2475,106 +2880,149 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create TV slide with image upload
-  app.post("/api/admin/tv-slides", requireAdminAuth, upload.single("image"), async (req, res) => {
-    try {
-      const { type, title, durationSeconds, orderIndex, isActive, leaderboardMonth } = req.body;
-      
-      let imageUrl: string | undefined;
-      
-      // If image file is uploaded, process and upload to Object Storage
-      if (req.file) {
-        const buffer = req.file.buffer;
-        const filename = `tv-slide-${Date.now()}.webp`;
-        
-        // Convert to WebP for better quality on 4K TVs
-        const sharp = (await import('sharp')).default;
-        const webpBuffer = await sharp(buffer)
-          .webp({ quality: 95 })
-          .toBuffer();
-        
-        const objectStorageService = new ObjectStorageService();
-        imageUrl = await objectStorageService.uploadPublicObject(webpBuffer, filename);
-      } else if (req.body.imageUrl) {
-        imageUrl = req.body.imageUrl;
+  app.post(
+    "/api/admin/tv-slides",
+    requireAdminAuth,
+    upload.single("image"),
+    async (req, res) => {
+      try {
+        const {
+          type,
+          title,
+          durationSeconds,
+          orderIndex,
+          isActive,
+          leaderboardMonth,
+        } = req.body;
+
+        let imageUrl: string | undefined;
+
+        // If image file is uploaded, process and upload to Object Storage
+        if (req.file) {
+          const buffer = req.file.buffer;
+          const filename = `tv-slide-${Date.now()}.webp`;
+
+          // Convert to WebP for better quality on 4K TVs
+          const sharp = (await import("sharp")).default;
+          const webpBuffer = await sharp(buffer)
+            .webp({ quality: 95 })
+            .toBuffer();
+
+          const objectStorageService = new ObjectStorageService();
+          imageUrl = await objectStorageService.uploadPublicObject(
+            webpBuffer,
+            filename,
+          );
+        } else if (req.body.imageUrl) {
+          imageUrl = req.body.imageUrl;
+        }
+
+        // Validate type
+        if (type && type !== "leaderboard" && type !== "image") {
+          res
+            .status(400)
+            .json({ error: "Type must be 'leaderboard' or 'image'" });
+          return;
+        }
+
+        // For image type, require an image URL
+        if (type === "image" && !imageUrl) {
+          res
+            .status(400)
+            .json({ error: "Image is required for image type slides" });
+          return;
+        }
+
+        const slide = await storage.createTvSlide({
+          type: type || "image",
+          imageUrl: imageUrl || null,
+          title: title || null,
+          durationSeconds: durationSeconds ? parseInt(durationSeconds) : 60,
+          orderIndex: orderIndex ? parseInt(orderIndex) : 0,
+          isActive: isActive === "true" || isActive === true,
+          leaderboardMonth:
+            leaderboardMonth && /^\d{4}-\d{2}$/.test(leaderboardMonth)
+              ? leaderboardMonth
+              : null,
+        });
+
+        res.status(201).json(slide);
+      } catch (error) {
+        console.error("[Admin TV Slides] Error creating slide:", error);
+        res.status(500).json({ error: "Failed to create slide" });
       }
-
-      // Validate type
-      if (type && type !== "leaderboard" && type !== "image") {
-        res.status(400).json({ error: "Type must be 'leaderboard' or 'image'" });
-        return;
-      }
-
-      // For image type, require an image URL
-      if (type === "image" && !imageUrl) {
-        res.status(400).json({ error: "Image is required for image type slides" });
-        return;
-      }
-
-      const slide = await storage.createTvSlide({
-        type: type || "image",
-        imageUrl: imageUrl || null,
-        title: title || null,
-        durationSeconds: durationSeconds ? parseInt(durationSeconds) : 60,
-        orderIndex: orderIndex ? parseInt(orderIndex) : 0,
-        isActive: isActive === "true" || isActive === true,
-        leaderboardMonth: (leaderboardMonth && /^\d{4}-\d{2}$/.test(leaderboardMonth)) ? leaderboardMonth : null,
-      });
-
-      res.status(201).json(slide);
-    } catch (error) {
-      console.error("[Admin TV Slides] Error creating slide:", error);
-      res.status(500).json({ error: "Failed to create slide" });
-    }
-  });
+    },
+  );
 
   // Update TV slide
-  app.patch("/api/admin/tv-slides/:id", requireAdminAuth, upload.single("image"), async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const { type, title, durationSeconds, orderIndex, isActive, leaderboardMonth } = req.body;
-      
-      const existingSlide = await storage.getTvSlide(id);
-      if (!existingSlide) {
-        res.status(404).json({ error: "Slide not found" });
-        return;
-      }
+  app.patch(
+    "/api/admin/tv-slides/:id",
+    requireAdminAuth,
+    upload.single("image"),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const {
+          type,
+          title,
+          durationSeconds,
+          orderIndex,
+          isActive,
+          leaderboardMonth,
+        } = req.body;
 
-      let imageUrl: string | undefined | null = undefined;
-      
-      // If new image is uploaded
-      if (req.file) {
-        const buffer = req.file.buffer;
-        const filename = `tv-slide-${Date.now()}.webp`;
-        
-        const sharp = (await import('sharp')).default;
-        const webpBuffer = await sharp(buffer)
-          .webp({ quality: 95 })
-          .toBuffer();
-        
-        const objectStorageService = new ObjectStorageService();
-        imageUrl = await objectStorageService.uploadPublicObject(webpBuffer, filename);
-      } else if (req.body.imageUrl !== undefined) {
-        imageUrl = req.body.imageUrl || null;
-      }
+        const existingSlide = await storage.getTvSlide(id);
+        if (!existingSlide) {
+          res.status(404).json({ error: "Slide not found" });
+          return;
+        }
 
-      const updateData: any = {};
-      if (type !== undefined) updateData.type = type;
-      if (title !== undefined) updateData.title = title || null;
-      if (durationSeconds !== undefined) updateData.durationSeconds = parseInt(durationSeconds);
-      if (orderIndex !== undefined) updateData.orderIndex = parseInt(orderIndex);
-      if (isActive !== undefined) updateData.isActive = isActive === "true" || isActive === true;
-      if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
-      if (leaderboardMonth !== undefined) {
-        updateData.leaderboardMonth = (leaderboardMonth && /^\d{4}-\d{2}$/.test(leaderboardMonth)) ? leaderboardMonth : null;
-      }
+        let imageUrl: string | undefined | null = undefined;
 
-      const updatedSlide = await storage.updateTvSlide(id, updateData);
-      res.json(updatedSlide);
-    } catch (error) {
-      console.error("[Admin TV Slides] Error updating slide:", error);
-      res.status(500).json({ error: "Failed to update slide" });
-    }
-  });
+        // If new image is uploaded
+        if (req.file) {
+          const buffer = req.file.buffer;
+          const filename = `tv-slide-${Date.now()}.webp`;
+
+          const sharp = (await import("sharp")).default;
+          const webpBuffer = await sharp(buffer)
+            .webp({ quality: 95 })
+            .toBuffer();
+
+          const objectStorageService = new ObjectStorageService();
+          imageUrl = await objectStorageService.uploadPublicObject(
+            webpBuffer,
+            filename,
+          );
+        } else if (req.body.imageUrl !== undefined) {
+          imageUrl = req.body.imageUrl || null;
+        }
+
+        const updateData: any = {};
+        if (type !== undefined) updateData.type = type;
+        if (title !== undefined) updateData.title = title || null;
+        if (durationSeconds !== undefined)
+          updateData.durationSeconds = parseInt(durationSeconds);
+        if (orderIndex !== undefined)
+          updateData.orderIndex = parseInt(orderIndex);
+        if (isActive !== undefined)
+          updateData.isActive = isActive === "true" || isActive === true;
+        if (imageUrl !== undefined) updateData.imageUrl = imageUrl;
+        if (leaderboardMonth !== undefined) {
+          updateData.leaderboardMonth =
+            leaderboardMonth && /^\d{4}-\d{2}$/.test(leaderboardMonth)
+              ? leaderboardMonth
+              : null;
+        }
+
+        const updatedSlide = await storage.updateTvSlide(id, updateData);
+        res.json(updatedSlide);
+      } catch (error) {
+        console.error("[Admin TV Slides] Error updating slide:", error);
+        res.status(500).json({ error: "Failed to update slide" });
+      }
+    },
+  );
 
   // Delete TV slide
   app.delete("/api/admin/tv-slides/:id", requireAdminAuth, async (req, res) => {
@@ -2593,23 +3041,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Reorder TV slides
-  app.post("/api/admin/tv-slides/reorder", requireAdminAuth, async (req, res) => {
-    try {
-      const { orders } = req.body;
-      if (!Array.isArray(orders)) {
-        res.status(400).json({ error: "Orders must be an array" });
-        return;
+  app.post(
+    "/api/admin/tv-slides/reorder",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const { orders } = req.body;
+        if (!Array.isArray(orders)) {
+          res.status(400).json({ error: "Orders must be an array" });
+          return;
+        }
+        await storage.reorderTvSlides(orders);
+        res.json({ success: true });
+      } catch (error) {
+        console.error("[Admin TV Slides] Error reordering slides:", error);
+        res.status(500).json({ error: "Failed to reorder slides" });
       }
-      await storage.reorderTvSlides(orders);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("[Admin TV Slides] Error reordering slides:", error);
-      res.status(500).json({ error: "Failed to reorder slides" });
-    }
-  });
+    },
+  );
 
   // ==================== A/B Testing - Experiments ====================
-  
+
   // Get all experiments (admin)
   app.get("/api/admin/experiments", requireAdminAuth, async (_req, res) => {
     try {
@@ -2653,23 +3105,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/experiments", requireAdminAuth, async (req, res) => {
     try {
       const { testId, name, description, status, variants } = req.body;
-      
+
       if (!testId || !name || !variants) {
-        res.status(400).json({ error: "testId, name, and variants are required" });
+        res
+          .status(400)
+          .json({ error: "testId, name, and variants are required" });
         return;
       }
 
       // Validate variants is valid JSON
       try {
-        const parsedVariants = typeof variants === "string" ? JSON.parse(variants) : variants;
+        const parsedVariants =
+          typeof variants === "string" ? JSON.parse(variants) : variants;
         if (!Array.isArray(parsedVariants) || parsedVariants.length < 2) {
-          res.status(400).json({ error: "Variants must be an array with at least 2 items" });
+          res
+            .status(400)
+            .json({ error: "Variants must be an array with at least 2 items" });
           return;
         }
         // Validate weights sum
-        const totalWeight = parsedVariants.reduce((sum: number, v: any) => sum + (v.weight || 0), 0);
+        const totalWeight = parsedVariants.reduce(
+          (sum: number, v: any) => sum + (v.weight || 0),
+          0,
+        );
         if (totalWeight !== 100) {
-          res.status(400).json({ error: `Weights must sum to 100, got ${totalWeight}` });
+          res
+            .status(400)
+            .json({ error: `Weights must sum to 100, got ${totalWeight}` });
           return;
         }
       } catch (e) {
@@ -2682,12 +3144,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name,
         description: description || null,
         status: status || "inactive",
-        variants: typeof variants === "string" ? variants : JSON.stringify(variants),
+        variants:
+          typeof variants === "string" ? variants : JSON.stringify(variants),
       });
       res.json(experiment);
     } catch (error: any) {
-      if (error.code === "23505") { // Unique violation
-        res.status(400).json({ error: "Experiment with this test_id already exists" });
+      if (error.code === "23505") {
+        // Unique violation
+        res
+          .status(400)
+          .json({ error: "Experiment with this test_id already exists" });
         return;
       }
       console.error("[Admin Experiments] Error creating experiment:", error);
@@ -2696,73 +3162,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update experiment (admin)
-  app.patch("/api/admin/experiments/:id", requireAdminAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const { name, description, status, variants } = req.body;
+  app.patch(
+    "/api/admin/experiments/:id",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const { name, description, status, variants } = req.body;
 
-      // Validate variants if provided
-      if (variants !== undefined) {
-        try {
-          const parsedVariants = typeof variants === "string" ? JSON.parse(variants) : variants;
-          if (!Array.isArray(parsedVariants) || parsedVariants.length < 2) {
-            res.status(400).json({ error: "Variants must be an array with at least 2 items" });
+        // Validate variants if provided
+        if (variants !== undefined) {
+          try {
+            const parsedVariants =
+              typeof variants === "string" ? JSON.parse(variants) : variants;
+            if (!Array.isArray(parsedVariants) || parsedVariants.length < 2) {
+              res
+                .status(400)
+                .json({
+                  error: "Variants must be an array with at least 2 items",
+                });
+              return;
+            }
+            const totalWeight = parsedVariants.reduce(
+              (sum: number, v: any) => sum + (v.weight || 0),
+              0,
+            );
+            if (totalWeight !== 100) {
+              res
+                .status(400)
+                .json({ error: `Weights must sum to 100, got ${totalWeight}` });
+              return;
+            }
+          } catch (e) {
+            res.status(400).json({ error: "Invalid variants JSON" });
             return;
           }
-          const totalWeight = parsedVariants.reduce((sum: number, v: any) => sum + (v.weight || 0), 0);
-          if (totalWeight !== 100) {
-            res.status(400).json({ error: `Weights must sum to 100, got ${totalWeight}` });
-            return;
-          }
-        } catch (e) {
-          res.status(400).json({ error: "Invalid variants JSON" });
+        }
+
+        const updateData: any = {};
+        if (name !== undefined) updateData.name = name;
+        if (description !== undefined) updateData.description = description;
+        if (status !== undefined) updateData.status = status;
+        if (variants !== undefined) {
+          updateData.variants =
+            typeof variants === "string" ? variants : JSON.stringify(variants);
+        }
+
+        const updated = await storage.updateExperiment(id, updateData);
+        if (!updated) {
+          res.status(404).json({ error: "Experiment not found" });
           return;
         }
+        res.json(updated);
+      } catch (error) {
+        console.error("[Admin Experiments] Error updating experiment:", error);
+        res.status(500).json({ error: "Failed to update experiment" });
       }
-
-      const updateData: any = {};
-      if (name !== undefined) updateData.name = name;
-      if (description !== undefined) updateData.description = description;
-      if (status !== undefined) updateData.status = status;
-      if (variants !== undefined) {
-        updateData.variants = typeof variants === "string" ? variants : JSON.stringify(variants);
-      }
-
-      const updated = await storage.updateExperiment(id, updateData);
-      if (!updated) {
-        res.status(404).json({ error: "Experiment not found" });
-        return;
-      }
-      res.json(updated);
-    } catch (error) {
-      console.error("[Admin Experiments] Error updating experiment:", error);
-      res.status(500).json({ error: "Failed to update experiment" });
-    }
-  });
+    },
+  );
 
   // Delete experiment (admin)
-  app.delete("/api/admin/experiments/:id", requireAdminAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const deleted = await storage.deleteExperiment(id);
-      if (!deleted) {
-        res.status(404).json({ error: "Experiment not found" });
-        return;
+  app.delete(
+    "/api/admin/experiments/:id",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const deleted = await storage.deleteExperiment(id);
+        if (!deleted) {
+          res.status(404).json({ error: "Experiment not found" });
+          return;
+        }
+        res.json({ success: true });
+      } catch (error) {
+        console.error("[Admin Experiments] Error deleting experiment:", error);
+        res.status(500).json({ error: "Failed to delete experiment" });
       }
-      res.json({ success: true });
-    } catch (error) {
-      console.error("[Admin Experiments] Error deleting experiment:", error);
-      res.status(500).json({ error: "Failed to delete experiment" });
-    }
-  });
+    },
+  );
 
   // Log A/B test event
   app.post("/api/events/log", async (req, res) => {
     try {
-      const { eventType, userIdentifier, userId, deviceId, testAssignments, eventData } = req.body;
-      
+      const {
+        eventType,
+        userIdentifier,
+        userId,
+        deviceId,
+        testAssignments,
+        eventData,
+      } = req.body;
+
       if (!eventType || !userIdentifier) {
-        res.status(400).json({ error: "eventType and userIdentifier are required" });
+        res
+          .status(400)
+          .json({ error: "eventType and userIdentifier are required" });
         return;
       }
 
@@ -2771,7 +3265,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userIdentifier,
         userId: userId || null,
         deviceId: deviceId || null,
-        testAssignments: testAssignments ? JSON.stringify(testAssignments) : null,
+        testAssignments: testAssignments
+          ? JSON.stringify(testAssignments)
+          : null,
         eventData: eventData ? JSON.stringify(eventData) : null,
       });
       res.json({ success: true, eventId: event.id });
@@ -2785,14 +3281,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/device-user-mapping", async (req, res) => {
     try {
       const { deviceId, userId, testAssignments } = req.body;
-      
+
       if (!deviceId || !userId) {
         res.status(400).json({ error: "deviceId and userId are required" });
         return;
       }
 
       const mapping = await storage.createDeviceUserMapping(deviceId, userId);
-      
+
       // Save A/B test assignments to user.analytics if provided
       if (testAssignments && Object.keys(testAssignments).length > 0) {
         const user = await storage.getUser(userId);
@@ -2801,9 +3297,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (user.analytics) {
             try {
               existingAnalytics = JSON.parse(user.analytics);
-            } catch { existingAnalytics = {}; }
+            } catch {
+              existingAnalytics = {};
+            }
           }
-          
+
           // Merge: keep existing assignments, add new ones only if not present
           const abAssignments = existingAnalytics.abAssignments || {};
           let updated = false;
@@ -2813,16 +3311,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
               updated = true;
             }
           }
-          
+
           if (updated) {
             existingAnalytics.abAssignments = abAssignments;
-            await db.update(usersTable).set({ 
-              analytics: JSON.stringify(existingAnalytics) 
-            }).where(eq(usersTable.id, userId));
+            await db
+              .update(usersTable)
+              .set({
+                analytics: JSON.stringify(existingAnalytics),
+              })
+              .where(eq(usersTable.id, userId));
           }
         }
       }
-      
+
       res.json(mapping);
     } catch (error) {
       console.error("[Device-User Mapping] Error saving mapping:", error);
@@ -2860,7 +3361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Security: Verify order ownership
       // Normalize userId - treat empty strings as null
       const orderUserId = order.userId?.trim() || null;
-      
+
       if (req.isAuthenticated()) {
         const userId = (req.user as any).id;
         const userPhone = (req.user as any).phone;
@@ -2873,11 +3374,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (orderUserId === null) {
           const normalizedOrderPhone = normalizePhone(order.phone || "");
           const normalizedUserPhone = normalizePhone(userPhone || "");
-          if (!normalizedUserPhone || normalizedOrderPhone !== normalizedUserPhone) {
+          if (
+            !normalizedUserPhone ||
+            normalizedOrderPhone !== normalizedUserPhone
+          ) {
             res.status(403).json({ error: "Cannot access guest order" });
             return;
           }
-          console.log("[Payment] Authenticated user paying own guest order, phone matched:", normalizedOrderPhone);
+          console.log(
+            "[Payment] Authenticated user paying own guest order, phone matched:",
+            normalizedOrderPhone,
+          );
         }
       } else {
         // Unauthenticated users can only init payment for guest orders (userId === null)
@@ -2916,11 +3423,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(400).json({ error: "Phone number is required for payment" });
         return;
       }
-      
+
       const normalizedPhone = normalizePhone(order.phone);
       // Tinkoff requires phone WITHOUT "+" for Receipt.Phone (79XXXXXXXXX format)
-      const phoneForReceipt = normalizedPhone.replace(/^\+/, '');
-      console.log("[Payment] Phone normalized:", order.phone, "->", normalizedPhone, "Receipt format:", phoneForReceipt);
+      const phoneForReceipt = normalizedPhone.replace(/^\+/, "");
+      console.log(
+        "[Payment] Phone normalized:",
+        order.phone,
+        "->",
+        normalizedPhone,
+        "Receipt format:",
+        phoneForReceipt,
+      );
 
       // Define receipt item interface for type safety
       interface ReceiptItem {
@@ -2938,15 +3452,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // This ensures Tinkoff displays the actual product name and correct price on the fiscal receipt
       const receiptItems: ReceiptItem[] = orderItems.map((item: any) => {
         // Calculate full line total in kopecks (before any discounts)
-        const amountInKopecks = Math.round(item.pricePerGram * item.quantity * 100);
-        
+        const amountInKopecks = Math.round(
+          item.pricePerGram * item.quantity * 100,
+        );
+
         // For fiscal receipts: display full item description with quantity info in the name
         let itemName = item.name;
         if (item.quantity !== 1) {
           // Add weight/quantity info to product name for clarity on receipt
           itemName = `${item.name} - ${item.quantity}g`;
         }
-        
+
         return {
           Name: itemName, // Product name with quantity (e.g., "Лунный свет - 25g")
           Price: amountInKopecks, // Full line price in KOPECKS (equals Amount)
@@ -2960,66 +3476,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Calculate payment amount in kopecks
       const amountInKopecks = Math.round(order.total * 100);
-      
+
       // Calculate sum of receipt items (before discount adjustment)
-      const totalItemsAmount = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
+      const totalItemsAmount = receiptItems.reduce(
+        (sum: number, item: ReceiptItem) => sum + item.Amount,
+        0,
+      );
       const discountAmount = totalItemsAmount - amountInKopecks;
 
       // Distribute any discount proportionally across all items
       // This handles loyalty discounts, first-order discounts, etc.
       if (discountAmount > 0) {
-        console.log("[Payment] Total discount to distribute:", discountAmount, "kopecks");
-        
+        console.log(
+          "[Payment] Total discount to distribute:",
+          discountAmount,
+          "kopecks",
+        );
+
         // First pass: apply proportional discounts with 54-ФЗ minimum (1 kopeck)
         let actualDiscountDistributed = 0;
         const minAmount = 1; // 54-ФЗ requires Amount ≥ 1 kopeck
-        
+
         // Apply proportional discount to each item except the last
         for (let i = 0; i < receiptItems.length - 1; i++) {
           const item = receiptItems[i];
-          const idealDiscount = Math.round((discountAmount * item.Amount) / totalItemsAmount);
+          const idealDiscount = Math.round(
+            (discountAmount * item.Amount) / totalItemsAmount,
+          );
           const maxPossibleDiscount = item.Amount - minAmount; // Leave at least 1 kopeck
           const actualDiscount = Math.min(idealDiscount, maxPossibleDiscount);
-          
+
           item.Amount -= actualDiscount;
           item.Price = item.Amount; // Keep Price = Amount for Quantity=1
           actualDiscountDistributed += actualDiscount;
-          console.log(`[Payment] Item "${item.Name}": discount=${actualDiscount}, Amount=${item.Amount}`);
+          console.log(
+            `[Payment] Item "${item.Name}": discount=${actualDiscount}, Amount=${item.Amount}`,
+          );
         }
-        
+
         // Last item gets all remaining discount (ensures exact total)
         const lastItem = receiptItems[receiptItems.length - 1];
         const remainingDiscount = discountAmount - actualDiscountDistributed;
         const maxPossibleDiscount = lastItem.Amount - minAmount;
         const actualDiscount = Math.min(remainingDiscount, maxPossibleDiscount);
-        
+
         lastItem.Amount -= actualDiscount;
         lastItem.Price = lastItem.Amount; // Keep Price = Amount for Quantity=1
         actualDiscountDistributed += actualDiscount;
-        console.log(`[Payment] Item "${lastItem.Name}": final discount=${actualDiscount}, Amount=${lastItem.Amount}`);
-        
+        console.log(
+          `[Payment] Item "${lastItem.Name}": final discount=${actualDiscount}, Amount=${lastItem.Amount}`,
+        );
+
         // If we couldn't distribute full discount due to 54-ФЗ minimum constraints
         if (actualDiscountDistributed < discountAmount) {
-          const undistributedDiscount = discountAmount - actualDiscountDistributed;
-          console.warn(`[Payment] ⚠️ Could not distribute ${undistributedDiscount} kopecks due to 54-ФЗ minimum (1 kopeck per item)`);
-          console.warn(`[Payment] This may cause receipt total mismatch - reducing order total to match`);
+          const undistributedDiscount =
+            discountAmount - actualDiscountDistributed;
+          console.warn(
+            `[Payment] ⚠️ Could not distribute ${undistributedDiscount} kopecks due to 54-ФЗ minimum (1 kopeck per item)`,
+          );
+          console.warn(
+            `[Payment] This may cause receipt total mismatch - reducing order total to match`,
+          );
         }
       }
 
       // Verify that receipt items total equals payment amount (in KOPECKS)
-      const receiptTotal = receiptItems.reduce((sum: number, item: ReceiptItem) => sum + item.Amount, 0);
+      const receiptTotal = receiptItems.reduce(
+        (sum: number, item: ReceiptItem) => sum + item.Amount,
+        0,
+      );
       if (receiptTotal !== amountInKopecks) {
         console.error("[Payment] Receipt total mismatch:", {
           receiptTotal,
           amountInKopecks,
           diff: receiptTotal - amountInKopecks,
-          items: receiptItems.map(i => ({ name: i.Name, amount: i.Amount, price: i.Price }))
+          items: receiptItems.map((i) => ({
+            name: i.Name,
+            amount: i.Amount,
+            price: i.Price,
+          })),
         });
-        throw new Error(`Receipt total mismatch: ${receiptTotal} !== ${amountInKopecks}`);
+        throw new Error(
+          `Receipt total mismatch: ${receiptTotal} !== ${amountInKopecks}`,
+        );
       }
 
       // Use REPLIT_DOMAINS if available (development), otherwise production domain
-      const baseUrl = process.env.REPLIT_DOMAINS 
+      const baseUrl = process.env.REPLIT_DOMAINS
         ? `https://${process.env.REPLIT_DOMAINS}`
         : "https://puerpub.replit.app";
 
@@ -3041,12 +3584,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Standard payment init - Tinkoff will show all available payment methods (card, T-Pay, SBP)
-      console.log("[Payment] Full payment request:", JSON.stringify(paymentRequest, null, 2));
+      console.log(
+        "[Payment] Full payment request:",
+        JSON.stringify(paymentRequest, null, 2),
+      );
 
       const paymentResponse = await tinkoffClient.init(paymentRequest);
 
       // Save payment info to order
-      await db.update(ordersTable)
+      await db
+        .update(ordersTable)
         .set({
           paymentId: String(paymentResponse.PaymentId),
           paymentStatus: paymentResponse.Status,
@@ -3054,7 +3601,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .where(eq(ordersTable.id, orderId));
 
-      console.log("[Payment] Payment initialized for order:", orderId, "PaymentId:", paymentResponse.PaymentId);
+      console.log(
+        "[Payment] Payment initialized for order:",
+        orderId,
+        "PaymentId:",
+        paymentResponse.PaymentId,
+      );
 
       res.json({
         success: true,
@@ -3063,7 +3615,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("[Payment] Failed to initialize payment:", error);
-      res.status(500).json({ error: error.message || "Failed to initialize payment" });
+      res
+        .status(500)
+        .json({ error: error.message || "Failed to initialize payment" });
     }
   });
 
@@ -3085,9 +3639,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const paymentStatus = notification.Status;
 
       // Check if this is a wallet top-up (OrderId starts with "W_")
-      if (typeof orderIdRaw === 'string' && orderIdRaw.startsWith("W_")) {
-        console.log("[Wallet] Received wallet payment notification:", orderIdRaw, "Status:", paymentStatus);
-        
+      if (typeof orderIdRaw === "string" && orderIdRaw.startsWith("W_")) {
+        console.log(
+          "[Wallet] Received wallet payment notification:",
+          orderIdRaw,
+          "Status:",
+          paymentStatus,
+        );
+
         // Only process confirmed payments
         if (paymentStatus === "CONFIRMED") {
           // Parse wallet order ID: W_timestamp_userId_amount
@@ -3096,25 +3655,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const userIdPrefix = parts[2];
             const amountRub = parseInt(parts[3]);
             const amountKopecks = amountRub * 100;
-            
+
             // Find user by ID prefix
             const allUsers = await db.select().from(usersTable);
-            const user = allUsers.find(u => u.id.startsWith(userIdPrefix));
-            
+            const user = allUsers.find((u) => u.id.startsWith(userIdPrefix));
+
             if (user) {
               // Check if this payment was already processed (prevent duplicates)
-              const existingTransaction = await db.query.walletTransactions.findFirst({
-                where: eq(walletTransactions.paymentId, notification.PaymentId),
-              });
-              
+              const existingTransaction =
+                await db.query.walletTransactions.findFirst({
+                  where: eq(
+                    walletTransactions.paymentId,
+                    notification.PaymentId,
+                  ),
+                });
+
               if (!existingTransaction) {
                 // Credit the wallet
-                await db.update(usersTable)
-                  .set({ 
-                    walletBalance: sql`${usersTable.walletBalance} + ${amountKopecks}` 
+                await db
+                  .update(usersTable)
+                  .set({
+                    walletBalance: sql`${usersTable.walletBalance} + ${amountKopecks}`,
                   })
                   .where(eq(usersTable.id, user.id));
-                
+
                 // Record transaction
                 await db.insert(walletTransactions).values({
                   userId: user.id,
@@ -3123,117 +3687,173 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   description: `Пополнение через СБП на ${amountRub}₽`,
                   paymentId: notification.PaymentId,
                 });
-                
-                console.log("[Wallet] ✅ Credited", amountRub, "RUB to user:", user.id);
+
+                console.log(
+                  "[Wallet] ✅ Credited",
+                  amountRub,
+                  "RUB to user:",
+                  user.id,
+                );
               } else {
-                console.log("[Wallet] Payment already processed:", notification.PaymentId);
+                console.log(
+                  "[Wallet] Payment already processed:",
+                  notification.PaymentId,
+                );
               }
             } else {
-              console.error("[Wallet] User not found for prefix:", userIdPrefix);
+              console.error(
+                "[Wallet] User not found for prefix:",
+                userIdPrefix,
+              );
             }
           }
         }
-        
+
         res.send(tinkoffClient.getNotificationSuccessResponse());
         return;
       }
 
       // Check if this is a Telegram order (OrderId starts with "T_")
-      if (typeof orderIdRaw === 'string' && orderIdRaw.startsWith("T_")) {
-        console.log("[Telegram Order] Received payment notification:", orderIdRaw, "Status:", paymentStatus);
-        
+      if (typeof orderIdRaw === "string" && orderIdRaw.startsWith("T_")) {
+        console.log(
+          "[Telegram Order] Received payment notification:",
+          orderIdRaw,
+          "Status:",
+          paymentStatus,
+        );
+
         // Only process confirmed payments
         if (paymentStatus === "CONFIRMED") {
           // Find pending telegram order
           const pendingOrder = await db.query.pendingTelegramOrders.findFirst({
             where: eq(pendingTelegramOrdersTable.orderId, orderIdRaw),
           });
-          
+
           if (pendingOrder) {
             // Check if already processed
             if (pendingOrder.status === "paid") {
-              console.log("[Telegram Order] Order already processed:", orderIdRaw);
+              console.log(
+                "[Telegram Order] Order already processed:",
+                orderIdRaw,
+              );
             } else {
               // Parse items
               const items = JSON.parse(pendingOrder.items as string);
-              
+
               // Get user's email (or use placeholder for Telegram orders)
               const user = await db.query.users.findFirst({
                 where: eq(usersTable.id, pendingOrder.userId),
               });
-              const userEmail = user?.email || `telegram-${pendingOrder.chatId}@bot.puerpub.ru`;
-              
+              const userEmail =
+                user?.email || `telegram-${pendingOrder.chatId}@bot.puerpub.ru`;
+
               // Create real order (total is in kopecks, convert to rubles for orders table)
               const totalRubles = pendingOrder.total / 100;
-              const usedFirstOrderDiscount = pendingOrder.discountType === "first_order";
-              
-              const [newOrder] = await db.insert(ordersTable).values({
-                userId: pendingOrder.userId,
-                name: pendingOrder.name,
-                email: userEmail,
-                phone: pendingOrder.phone,
-                address: pendingOrder.address,
-                items: JSON.stringify(items.map((i: any) => ({
-                  id: i.id,
-                  name: i.name,
-                  pricePerGram: i.pricePerGram,
-                  quantity: i.quantity,
-                }))),
-                total: totalRubles,
-                status: "paid",
-                usedFirstOrderDiscount,
-                paymentStatus: "CONFIRMED",
-                paymentId: String(notification.PaymentId),
-                telegramChatId: pendingOrder.chatId, // Save chat ID for receipt delivery
-              }).returning();
-              
-              console.log("[Telegram Order] Created order:", newOrder.id, "for Telegram order:", orderIdRaw);
-              
+              const usedFirstOrderDiscount =
+                pendingOrder.discountType === "first_order";
+
+              const [newOrder] = await db
+                .insert(ordersTable)
+                .values({
+                  userId: pendingOrder.userId,
+                  name: pendingOrder.name,
+                  email: userEmail,
+                  phone: pendingOrder.phone,
+                  address: pendingOrder.address,
+                  items: JSON.stringify(
+                    items.map((i: any) => ({
+                      id: i.id,
+                      name: i.name,
+                      pricePerGram: i.pricePerGram,
+                      quantity: i.quantity,
+                    })),
+                  ),
+                  total: totalRubles,
+                  status: "paid",
+                  usedFirstOrderDiscount,
+                  paymentStatus: "CONFIRMED",
+                  paymentId: String(notification.PaymentId),
+                  telegramChatId: pendingOrder.chatId, // Save chat ID for receipt delivery
+                })
+                .returning();
+
+              console.log(
+                "[Telegram Order] Created order:",
+                newOrder.id,
+                "for Telegram order:",
+                orderIdRaw,
+              );
+
               // Update pending order status
-              await db.update(pendingTelegramOrdersTable)
+              await db
+                .update(pendingTelegramOrdersTable)
                 .set({ status: "paid" })
                 .where(eq(pendingTelegramOrdersTable.id, pendingOrder.id));
-              
+
               // Clear cart
-              await db.delete(telegramCartTable)
+              await db
+                .delete(telegramCartTable)
                 .where(eq(telegramCartTable.userId, pendingOrder.userId));
-              
+
               // Award XP if user exists (user was already queried above for email)
               if (user) {
                 const telegramSiteSettings = await storage.getSiteSettings();
-                const telegramXpMultiplier = telegramSiteSettings?.xpMultiplier ?? 1;
-                const xpToAdd = Math.floor((pendingOrder.total / 100) * telegramXpMultiplier); // XP per ruble with multiplier
-                
-                if (!user.firstOrderDiscountUsed && pendingOrder.discountType === "first_order") {
-                  await db.update(usersTable)
-                    .set({ 
+                const telegramXpMultiplier =
+                  telegramSiteSettings?.xpMultiplier ?? 1;
+                const xpToAdd = Math.floor(
+                  (pendingOrder.total / 100) * telegramXpMultiplier,
+                ); // XP per ruble with multiplier
+
+                if (
+                  !user.firstOrderDiscountUsed &&
+                  pendingOrder.discountType === "first_order"
+                ) {
+                  await db
+                    .update(usersTable)
+                    .set({
                       xp: sql`${usersTable.xp} + ${xpToAdd}`,
                       firstOrderDiscountUsed: true,
                     })
                     .where(eq(usersTable.id, user.id));
                 } else {
-                  await db.update(usersTable)
+                  await db
+                    .update(usersTable)
                     .set({ xp: sql`${usersTable.xp} + ${xpToAdd}` })
                     .where(eq(usersTable.id, user.id));
                 }
-                
-                console.log("[Telegram Order] Awarded", xpToAdd, "XP to user:", user.id, `(x${telegramXpMultiplier})`);
+
+                console.log(
+                  "[Telegram Order] Awarded",
+                  xpToAdd,
+                  "XP to user:",
+                  user.id,
+                  `(x${telegramXpMultiplier})`,
+                );
               }
-              
+
               // Send confirmation to customer's Telegram chat
               try {
                 const { sendMessage } = await import("./services/telegramBot");
-                await sendMessage(pendingOrder.chatId, `✅ <b>Заказ #${newOrder.id} оплачен!</b>
+                await sendMessage(
+                  pendingOrder.chatId,
+                  `✅ <b>Заказ #${newOrder.id} оплачен!</b>
 
 Спасибо за покупку! Мы свяжемся с вами для уточнения деталей доставки.
 
-💰 Сумма: ${(pendingOrder.total / 100).toLocaleString("ru-RU")} ₽`, {
-                  inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
-                });
+💰 Сумма: ${(pendingOrder.total / 100).toLocaleString("ru-RU")} ₽`,
+                  {
+                    inline_keyboard: [
+                      [{ text: "🏠 Главное меню", callback_data: "main_menu" }],
+                    ],
+                  },
+                );
               } catch (telegramError) {
-                console.error("[Telegram Order] Failed to send confirmation:", telegramError);
+                console.error(
+                  "[Telegram Order] Failed to send confirmation:",
+                  telegramError,
+                );
               }
-              
+
               // Send order notification to admin group chat
               try {
                 // Reconstruct a breakdown from pendingOrder fields (amounts stored in kopecks)
@@ -3245,29 +3865,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   abDiscountAmount: 0,
                   bulkDiscountAmount: 0,
                   subtotalAfterItemDiscounts: subtotalRubles,
-                  firstOrderDiscountAmount: pendingOrder.discountType === "first_order" ? discountRubles : 0,
-                  loyaltyDiscountAmount: pendingOrder.discountType === "loyalty" ? discountRubles : 0,
-                  customDiscountAmount: pendingOrder.discountType === "custom" ? discountRubles : 0,
+                  firstOrderDiscountAmount:
+                    pendingOrder.discountType === "first_order"
+                      ? discountRubles
+                      : 0,
+                  loyaltyDiscountAmount:
+                    pendingOrder.discountType === "loyalty"
+                      ? discountRubles
+                      : 0,
+                  customDiscountAmount:
+                    pendingOrder.discountType === "custom" ? discountRubles : 0,
                   finalTotal: pendingOrder.total / 100,
                 };
                 // Approximate percent for label (shown only if meaningful)
-                const approxPct = subtotalRubles > 0 ? Math.round((discountRubles / subtotalRubles) * 100) : 0;
+                const approxPct =
+                  subtotalRubles > 0
+                    ? Math.round((discountRubles / subtotalRubles) * 100)
+                    : 0;
                 const telegramPercents = {
-                  firstOrder: pendingOrder.discountType === "first_order" ? approxPct : undefined,
-                  loyalty: pendingOrder.discountType === "loyalty" ? approxPct : undefined,
-                  custom: pendingOrder.discountType === "custom" ? approxPct : undefined,
+                  firstOrder:
+                    pendingOrder.discountType === "first_order"
+                      ? approxPct
+                      : undefined,
+                  loyalty:
+                    pendingOrder.discountType === "loyalty"
+                      ? approxPct
+                      : undefined,
+                  custom:
+                    pendingOrder.discountType === "custom"
+                      ? approxPct
+                      : undefined,
                 };
-                await sendTelegramOrderNotification(newOrder, telegramBreakdown, telegramPercents);
+                await sendTelegramOrderNotification(
+                  newOrder,
+                  telegramBreakdown,
+                  telegramPercents,
+                );
               } catch (adminNotifyError) {
-                console.error("[Telegram Order] Failed to send admin notification:", adminNotifyError);
+                console.error(
+                  "[Telegram Order] Failed to send admin notification:",
+                  adminNotifyError,
+                );
               }
-              
+
               console.log("[Telegram Order] ✅ Order completed:", orderIdRaw);
             }
           } else {
-            console.error("[Telegram Order] Pending order not found:", orderIdRaw);
+            console.error(
+              "[Telegram Order] Pending order not found:",
+              orderIdRaw,
+            );
           }
-        } else if (paymentStatus === "REJECTED" || paymentStatus === "CANCELLED") {
+        } else if (
+          paymentStatus === "REJECTED" ||
+          paymentStatus === "CANCELLED"
+        ) {
           // Find the pending order to get customer name for admin notification
           const pendingOrder = await db.query.pendingTelegramOrders.findFirst({
             where: eq(pendingTelegramOrdersTable.orderId, orderIdRaw),
@@ -3277,14 +3929,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Idempotency guard: only notify if we haven't already processed this rejection
             if (pendingOrder.status === "pending") {
               // Mark as cancelled to prevent duplicate notifications on webhook retries
-              await db.update(pendingTelegramOrdersTable)
+              await db
+                .update(pendingTelegramOrdersTable)
                 .set({ status: "cancelled" })
                 .where(eq(pendingTelegramOrdersTable.id, pendingOrder.id));
 
               try {
-                await sendPaymentStatusNotification(pendingOrder.id, pendingOrder.name, paymentStatus as 'REJECTED' | 'CANCELLED');
+                await sendPaymentStatusNotification(
+                  pendingOrder.id,
+                  pendingOrder.name,
+                  paymentStatus as "REJECTED" | "CANCELLED",
+                );
               } catch (notifyError) {
-                console.error("[Telegram Order] Failed to send rejection notification:", notifyError);
+                console.error(
+                  "[Telegram Order] Failed to send rejection notification:",
+                  notifyError,
+                );
               }
 
               // Notify the customer that their payment was rejected
@@ -3292,31 +3952,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 const { sendMessage } = await import("./services/telegramBot");
                 const delivered = await sendMessage(
                   pendingOrder.chatId,
-                  `❌ <b>Платёж по заказу не прошёл</b>\n\nК сожалению, оплата была отклонена. Это может произойти по разным причинам (недостаточно средств, ограничения банка и т.д.).\n\nПожалуйста, попробуйте оформить заказ снова или свяжитесь с нашей службой поддержки — мы готовы помочь!`
+                  `❌ <b>Платёж по заказу не прошёл</b>\n\nК сожалению, оплата была отклонена. Это может произойти по разным причинам (недостаточно средств, ограничения банка и т.д.).\n\nПожалуйста, попробуйте оформить заказ снова или свяжитесь с нашей службой поддержки — мы готовы помочь!`,
                 );
                 if (!delivered) {
-                  console.error("[Telegram Order] Customer rejection notification not delivered to chatId:", pendingOrder.chatId);
+                  console.error(
+                    "[Telegram Order] Customer rejection notification not delivered to chatId:",
+                    pendingOrder.chatId,
+                  );
                 }
               } catch (customerNotifyError) {
-                console.error("[Telegram Order] Failed to send customer rejection notification:", customerNotifyError);
+                console.error(
+                  "[Telegram Order] Failed to send customer rejection notification:",
+                  customerNotifyError,
+                );
               }
             } else {
-              console.log("[Telegram Order] Rejection already processed for:", orderIdRaw, "status:", pendingOrder.status);
+              console.log(
+                "[Telegram Order] Rejection already processed for:",
+                orderIdRaw,
+                "status:",
+                pendingOrder.status,
+              );
             }
           } else {
-            console.error("[Telegram Order] Pending order not found for rejection:", orderIdRaw);
+            console.error(
+              "[Telegram Order] Pending order not found for rejection:",
+              orderIdRaw,
+            );
           }
         }
-        
+
         res.send(tinkoffClient.getNotificationSuccessResponse());
         return;
       }
 
       // Handle fiscalization notification (Status = "RECEIPT") for Telegram orders
-      if (paymentStatus === "RECEIPT" && typeof orderIdRaw === 'string' && orderIdRaw.startsWith("T_")) {
-        console.log("[Telegram Order] Received RECEIPT notification:", orderIdRaw);
-        console.log("[Telegram Order] Full RECEIPT notification:", JSON.stringify(notification, null, 2));
-        
+      if (
+        paymentStatus === "RECEIPT" &&
+        typeof orderIdRaw === "string" &&
+        orderIdRaw.startsWith("T_")
+      ) {
+        console.log(
+          "[Telegram Order] Received RECEIPT notification:",
+          orderIdRaw,
+        );
+        console.log(
+          "[Telegram Order] Full RECEIPT notification:",
+          JSON.stringify(notification, null, 2),
+        );
+
         // Extract receipt URL
         let receiptUrl: string | null = null;
         if (notification.Url) {
@@ -3326,47 +4010,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (notification.ReceiptUrl) {
           receiptUrl = notification.ReceiptUrl;
         }
-        
+
         if (receiptUrl) {
           // Find the real order by paymentId - this has telegramChatId saved
           const realOrder = await db.query.orders.findFirst({
             where: eq(ordersTable.paymentId, String(notification.PaymentId)),
           });
-          
+
           // Update order with receipt URL
           if (realOrder) {
-            await db.update(ordersTable)
+            await db
+              .update(ordersTable)
               .set({ receiptUrl: receiptUrl })
               .where(eq(ordersTable.id, realOrder.id));
-            
+
             // Get chat ID from order (saved during CONFIRMED)
             const chatId = realOrder.telegramChatId;
-            
+
             if (chatId) {
               // Send receipt to Telegram user
               try {
                 const { sendMessage } = await import("./services/telegramBot");
-                await sendMessage(chatId, `🧾 <b>Электронный чек по заказу #${realOrder.id}</b>
+                await sendMessage(
+                  chatId,
+                  `🧾 <b>Электронный чек по заказу #${realOrder.id}</b>
 
 <a href="${receiptUrl}">Открыть чек</a>
 
-Чек сформирован и доступен по ссылке выше.`, {
-                  inline_keyboard: [[{ text: "🏠 Главное меню", callback_data: "main_menu" }]],
-                });
-                console.log("[Telegram Order] ✅ Receipt sent to Telegram:", chatId);
+Чек сформирован и доступен по ссылке выше.`,
+                  {
+                    inline_keyboard: [
+                      [{ text: "🏠 Главное меню", callback_data: "main_menu" }],
+                    ],
+                  },
+                );
+                console.log(
+                  "[Telegram Order] ✅ Receipt sent to Telegram:",
+                  chatId,
+                );
               } catch (telegramError) {
-                console.error("[Telegram Order] Failed to send receipt:", telegramError);
+                console.error(
+                  "[Telegram Order] Failed to send receipt:",
+                  telegramError,
+                );
               }
             } else {
-              console.warn("[Telegram Order] No telegramChatId on order", realOrder.id);
+              console.warn(
+                "[Telegram Order] No telegramChatId on order",
+                realOrder.id,
+              );
             }
           } else {
-            console.warn("[Telegram Order] Real order not found for paymentId:", notification.PaymentId);
+            console.warn(
+              "[Telegram Order] Real order not found for paymentId:",
+              notification.PaymentId,
+            );
           }
         } else {
           console.warn("[Telegram Order] No receipt URL in notification");
         }
-        
+
         res.send(tinkoffClient.getNotificationSuccessResponse());
         return;
       }
@@ -3375,12 +4078,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Handle fiscalization notification (Status = "RECEIPT")
       if (paymentStatus === "RECEIPT") {
-        console.log("[Payment] Received fiscalization notification for order:", orderId);
-        console.log("[Payment] Full RECEIPT notification:", JSON.stringify(notification, null, 2));
-        
+        console.log(
+          "[Payment] Received fiscalization notification for order:",
+          orderId,
+        );
+        console.log(
+          "[Payment] Full RECEIPT notification:",
+          JSON.stringify(notification, null, 2),
+        );
+
         // Extract receipt URL from notification - try multiple possible locations
         let receiptUrl: string | null = null;
-        
+
         // Try various possible receipt URL locations in notification
         // Priority: direct Url field (most common in real Tinkoff payloads) > nested fields
         if (notification.Url) {
@@ -3392,16 +4101,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
           receiptUrl = notification.ReceiptUrl;
         } else if (notification.Receipt?.Url) {
           receiptUrl = notification.Receipt.Url;
-        } else if (notification.Receipts && Array.isArray(notification.Receipts) && notification.Receipts.length > 0) {
-          const receiptWithUrl = notification.Receipts.find((r: any) => r.Url || r.ReceiptUrl);
+        } else if (
+          notification.Receipts &&
+          Array.isArray(notification.Receipts) &&
+          notification.Receipts.length > 0
+        ) {
+          const receiptWithUrl = notification.Receipts.find(
+            (r: any) => r.Url || r.ReceiptUrl,
+          );
           if (receiptWithUrl) {
             receiptUrl = receiptWithUrl.Url || receiptWithUrl.ReceiptUrl;
           }
         }
-        
+
         if (!receiptUrl) {
-          console.warn("[Payment] No receipt URL found in fiscalization notification for order:", orderId);
-          console.warn("[Payment] Available notification fields:", Object.keys(notification));
+          console.warn(
+            "[Payment] No receipt URL found in fiscalization notification for order:",
+            orderId,
+          );
+          console.warn(
+            "[Payment] Available notification fields:",
+            Object.keys(notification),
+          );
           res.send(tinkoffClient.getNotificationSuccessResponse());
           return;
         }
@@ -3424,51 +4145,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // ATOMIC: Try to claim SMS sending rights with conditional update
         // Only updates if receiptSmsSent is still false (prevents race conditions)
-        const updateResult = await db.update(ordersTable)
-          .set({ 
+        const updateResult = await db
+          .update(ordersTable)
+          .set({
             paymentStatus: paymentStatus,
             receiptUrl: receiptUrl,
             receiptSmsSent: true,
           })
-          .where(and(eq(ordersTable.id, orderId), eq(ordersTable.receiptSmsSent, false)));
+          .where(
+            and(
+              eq(ordersTable.id, orderId),
+              eq(ordersTable.receiptSmsSent, false),
+            ),
+          );
 
         // Check if we won the race (row was updated)
         // If rowCount is 0, another process already set the flag
         if (updateResult.rowCount === 0) {
-          console.log("[Payment] Receipt SMS already sent for order:", orderId, "- skipping (lost race)");
+          console.log(
+            "[Payment] Receipt SMS already sent for order:",
+            orderId,
+            "- skipping (lost race)",
+          );
           // Still update receiptUrl if needed (without changing flag)
-          await db.update(ordersTable)
+          await db
+            .update(ordersTable)
             .set({ receiptUrl: receiptUrl, paymentStatus: paymentStatus })
             .where(eq(ordersTable.id, orderId));
           res.send(tinkoffClient.getNotificationSuccessResponse());
           return;
         }
 
-        console.log("[Payment] Won SMS race for order:", orderId, "- sending SMS");
+        console.log(
+          "[Payment] Won SMS race for order:",
+          orderId,
+          "- sending SMS",
+        );
 
         // Send SMS with receipt
         try {
           const normalizedPhone = normalizePhone(order.phone);
           await sendReceiptSms(normalizedPhone, receiptUrl, orderId);
-          console.log("[Payment] ✅ Receipt SMS sent successfully to", normalizedPhone);
+          console.log(
+            "[Payment] ✅ Receipt SMS sent successfully to",
+            normalizedPhone,
+          );
         } catch (error) {
-          console.error("[Payment] ⚠️ Failed to send receipt SMS for order:", orderId);
+          console.error(
+            "[Payment] ⚠️ Failed to send receipt SMS for order:",
+            orderId,
+          );
           console.error("[Payment] Error:", error);
           console.error("[Payment] Receipt URL:", receiptUrl);
           console.error("[Payment] Customer phone:", order.phone);
-          console.error("[Payment] ⚠️ MANUAL ACTION: Send receipt to customer manually");
-          
+          console.error(
+            "[Payment] ⚠️ MANUAL ACTION: Send receipt to customer manually",
+          );
+
           // Reset flag so manual retry can work
-          await db.update(ordersTable)
+          await db
+            .update(ordersTable)
             .set({ receiptSmsSent: false })
             .where(eq(ordersTable.id, orderId));
-          
+
           // Try to send Telegram notification to admin (don't fail webhook if this fails)
           try {
             const smsText = `Спасибо за заказ #${orderId}! Ваш чек: ${receiptUrl}`;
-            await sendFailedReceiptSmsNotification(orderId, order.phone, smsText);
+            await sendFailedReceiptSmsNotification(
+              orderId,
+              order.phone,
+              smsText,
+            );
           } catch (telegramError) {
-            console.error("[Payment] ⚠️ Failed to send Telegram notification:", telegramError);
+            console.error(
+              "[Payment] ⚠️ Failed to send Telegram notification:",
+              telegramError,
+            );
             // Continue anyway - receipt is already saved
           }
         }
@@ -3484,15 +4236,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const previousPaymentStatus = orderBeforeUpdate?.paymentStatus ?? null;
 
       // Update order payment status
-      await db.update(ordersTable)
+      await db
+        .update(ordersTable)
         .set({
           paymentStatus: paymentStatus,
-          status: paymentStatus === "CONFIRMED" ? "paid" : 
-                  paymentStatus === "REJECTED" ? "cancelled" : "pending",
+          status:
+            paymentStatus === "CONFIRMED"
+              ? "paid"
+              : paymentStatus === "REJECTED"
+                ? "cancelled"
+                : "pending",
         })
         .where(eq(ordersTable.id, orderId));
 
-      console.log("[Payment] Order", orderId, "payment status updated to:", paymentStatus);
+      console.log(
+        "[Payment] Order",
+        orderId,
+        "payment status updated to:",
+        paymentStatus,
+      );
 
       // If payment confirmed, process receipt and award XP
       if (paymentStatus === "CONFIRMED") {
@@ -3502,25 +4264,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (order) {
           // Get full payment state to extract receipt URL
-          const paymentState = await tinkoffClient.getState(notification.PaymentId);
-          console.log("[Payment] Full GetState response:", JSON.stringify(paymentState, null, 2));
+          const paymentState = await tinkoffClient.getState(
+            notification.PaymentId,
+          );
+          console.log(
+            "[Payment] Full GetState response:",
+            JSON.stringify(paymentState, null, 2),
+          );
 
           // Extract receipt URL from response
           // Tinkoff returns fiscal receipts in Receipts array with Url field
           let receiptUrl: string | null = null;
-          
+
           // Try Receipts array first (primary location for fiscal receipts)
-          if (paymentState.Receipts && Array.isArray(paymentState.Receipts) && paymentState.Receipts.length > 0) {
+          if (
+            paymentState.Receipts &&
+            Array.isArray(paymentState.Receipts) &&
+            paymentState.Receipts.length > 0
+          ) {
             // Find the first receipt with a URL (usually lk.platformaofd.ru)
-            const receiptWithUrl = paymentState.Receipts.find((r: any) => r.Url);
+            const receiptWithUrl = paymentState.Receipts.find(
+              (r: any) => r.Url,
+            );
             if (receiptWithUrl) {
               receiptUrl = receiptWithUrl.Url;
             }
           }
-          
+
           // Fallback to legacy fields if Receipts array not available
           if (!receiptUrl) {
-            if (typeof paymentState.Receipt === 'string') {
+            if (typeof paymentState.Receipt === "string") {
               receiptUrl = paymentState.Receipt;
             } else if (paymentState.Receipt?.Url) {
               receiptUrl = paymentState.Receipt.Url;
@@ -3534,10 +4307,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Save receipt URL to order and send SMS
           if (receiptUrl) {
             // Receipt available immediately - send now
-            await db.update(ordersTable)
+            await db
+              .update(ordersTable)
               .set({ receiptUrl: receiptUrl })
               .where(eq(ordersTable.id, orderId));
-            
+
             console.log("[Payment] Receipt URL saved for order:", orderId);
 
             // Send SMS with receipt link (normalize phone first)
@@ -3546,20 +4320,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
               await sendReceiptSms(normalizedPhone, receiptUrl, orderId);
             } catch (error) {
               // This catches both normalization errors and SMS sending errors
-              console.error("[Payment] ⚠️ CRITICAL: Failed to send receipt SMS for order:", orderId);
+              console.error(
+                "[Payment] ⚠️ CRITICAL: Failed to send receipt SMS for order:",
+                orderId,
+              );
               console.error("[Payment] Error details:", error);
               console.error("[Payment] Receipt URL:", receiptUrl);
               console.error("[Payment] Customer phone (raw):", order.phone);
-              console.error("[Payment] ⚠️ MANUAL ACTION: Send receipt to customer manually");
+              console.error(
+                "[Payment] ⚠️ MANUAL ACTION: Send receipt to customer manually",
+              );
               // Don't fail the webhook - graceful degradation
             }
           } else {
             // Receipt not ready yet - Tinkoff will send RECEIPT webhook (typically 2-10 minutes)
             // Schedule fallback polling in case webhook is missed (starts after 3min delay)
-            console.log("[Payment] Receipt not available immediately for order:", orderId);
-            console.log("[Payment] PRIMARY: Waiting for RECEIPT webhook from Tinkoff");
-            console.log("[Payment] FALLBACK: Scheduled GetState checks at +3/7/12min (if webhook missed)");
-            scheduleReceiptFallback(orderId, notification.PaymentId, order.phone);
+            console.log(
+              "[Payment] Receipt not available immediately for order:",
+              orderId,
+            );
+            console.log(
+              "[Payment] PRIMARY: Waiting for RECEIPT webhook from Tinkoff",
+            );
+            console.log(
+              "[Payment] FALLBACK: Scheduled GetState checks at +3/7/12min (if webhook missed)",
+            );
+            scheduleReceiptFallback(
+              orderId,
+              notification.PaymentId,
+              order.phone,
+            );
           }
 
           // Award XP to user if authenticated
@@ -3567,18 +4357,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const siteSettings = await storage.getSiteSettings();
             const xpMultiplier = siteSettings?.xpMultiplier ?? 1;
             const xpToAdd = Math.floor(order.total * xpMultiplier);
-            await db.update(usersTable)
+            await db
+              .update(usersTable)
               .set({
                 xp: sql`${usersTable.xp} + ${xpToAdd}`,
               })
               .where(eq(usersTable.id, order.userId));
 
-            console.log("[Payment] Added", xpToAdd, "XP to user:", order.userId, `(x${xpMultiplier})`);
+            console.log(
+              "[Payment] Added",
+              xpToAdd,
+              "XP to user:",
+              order.userId,
+              `(x${xpMultiplier})`,
+            );
           }
 
           // Cancel pending 5-min timer and send immediate Telegram notification
           // Re-query order so paymentStatus is CONFIRMED
-          const confirmedOrder = await db.query.orders.findFirst({ where: eq(ordersTable.id, orderId) });
+          const confirmedOrder = await db.query.orders.findFirst({
+            where: eq(ordersTable.id, orderId),
+          });
           if (confirmedOrder) {
             const pending = cancelTelegramNotifyTimer(orderId);
             try {
@@ -3588,16 +4387,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 pending?.percents ?? null,
                 pending?.abInfo ?? null,
               );
-              console.log("[Payment] Sent Telegram notification for confirmed order:", orderId);
+              console.log(
+                "[Payment] Sent Telegram notification for confirmed order:",
+                orderId,
+              );
             } catch (tgErr) {
-              console.error("[Payment] Failed to send Telegram notification:", tgErr);
+              console.error(
+                "[Payment] Failed to send Telegram notification:",
+                tgErr,
+              );
             }
             // Short payment status notification — only on actual transition to CONFIRMED
-            if (previousPaymentStatus !== 'CONFIRMED') {
+            if (previousPaymentStatus !== "CONFIRMED") {
               try {
-                await sendPaymentStatusNotification(orderId, confirmedOrder.name, 'CONFIRMED', confirmedOrder.total);
+                await sendPaymentStatusNotification(
+                  orderId,
+                  confirmedOrder.name,
+                  "CONFIRMED",
+                  confirmedOrder.total,
+                );
               } catch (err) {
-                console.error("[Payment] Failed to send payment status Telegram notification:", err);
+                console.error(
+                  "[Payment] Failed to send payment status Telegram notification:",
+                  err,
+                );
               }
             }
           }
@@ -3610,9 +4423,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ) {
         if (orderBeforeUpdate) {
           try {
-            await sendPaymentStatusNotification(orderBeforeUpdate.id, orderBeforeUpdate.name, paymentStatus as 'REJECTED' | 'CANCELLED');
+            await sendPaymentStatusNotification(
+              orderBeforeUpdate.id,
+              orderBeforeUpdate.name,
+              paymentStatus as "REJECTED" | "CANCELLED",
+            );
           } catch (err) {
-            console.error("[Payment] Failed to send payment status Telegram notification:", err);
+            console.error(
+              "[Payment] Failed to send payment status Telegram notification:",
+              err,
+            );
           }
         }
       }
@@ -3641,7 +4461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Security: Verify order ownership
       // Normalize userId - treat empty strings as null
       const orderUserId = order.userId?.trim() || null;
-      
+
       if (req.isAuthenticated()) {
         const userId = (req.user as any).id;
         // Authenticated users can only check payment for their own orders
@@ -3676,15 +4496,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update our database if status changed
       if (paymentState.Status !== order.paymentStatus) {
-        await db.update(ordersTable)
+        await db
+          .update(ordersTable)
           .set({
             paymentStatus: paymentState.Status,
-            status: paymentState.Status === "CONFIRMED" ? "paid" : 
-                    paymentState.Status === "REJECTED" ? "cancelled" : "pending",
+            status:
+              paymentState.Status === "CONFIRMED"
+                ? "paid"
+                : paymentState.Status === "REJECTED"
+                  ? "cancelled"
+                  : "pending",
           })
           .where(eq(ordersTable.id, orderId));
 
-        console.log("[Payment] Order", orderId, "status synchronized:", paymentState.Status);
+        console.log(
+          "[Payment] Order",
+          orderId,
+          "status synchronized:",
+          paymentState.Status,
+        );
       }
 
       res.json({
@@ -3694,7 +4524,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("[Payment] Failed to check payment status:", error);
-      res.status(500).json({ error: error.message || "Failed to check payment status" });
+      res
+        .status(500)
+        .json({ error: error.message || "Failed to check payment status" });
     }
   });
 
@@ -3709,7 +4541,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate amount (in rubles)
       const amountRub = parseInt(amount);
       if (!amountRub || amountRub < 100 || amountRub > 50000) {
-        res.status(400).json({ error: "Сумма должна быть от 100 до 50000 рублей" });
+        res
+          .status(400)
+          .json({ error: "Сумма должна быть от 100 до 50000 рублей" });
         return;
       }
 
@@ -3729,16 +4563,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const walletOrderId = `W_${Date.now()}_${userId.substring(0, 8)}_${amountRub}`;
 
       const tinkoffClient = getTinkoffClient();
-      
+
       // Normalize phone for receipt
       const normalizedPhone = normalizePhone(user.phone);
-      const phoneForReceipt = normalizedPhone.startsWith('+') 
-        ? normalizedPhone.substring(1) 
+      const phoneForReceipt = normalizedPhone.startsWith("+")
+        ? normalizedPhone.substring(1)
         : normalizedPhone;
 
-      const baseUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://puerpub.replit.app' 
-        : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
+      const baseUrl =
+        process.env.NODE_ENV === "production"
+          ? "https://puerpub.replit.app"
+          : `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`;
 
       const paymentRequest = {
         Amount: amountKopecks,
@@ -3750,26 +4585,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         Receipt: {
           Phone: phoneForReceipt,
           Taxation: "usn_income",
-          Items: [{
-            Name: `Пополнение кошелька на ${amountRub}₽`,
-            Price: amountKopecks,
-            Quantity: 1,
-            Amount: amountKopecks,
-            Tax: "none",
-            PaymentMethod: "full_prepayment",
-            PaymentObject: "service",
-          }],
+          Items: [
+            {
+              Name: `Пополнение кошелька на ${amountRub}₽`,
+              Price: amountKopecks,
+              Quantity: 1,
+              Amount: amountKopecks,
+              Tax: "none",
+              PaymentMethod: "full_prepayment",
+              PaymentObject: "service",
+            },
+          ],
         },
         NotificationURL: `${baseUrl}/api/payments/notification`,
         SuccessURL: `${baseUrl}/wallet/success?amount=${amountRub}`,
         FailURL: `${baseUrl}/wallet/error`,
       };
 
-      console.log("[Wallet] Creating top-up payment:", walletOrderId, "Amount:", amountRub);
+      console.log(
+        "[Wallet] Creating top-up payment:",
+        walletOrderId,
+        "Amount:",
+        amountRub,
+      );
 
       const paymentResponse = await tinkoffClient.init(paymentRequest);
 
-      console.log("[Wallet] Payment created, PaymentId:", paymentResponse.PaymentId);
+      console.log(
+        "[Wallet] Payment created, PaymentId:",
+        paymentResponse.PaymentId,
+      );
 
       res.json({
         success: true,
@@ -3779,7 +4624,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("[Wallet] Top-up creation failed:", error);
-      res.status(500).json({ error: error.message || "Ошибка при создании платежа" });
+      res
+        .status(500)
+        .json({ error: error.message || "Ошибка при создании платежа" });
     }
   });
 
@@ -3821,31 +4668,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/telegram/magic-link", requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      
+
       const existingProfile = await getUserTelegramProfile(userId);
       if (existingProfile) {
-        res.status(400).json({ error: "Telegram уже привязан к вашему аккаунту" });
+        res
+          .status(400)
+          .json({ error: "Telegram уже привязан к вашему аккаунту" });
         return;
       }
-      
+
       const result = await createMagicLink(userId, "telegram");
-      
+
       if (!result.success || !result.token) {
-        res.status(500).json({ error: result.error || "Не удалось создать ссылку" });
+        res
+          .status(500)
+          .json({ error: result.error || "Не удалось создать ссылку" });
         return;
       }
-      
+
       // Generate short code from token (first 8 chars uppercase)
       const shortCode = result.token.substring(0, 8).toUpperCase();
       const botUsername = "PuerPabbot";
       const deepLink = `https://t.me/${botUsername}`;
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         deepLink,
         shortCode,
         token: result.token,
-        expiresIn: 15
+        expiresIn: 15,
       });
     } catch (error) {
       console.error("[Telegram] Magic link creation error:", error);
@@ -3858,12 +4709,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const profile = await getUserTelegramProfile(userId);
-      
+
       if (!profile) {
         res.json({ linked: false });
         return;
       }
-      
+
       res.json({
         linked: true,
         username: profile.username,
@@ -3881,12 +4732,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.id;
       const success = await unlinkTelegram(userId);
-      
+
       if (!success) {
-        res.status(400).json({ error: "Telegram не привязан к вашему аккаунту" });
+        res
+          .status(400)
+          .json({ error: "Telegram не привязан к вашему аккаунту" });
         return;
       }
-      
+
       res.json({ success: true });
     } catch (error) {
       console.error("[Telegram] Unlink error:", error);
@@ -3899,9 +4752,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const update = req.body;
       console.log("[Telegram Bot] Webhook received update:", update?.update_id);
-      
+
       await handleWebhookUpdate(update);
-      
+
       res.status(200).json({ ok: true });
     } catch (error) {
       console.error("[Telegram Bot] Webhook error:", error);
@@ -3910,29 +4763,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin: Set/Get webhook info
-  app.post("/api/admin/telegram/webhook", requireAdminAuth, async (req, res) => {
-    try {
-      const { webhookUrl } = req.body;
-      
-      if (webhookUrl) {
-        const success = await setWebhook(webhookUrl);
-        res.json({ success, message: success ? "Webhook установлен" : "Ошибка установки webhook" });
-      } else {
-        const info = await getWebhookInfo();
-        res.json(info);
+  app.post(
+    "/api/admin/telegram/webhook",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const { webhookUrl } = req.body;
+
+        if (webhookUrl) {
+          const success = await setWebhook(webhookUrl);
+          res.json({
+            success,
+            message: success
+              ? "Webhook установлен"
+              : "Ошибка установки webhook",
+          });
+        } else {
+          const info = await getWebhookInfo();
+          res.json(info);
+        }
+      } catch (error) {
+        console.error("[Telegram Bot] Webhook setup error:", error);
+        res.status(500).json({ error: "Failed to configure webhook" });
       }
-    } catch (error) {
-      console.error("[Telegram Bot] Webhook setup error:", error);
-      res.status(500).json({ error: "Failed to configure webhook" });
-    }
-  });
+    },
+  );
 
   // ================== MEDIA (Video Gallery) ==================
 
   // Get all media (optional productId filter)
   app.get("/api/media", async (req, res) => {
     try {
-      const productId = req.query.productId ? parseInt(req.query.productId as string) : undefined;
+      const productId = req.query.productId
+        ? parseInt(req.query.productId as string)
+        : undefined;
       const mediaItems = await storage.getMedia(productId);
       res.json(mediaItems);
     } catch (error) {
@@ -3970,174 +4834,239 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Configure multer for video uploads (larger file size)
   const videoUpload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit for videos
+    limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit for videos
   });
 
   // Admin: Create media (video or image upload)
-  app.post("/api/admin/media", requireAdminAuth, videoUpload.fields([
-    { name: "file", maxCount: 1 },
-    { name: "thumbnail", maxCount: 1 }
-  ]), async (req, res) => {
-    console.log("[Media Upload] Request received:", { 
-      body: req.body, 
-      hasFiles: !!req.files,
-      fileKeys: req.files ? Object.keys(req.files as any) : []
-    });
-    try {
-      console.log("[Media] Received media upload request");
-      console.log("[Media] Request body:", req.body);
-      console.log("[Media] Request files:", req.files);
-      
-      const { productId, type, title, description, sourceUrl, featured } = req.body;
-      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
-      
-      console.log("[Media Upload] Parsed:", { productId, type, hasFile: !!files?.file?.[0] });
-      
-      if (!productId || !type) {
-        console.error("[Media] Missing required fields:", { productId, type });
-        return res.status(400).json({ error: "productId and type are required" });
-      }
+  app.post(
+    "/api/admin/media",
+    requireAdminAuth,
+    videoUpload.fields([
+      { name: "file", maxCount: 1 },
+      { name: "thumbnail", maxCount: 1 },
+    ]),
+    async (req, res) => {
+      console.log("[Media Upload] Request received:", {
+        body: req.body,
+        hasFiles: !!req.files,
+        fileKeys: req.files ? Object.keys(req.files as any) : [],
+      });
+      try {
+        console.log("[Media] Received media upload request");
+        console.log("[Media] Request body:", req.body);
+        console.log("[Media] Request files:", req.files);
 
-      const objectStorageService = new ObjectStorageService();
-      let sourceValue: string;
-      let sourceType: "file" | "url";
-      let thumbnailUrl: string | null = null;
+        const { productId, type, title, description, sourceUrl, featured } =
+          req.body;
+        const files = req.files as {
+          [fieldname: string]: Express.Multer.File[];
+        };
 
-      // Handle file upload or URL
-      if (files?.file?.[0]) {
-        const file = files.file[0];
-        console.log("[Media] Processing file upload:", {
-          filename: file.originalname,
-          mimetype: file.mimetype,
-          size: file.size,
-          type
+        console.log("[Media Upload] Parsed:", {
+          productId,
+          type,
+          hasFile: !!files?.file?.[0],
         });
-        
-        // Validate MIME type matches declared type
-        const isVideo = file.mimetype.startsWith("video/");
-        const isImage = file.mimetype.startsWith("image/");
-        
-        if (type === "video" && !isVideo) {
-          console.error("[Media] MIME type mismatch for video:", file.mimetype);
-          return res.status(400).json({ error: "File must be a video for type 'video'" });
+
+        if (!productId || !type) {
+          console.error("[Media] Missing required fields:", {
+            productId,
+            type,
+          });
+          return res
+            .status(400)
+            .json({ error: "productId and type are required" });
         }
-        if (type === "image" && !isImage) {
-          console.error("[Media] MIME type mismatch for image:", file.mimetype);
-          return res.status(400).json({ error: "File must be an image for type 'image'" });
-        }
-        
-        const ext = type === "video" ? ".mp4" : ".webp";
-        const filename = `media/${randomUUID()}${ext}`;
-        
-        try {
-          if (type === "image") {
-            // Convert image to WebP
-            const sharp = (await import("sharp")).default;
-            const webpBuffer = await sharp(file.buffer).webp({ quality: 85 }).toBuffer();
-            sourceValue = await objectStorageService.uploadPublicObject(webpBuffer, filename.replace(ext, ".webp"));
-            console.log("[Media] Image uploaded to:", sourceValue);
-          } else {
-            // Upload video as-is
-            sourceValue = await objectStorageService.uploadPublicObject(file.buffer, filename);
-            console.log("[Media] Video uploaded to:", sourceValue);
+
+        const objectStorageService = new ObjectStorageService();
+        let sourceValue: string;
+        let sourceType: "file" | "url";
+        let thumbnailUrl: string | null = null;
+
+        // Handle file upload or URL
+        if (files?.file?.[0]) {
+          const file = files.file[0];
+          console.log("[Media] Processing file upload:", {
+            filename: file.originalname,
+            mimetype: file.mimetype,
+            size: file.size,
+            type,
+          });
+
+          // Validate MIME type matches declared type
+          const isVideo = file.mimetype.startsWith("video/");
+          const isImage = file.mimetype.startsWith("image/");
+
+          if (type === "video" && !isVideo) {
+            console.error(
+              "[Media] MIME type mismatch for video:",
+              file.mimetype,
+            );
+            return res
+              .status(400)
+              .json({ error: "File must be a video for type 'video'" });
           }
-          sourceType = "file";
-        } catch (uploadError) {
-          console.error("[Media] Error uploading file to storage:", uploadError);
-          return res.status(500).json({ error: "Failed to upload file to storage" });
-        }
-      } else if (sourceUrl) {
-        console.log("[Media] Using source URL:", sourceUrl);
-        sourceValue = sourceUrl;
-        sourceType = "url";
-      } else {
-        console.error("[Media] No file or sourceUrl provided");
-        return res.status(400).json({ error: "Either file or sourceUrl is required" });
-      }
+          if (type === "image" && !isImage) {
+            console.error(
+              "[Media] MIME type mismatch for image:",
+              file.mimetype,
+            );
+            return res
+              .status(400)
+              .json({ error: "File must be an image for type 'image'" });
+          }
 
-      // Handle thumbnail upload
-      if (files?.thumbnail?.[0]) {
-        const thumbnailFile = files.thumbnail[0];
-        console.log("[Media] Processing thumbnail:", {
-          filename: thumbnailFile.originalname,
-          mimetype: thumbnailFile.mimetype,
-          size: thumbnailFile.size
+          const ext = type === "video" ? ".mp4" : ".webp";
+          const filename = `media/${randomUUID()}${ext}`;
+
+          try {
+            if (type === "image") {
+              // Convert image to WebP
+              const sharp = (await import("sharp")).default;
+              const webpBuffer = await sharp(file.buffer)
+                .webp({ quality: 85 })
+                .toBuffer();
+              sourceValue = await objectStorageService.uploadPublicObject(
+                webpBuffer,
+                filename.replace(ext, ".webp"),
+              );
+              console.log("[Media] Image uploaded to:", sourceValue);
+            } else {
+              // Upload video as-is
+              sourceValue = await objectStorageService.uploadPublicObject(
+                file.buffer,
+                filename,
+              );
+              console.log("[Media] Video uploaded to:", sourceValue);
+            }
+            sourceType = "file";
+          } catch (uploadError) {
+            console.error(
+              "[Media] Error uploading file to storage:",
+              uploadError,
+            );
+            return res
+              .status(500)
+              .json({ error: "Failed to upload file to storage" });
+          }
+        } else if (sourceUrl) {
+          console.log("[Media] Using source URL:", sourceUrl);
+          sourceValue = sourceUrl;
+          sourceType = "url";
+        } else {
+          console.error("[Media] No file or sourceUrl provided");
+          return res
+            .status(400)
+            .json({ error: "Either file or sourceUrl is required" });
+        }
+
+        // Handle thumbnail upload
+        if (files?.thumbnail?.[0]) {
+          const thumbnailFile = files.thumbnail[0];
+          console.log("[Media] Processing thumbnail:", {
+            filename: thumbnailFile.originalname,
+            mimetype: thumbnailFile.mimetype,
+            size: thumbnailFile.size,
+          });
+          try {
+            const sharp = (await import("sharp")).default;
+            const webpBuffer = await sharp(thumbnailFile.buffer)
+              .webp({ quality: 80 })
+              .toBuffer();
+            const thumbnailFilename = `media/thumb_${randomUUID()}.webp`;
+            thumbnailUrl = await objectStorageService.uploadPublicObject(
+              webpBuffer,
+              thumbnailFilename,
+            );
+            console.log("[Media] Thumbnail uploaded to:", thumbnailUrl);
+          } catch (thumbnailError) {
+            console.error("[Media] Error uploading thumbnail:", thumbnailError);
+            // Don't fail the whole request if thumbnail fails
+          }
+        }
+
+        console.log("[Media] Creating media record:", {
+          productId: parseInt(productId),
+          type,
+          source: sourceValue,
+          sourceType,
+          thumbnail: thumbnailUrl,
+          featured: featured === "true" || featured === true,
         });
-        try {
-          const sharp = (await import("sharp")).default;
-          const webpBuffer = await sharp(thumbnailFile.buffer).webp({ quality: 80 }).toBuffer();
-          const thumbnailFilename = `media/thumb_${randomUUID()}.webp`;
-          thumbnailUrl = await objectStorageService.uploadPublicObject(webpBuffer, thumbnailFilename);
-          console.log("[Media] Thumbnail uploaded to:", thumbnailUrl);
-        } catch (thumbnailError) {
-          console.error("[Media] Error uploading thumbnail:", thumbnailError);
-          // Don't fail the whole request if thumbnail fails
+
+        const newMedia = await storage.createMedia({
+          productId: parseInt(productId),
+          type: type as "video" | "image",
+          title: title || null,
+          description: description || null,
+          source: sourceValue,
+          sourceType,
+          thumbnail: thumbnailUrl,
+          featured: featured === "true" || featured === true,
+          displayOrder: 0,
+        });
+
+        console.log("[Media] Media created successfully:", newMedia.id);
+        res.json(newMedia);
+      } catch (error) {
+        console.error("[Media] Error creating media:", error);
+        if (error instanceof Error) {
+          console.error("[Media] Error stack:", error.stack);
         }
+        res
+          .status(500)
+          .json({
+            error:
+              error instanceof Error ? error.message : "Failed to create media",
+          });
       }
-
-      console.log("[Media] Creating media record:", {
-        productId: parseInt(productId),
-        type,
-        source: sourceValue,
-        sourceType,
-        thumbnail: thumbnailUrl,
-        featured: featured === "true" || featured === true
-      });
-
-      const newMedia = await storage.createMedia({
-        productId: parseInt(productId),
-        type: type as "video" | "image",
-        title: title || null,
-        description: description || null,
-        source: sourceValue,
-        sourceType,
-        thumbnail: thumbnailUrl,
-        featured: featured === "true" || featured === true,
-        displayOrder: 0,
-      });
-
-      console.log("[Media] Media created successfully:", newMedia.id);
-      res.json(newMedia);
-    } catch (error) {
-      console.error("[Media] Error creating media:", error);
-      if (error instanceof Error) {
-        console.error("[Media] Error stack:", error.stack);
-      }
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to create media" });
-    }
-  });
+    },
+  );
 
   // Admin: Update media
-  app.patch("/api/admin/media/:id", requireAdminAuth, videoUpload.single("thumbnail"), async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const { title, description, featured, displayOrder } = req.body;
-      
-      const updateData: any = {};
-      if (title !== undefined) updateData.title = title || null;
-      if (description !== undefined) updateData.description = description || null;
-      if (featured !== undefined) updateData.featured = featured === "true" || featured === true;
-      if (displayOrder !== undefined) updateData.displayOrder = parseInt(displayOrder);
+  app.patch(
+    "/api/admin/media/:id",
+    requireAdminAuth,
+    videoUpload.single("thumbnail"),
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        const { title, description, featured, displayOrder } = req.body;
 
-      // Handle thumbnail update
-      if (req.file) {
-        const objectStorageService = new ObjectStorageService();
-        const sharp = (await import("sharp")).default;
-        const webpBuffer = await sharp(req.file.buffer).webp({ quality: 80 }).toBuffer();
-        const thumbnailFilename = `media/thumb_${randomUUID()}.webp`;
-        updateData.thumbnail = await objectStorageService.uploadPublicObject(webpBuffer, thumbnailFilename);
-      }
+        const updateData: any = {};
+        if (title !== undefined) updateData.title = title || null;
+        if (description !== undefined)
+          updateData.description = description || null;
+        if (featured !== undefined)
+          updateData.featured = featured === "true" || featured === true;
+        if (displayOrder !== undefined)
+          updateData.displayOrder = parseInt(displayOrder);
 
-      const updated = await storage.updateMedia(id, updateData);
-      if (!updated) {
-        return res.status(404).json({ error: "Media not found" });
+        // Handle thumbnail update
+        if (req.file) {
+          const objectStorageService = new ObjectStorageService();
+          const sharp = (await import("sharp")).default;
+          const webpBuffer = await sharp(req.file.buffer)
+            .webp({ quality: 80 })
+            .toBuffer();
+          const thumbnailFilename = `media/thumb_${randomUUID()}.webp`;
+          updateData.thumbnail = await objectStorageService.uploadPublicObject(
+            webpBuffer,
+            thumbnailFilename,
+          );
+        }
+
+        const updated = await storage.updateMedia(id, updateData);
+        if (!updated) {
+          return res.status(404).json({ error: "Media not found" });
+        }
+        res.json(updated);
+      } catch (error) {
+        console.error("[Media] Error updating media:", error);
+        res.status(500).json({ error: "Failed to update media" });
       }
-      res.json(updated);
-    } catch (error) {
-      console.error("[Media] Error updating media:", error);
-      res.status(500).json({ error: "Failed to update media" });
-    }
-  });
+    },
+  );
 
   // Admin: Delete media
   app.delete("/api/admin/media/:id", requireAdminAuth, async (req, res) => {
@@ -4173,13 +5102,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Analytics Endpoints
   // ============================================
 
-  const { logEvent, logEventsBatch, analyticsEventSchema, analyticsEventsBatchSchema } = await import("./analytics");
+  const {
+    logEvent,
+    logEventsBatch,
+    analyticsEventSchema,
+    analyticsEventsBatchSchema,
+  } = await import("./analytics");
 
   // Public endpoint: Log a single analytics event
   app.post("/api/analytics/log", async (req, res) => {
     try {
       const validatedEvent = analyticsEventSchema.parse(req.body);
-      
+
       // Если user_id не передан, пытаемся взять из сессии
       if (!validatedEvent.user_id && req.user) {
         validatedEvent.user_id = (req.user as any).id;
@@ -4201,9 +5135,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/analytics/log/batch", async (req, res) => {
     try {
       const validatedBatch = analyticsEventsBatchSchema.parse(req.body);
-      
+
       // Добавляем user_id из сессии, если не передан
-      const events = validatedBatch.events.map(event => {
+      const events = validatedBatch.events.map((event) => {
         if (!event.user_id && req.user) {
           return { ...event, user_id: (req.user as any).id };
         }
@@ -4223,12 +5157,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin endpoint: Get analytics summary
-  app.get("/api/admin/analytics/summary", requireAdminAuth, async (req, res) => {
-    try {
-      const { pool } = await import("./db");
-      
-      // Получаем статистику за последние 7 дней
-      const result = await pool.query(`
+  app.get(
+    "/api/admin/analytics/summary",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const { pool } = await import("./db");
+
+        // Получаем статистику за последние 7 дней
+        const result = await pool.query(`
         SELECT 
           date AS "date",
           active_users AS "activeUsers",
@@ -4241,19 +5178,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ORDER BY date DESC
       `);
 
-      res.json({ stats: result.rows });
-    } catch (error) {
-      console.error("Error fetching analytics summary:", error);
-      res.status(500).json({ error: "Failed to fetch analytics summary" });
-    }
-  });
+        res.json({ stats: result.rows });
+      } catch (error) {
+        console.error("Error fetching analytics summary:", error);
+        res.status(500).json({ error: "Failed to fetch analytics summary" });
+      }
+    },
+  );
 
   // Admin endpoint: Get ETL job status
-  app.get("/api/admin/analytics/etl-status", requireAdminAuth, async (req, res) => {
-    try {
-      const { pool } = await import("./db");
-      
-      const result = await pool.query(`
+  app.get(
+    "/api/admin/analytics/etl-status",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const { pool } = await import("./db");
+
+        const result = await pool.query(`
         SELECT 
           job_name,
           start_time,
@@ -4266,47 +5207,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
         LIMIT 20
       `);
 
-      res.json({ jobs: result.rows });
-    } catch (error) {
-      console.error("Error fetching ETL status:", error);
-      res.status(500).json({ error: "Failed to fetch ETL status" });
-    }
-  });
+        res.json({ jobs: result.rows });
+      } catch (error) {
+        console.error("Error fetching ETL status:", error);
+        res.status(500).json({ error: "Failed to fetch ETL status" });
+      }
+    },
+  );
 
   // Admin endpoint: Manually trigger ETL process
-  app.post("/api/admin/analytics/etl/trigger/:job", requireAdminAuth, async (req, res) => {
-    try {
-      const { pool } = await import("./db");
-      const jobName = req.params.job;
+  app.post(
+    "/api/admin/analytics/etl/trigger/:job",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const { pool } = await import("./db");
+        const jobName = req.params.job;
 
-      let query: string;
-      switch (jobName) {
-        case "sessions":
-          query = "SELECT process_sessions()";
-          break;
-        case "events_clean":
-          query = "SELECT process_events_clean()";
-          break;
-        case "experiment_metrics":
-          query = "SELECT aggregate_experiment_metrics_daily()";
-          break;
-        case "daily_stats":
-          query = "SELECT aggregate_daily_stats()";
-          break;
-        case "retention":
-          query = "SELECT update_user_retention()";
-          break;
-        default:
-          return res.status(400).json({ error: "Unknown job name" });
+        let query: string;
+        switch (jobName) {
+          case "sessions":
+            query = "SELECT process_sessions()";
+            break;
+          case "events_clean":
+            query = "SELECT process_events_clean()";
+            break;
+          case "experiment_metrics":
+            query = "SELECT aggregate_experiment_metrics_daily()";
+            break;
+          case "daily_stats":
+            query = "SELECT aggregate_daily_stats()";
+            break;
+          case "retention":
+            query = "SELECT update_user_retention()";
+            break;
+          default:
+            return res.status(400).json({ error: "Unknown job name" });
+        }
+
+        const result = await pool.query(query);
+        res.json({ success: true, result: result.rows[0] });
+      } catch (error) {
+        console.error(`Error triggering ETL job ${req.params.job}:`, error);
+        res.status(500).json({ error: "Failed to trigger ETL job" });
       }
-
-      const result = await pool.query(query);
-      res.json({ success: true, result: result.rows[0] });
-    } catch (error) {
-      console.error(`Error triggering ETL job ${req.params.job}:`, error);
-      res.status(500).json({ error: "Failed to trigger ETL job" });
-    }
-  });
+    },
+  );
 
   // ============================================================
   // App Waitlist routes
@@ -4317,9 +5263,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parsed = insertAppWaitlistSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ error: parsed.error.flatten().fieldErrors });
+        return res
+          .status(400)
+          .json({ error: parsed.error.flatten().fieldErrors });
       }
-      const [entry] = await db.insert(appWaitlist).values(parsed.data).returning();
+      const [entry] = await db
+        .insert(appWaitlist)
+        .values(parsed.data)
+        .returning();
       return res.status(201).json(entry);
     } catch (error) {
       console.error("Waitlist insert error:", error);
@@ -4330,7 +5281,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin: get all waitlist entries
   app.get("/api/admin/waitlist", requireAdminAuth, async (_req, res) => {
     try {
-      const entries = await db.select().from(appWaitlist).orderBy(desc(appWaitlist.createdAt));
+      const entries = await db
+        .select()
+        .from(appWaitlist)
+        .orderBy(desc(appWaitlist.createdAt));
       return res.json(entries);
     } catch (error) {
       console.error("Waitlist fetch error:", error);
@@ -4344,7 +5298,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/admin/crm/admins", requireAdminAuth, async (_req, res) => {
     try {
-      return res.json(await db.select().from(crmAdmins).orderBy(crmAdmins.name));
+      return res.json(
+        await db.select().from(crmAdmins).orderBy(crmAdmins.name),
+      );
     } catch (error) {
       console.error("CRM admins fetch error:", error);
       return res.status(500).json({ error: "Не удалось загрузить команду" });
@@ -4353,86 +5309,169 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/crm/admins", requireAdminAuth, async (req, res) => {
     const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
-    if (name.length < 2 || name.length > 80) return res.status(400).json({ error: "Укажите имя администратора" });
+    if (name.length < 2 || name.length > 80)
+      return res.status(400).json({ error: "Укажите имя администратора" });
     try {
       const [admin] = await db.insert(crmAdmins).values({ name }).returning();
       return res.status(201).json(admin);
     } catch (error) {
-      return res.status(409).json({ error: "Администратор с таким именем уже есть" });
+      return res
+        .status(409)
+        .json({ error: "Администратор с таким именем уже есть" });
     }
   });
 
-  app.post("/api/admin/crm/import", requireAdminAuth, upload.single("file"), async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "Выберите CSV-файл" });
-    const source = typeof req.body.source === "string" && req.body.source.trim() ? req.body.source.trim().slice(0, 80) : "TargetHunter";
-    const tags = typeof req.body.tags === "string" ? req.body.tags.split(",").map((tag: string) => tag.trim()).filter(Boolean).slice(0, 20) : [];
-    const ownerId = req.body.ownerId ? Number(req.body.ownerId) : null;
-    const dryRun = req.body.dryRun === "true";
-    if (ownerId && !Number.isInteger(ownerId)) return res.status(400).json({ error: "Некорректный ответственный" });
+  app.post(
+    "/api/admin/crm/import",
+    requireAdminAuth,
+    upload.single("file"),
+    async (req, res) => {
+      if (!req.file)
+        return res.status(400).json({ error: "Выберите CSV-файл" });
+      const source =
+        typeof req.body.source === "string" && req.body.source.trim()
+          ? req.body.source.trim().slice(0, 80)
+          : "TargetHunter";
+      const tags =
+        typeof req.body.tags === "string"
+          ? req.body.tags
+              .split(",")
+              .map((tag: string) => tag.trim())
+              .filter(Boolean)
+              .slice(0, 20)
+          : [];
+      const ownerId = req.body.ownerId ? Number(req.body.ownerId) : null;
+      const dryRun = req.body.dryRun === "true";
+      if (ownerId && !Number.isInteger(ownerId))
+        return res.status(400).json({ error: "Некорректный ответственный" });
 
-    try {
-      if (ownerId) {
-        const admin = await db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, ownerId) });
-        if (!admin) return res.status(400).json({ error: "Ответственный не найден" });
-      }
-      const rows = parseCsv(req.file.buffer.toString("utf8"));
-      if (!rows.length) return res.status(400).json({ error: "В CSV нет строк. Нужны заголовки и хотя бы один лид." });
-      if (rows.length > 5_000) return res.status(400).json({ error: "За раз можно импортировать до 5 000 лидов" });
-
-      const existing = await db.select({ externalId: crmContacts.externalId }).from(crmContacts);
-      const existingIds = new Set(existing.map((contact) => contact.externalId).filter(Boolean));
-      let created = 0;
-      let skipped = 0;
-      let invalid = 0;
-      let excluded = 0;
-      const now = new Date().toISOString();
-
-      for (const row of rows) {
-        const externalId = firstCsvValue(row, ["vk id", "vkid", "id", "id пользователя", "user id", "user id vk"]);
-        const profileUrl = firstCsvValue(row, ["ссылка", "ссылка на страницу", "profile url", "url", "profile", "vk"]);
-        const firstName = firstCsvValue(row, ["имя", "first name", "first_name", "name"]);
-        const lastName = firstCsvValue(row, ["фамилия", "last name", "last_name"]);
-        const name = [firstName, lastName].filter(Boolean).join(" ") || (externalId ? `VK ${externalId}` : "");
-        const isBanned = firstCsvValue(row, ["забанен"]).toLowerCase() === "да";
-        if (isBanned) { excluded += 1; continue; }
-        if (!name || (!externalId && !profileUrl)) { invalid += 1; continue; }
-        const normalizedExternalId = externalId || `url:${profileUrl.toLowerCase()}`;
-        if (existingIds.has(normalizedExternalId)) { skipped += 1; continue; }
-        const city = firstCsvValue(row, ["город"]);
-        const age = firstCsvValue(row, ["возраст"]);
-        const lastSeen = firstCsvValue(row, ["последний заход"]);
-        const canMessage = firstCsvValue(row, ["можно написать в лс"]);
-        const notes = [
-          "Импортировано из TargetHunter.",
-          city && `Город: ${city}.`,
-          age && `Возраст: ${age}.`,
-          lastSeen && `Последняя активность VK: ${lastSeen}.`,
-          canMessage && `Личные сообщения: ${canMessage.toLowerCase() === "да" ? "доступны" : "недоступны"}.`,
-        ].filter(Boolean).join(" ");
-        if (!dryRun) {
-          await db.insert(crmContacts).values({
-            name,
-            externalId: normalizedExternalId,
-            profileUrl: profileUrl || null,
-            source,
-            tags,
-            notes,
-            stage: "lead",
-            workStatus: ownerId ? "in_progress" : "new",
-            pipelineStage: ownerId ? "taken" : "new",
-            ownerId,
-            updatedAt: now,
+      try {
+        if (ownerId) {
+          const admin = await db.query.crmAdmins.findFirst({
+            where: eq(crmAdmins.id, ownerId),
           });
+          if (!admin)
+            return res.status(400).json({ error: "Ответственный не найден" });
         }
-        existingIds.add(normalizedExternalId);
-        created += 1;
+        const rows = parseCsv(req.file.buffer.toString("utf8"));
+        if (!rows.length)
+          return res
+            .status(400)
+            .json({
+              error: "В CSV нет строк. Нужны заголовки и хотя бы один лид.",
+            });
+        if (rows.length > 5_000)
+          return res
+            .status(400)
+            .json({ error: "За раз можно импортировать до 5 000 лидов" });
+
+        const existing = await db
+          .select({ externalId: crmContacts.externalId })
+          .from(crmContacts);
+        const existingIds = new Set(
+          existing.map((contact) => contact.externalId).filter(Boolean),
+        );
+        let created = 0;
+        let skipped = 0;
+        let invalid = 0;
+        let excluded = 0;
+        const now = new Date().toISOString();
+
+        for (const row of rows) {
+          const externalId = firstCsvValue(row, [
+            "vk id",
+            "vkid",
+            "id",
+            "id пользователя",
+            "user id",
+            "user id vk",
+          ]);
+          const profileUrl = firstCsvValue(row, [
+            "ссылка",
+            "ссылка на страницу",
+            "profile url",
+            "url",
+            "profile",
+            "vk",
+          ]);
+          const firstName = firstCsvValue(row, [
+            "имя",
+            "first name",
+            "first_name",
+            "name",
+          ]);
+          const lastName = firstCsvValue(row, [
+            "фамилия",
+            "last name",
+            "last_name",
+          ]);
+          const name =
+            [firstName, lastName].filter(Boolean).join(" ") ||
+            (externalId ? `VK ${externalId}` : "");
+          const isBanned =
+            firstCsvValue(row, ["забанен"]).toLowerCase() === "да";
+          if (isBanned) {
+            excluded += 1;
+            continue;
+          }
+          if (!name || (!externalId && !profileUrl)) {
+            invalid += 1;
+            continue;
+          }
+          const normalizedExternalId =
+            externalId || `url:${profileUrl.toLowerCase()}`;
+          if (existingIds.has(normalizedExternalId)) {
+            skipped += 1;
+            continue;
+          }
+          const city = firstCsvValue(row, ["город"]);
+          const age = firstCsvValue(row, ["возраст"]);
+          const lastSeen = firstCsvValue(row, ["последний заход"]);
+          const canMessage = firstCsvValue(row, ["можно написать в лс"]);
+          const notes = [
+            "Импортировано из TargetHunter.",
+            city && `Город: ${city}.`,
+            age && `Возраст: ${age}.`,
+            lastSeen && `Последняя активность VK: ${lastSeen}.`,
+            canMessage &&
+              `Личные сообщения: ${canMessage.toLowerCase() === "да" ? "доступны" : "недоступны"}.`,
+          ]
+            .filter(Boolean)
+            .join(" ");
+          if (!dryRun) {
+            await db.insert(crmContacts).values({
+              name,
+              externalId: normalizedExternalId,
+              profileUrl: profileUrl || null,
+              source,
+              tags,
+              notes,
+              stage: "lead",
+              workStatus: ownerId ? "in_progress" : "new",
+              pipelineStage: ownerId ? "taken" : "new",
+              ownerId,
+              updatedAt: now,
+            });
+          }
+          existingIds.add(normalizedExternalId);
+          created += 1;
+        }
+        return res
+          .status(dryRun ? 200 : 201)
+          .json({
+            created,
+            skipped,
+            invalid,
+            excluded,
+            total: rows.length,
+            dryRun,
+          });
+      } catch (error) {
+        console.error("CRM import error:", error);
+        return res.status(500).json({ error: "Не удалось импортировать лиды" });
       }
-      return res.status(dryRun ? 200 : 201).json({ created, skipped, invalid, excluded, total: rows.length, dryRun });
-    } catch (error) {
-      console.error("CRM import error:", error);
-      return res.status(500).json({ error: "Не удалось импортировать лиды" });
-    }
-  });
+    },
+  );
 
   app.get("/api/admin/crm/contacts", requireAdminAuth, async (_req, res) => {
     try {
@@ -4445,16 +5484,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const tasksByContact = new Map<number, typeof tasks>();
       const activitiesByContact = new Map<number, typeof activities>();
-      for (const task of tasks) tasksByContact.set(task.contactId, [...(tasksByContact.get(task.contactId) ?? []), task]);
-      for (const activity of activities) activitiesByContact.set(activity.contactId, [...(activitiesByContact.get(activity.contactId) ?? []), activity]);
+      for (const task of tasks)
+        tasksByContact.set(task.contactId, [
+          ...(tasksByContact.get(task.contactId) ?? []),
+          task,
+        ]);
+      for (const activity of activities)
+        activitiesByContact.set(activity.contactId, [
+          ...(activitiesByContact.get(activity.contactId) ?? []),
+          activity,
+        ]);
 
       const adminNames = new Map(admins.map((admin) => [admin.id, admin.name]));
-      return res.json(contacts.map((contact) => ({
-        ...contact,
-        ownerName: contact.ownerId ? adminNames.get(contact.ownerId) ?? null : null,
-        tasks: tasksByContact.get(contact.id) ?? [],
-        activities: (activitiesByContact.get(contact.id) ?? []).slice(0, 12),
-      })));
+      return res.json(
+        contacts.map((contact) => ({
+          ...contact,
+          ownerName: contact.ownerId
+            ? (adminNames.get(contact.ownerId) ?? null)
+            : null,
+          tasks: tasksByContact.get(contact.id) ?? [],
+          activities: (activitiesByContact.get(contact.id) ?? []).slice(0, 12),
+        })),
+      );
     } catch (error) {
       console.error("CRM contacts fetch error:", error);
       return res.status(500).json({ error: "Не удалось загрузить CRM" });
@@ -4464,73 +5515,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Полный каталог аккаунтов. Пароли и технические данные авторизации намеренно не выдаются.
   app.get("/api/admin/crm/users", requireAdminAuth, async (_req, res) => {
     try {
-      const [allUsers, allOrders, contacts, admins] = await Promise.all([
-        db.select().from(usersTable),
-        db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt)),
-        db.select().from(crmContacts),
-        db.select().from(crmAdmins),
-      ]);
+      const [allUsers, allOrders, allXpTransactions, contacts, admins] =
+        await Promise.all([
+          db.select().from(usersTable),
+          db.select().from(ordersTable).orderBy(desc(ordersTable.createdAt)),
+          db
+            .select()
+            .from(xpTransactions)
+            .orderBy(desc(xpTransactions.createdAt)),
+          db.select().from(crmContacts),
+          db.select().from(crmAdmins),
+        ]);
       const ordersByUser = new Map<string, typeof allOrders>();
       for (const order of allOrders) {
         if (!order.userId) continue;
-        ordersByUser.set(order.userId, [...(ordersByUser.get(order.userId) ?? []), order]);
+        ordersByUser.set(order.userId, [
+          ...(ordersByUser.get(order.userId) ?? []),
+          order,
+        ]);
+      }
+      const lastXpAccrualByUser = new Map<string, string>();
+      for (const transaction of allXpTransactions) {
+        if (
+          transaction.amount <= 0 ||
+          lastXpAccrualByUser.has(transaction.userId)
+        )
+          continue;
+        lastXpAccrualByUser.set(transaction.userId, transaction.createdAt);
       }
 
-      const contactsByUser = new Map(contacts.filter((contact) => contact.userId).map((contact) => [contact.userId!, contact]));
+      const contactsByUser = new Map(
+        contacts
+          .filter((contact) => contact.userId)
+          .map((contact) => [contact.userId!, contact]),
+      );
       const adminNames = new Map(admins.map((admin) => [admin.id, admin.name]));
-      return res.json(allUsers.map(({ password, ...user }) => {
-        const orders = ordersByUser.get(user.id) ?? [];
-        const successful = orders.filter((order) => order.status === "paid" || order.status === "completed");
-        const lastOrder = successful[0];
-        return {
-          ...user,
-          orderCount: successful.length,
-          totalSpent: successful.reduce((sum, order) => sum + order.total, 0),
-          lastOrderAt: lastOrder?.createdAt ?? null,
-          lastOrderStatus: lastOrder?.status ?? null,
-          crmContactId: contactsByUser.get(user.id)?.id ?? null,
-          ownerId: contactsByUser.get(user.id)?.ownerId ?? null,
-          ownerName: contactsByUser.get(user.id)?.ownerId ? adminNames.get(contactsByUser.get(user.id)!.ownerId!) ?? null : null,
-          workStatus: contactsByUser.get(user.id)?.workStatus ?? null,
-        };
-      }));
+      return res.json(
+        allUsers.map(({ password, ...user }) => {
+          const orders = ordersByUser.get(user.id) ?? [];
+          const successful = orders.filter(
+            (order) => order.status === "paid" || order.status === "completed",
+          );
+          const lastOrder = successful[0];
+          return {
+            ...user,
+            orderCount: successful.length,
+            totalSpent: successful.reduce((sum, order) => sum + order.total, 0),
+            lastOrderAt: lastOrder?.createdAt ?? null,
+            lastOrderStatus: lastOrder?.status ?? null,
+            lastXpAccrualAt: lastXpAccrualByUser.get(user.id) ?? null,
+            crmContactId: contactsByUser.get(user.id)?.id ?? null,
+            ownerId: contactsByUser.get(user.id)?.ownerId ?? null,
+            ownerName: contactsByUser.get(user.id)?.ownerId
+              ? (adminNames.get(contactsByUser.get(user.id)!.ownerId!) ?? null)
+              : null,
+            workStatus: contactsByUser.get(user.id)?.workStatus ?? null,
+          };
+        }),
+      );
     } catch (error) {
       console.error("CRM users fetch error:", error);
-      return res.status(500).json({ error: "Не удалось загрузить базу пользователей" });
+      return res
+        .status(500)
+        .json({ error: "Не удалось загрузить базу пользователей" });
     }
   });
 
-  app.post("/api/admin/crm/users/:userId/take", requireAdminAuth, async (req, res) => {
-    const ownerId = Number(req.body?.ownerId);
-    if (!Number.isInteger(ownerId)) return res.status(400).json({ error: "Выберите ответственного" });
-    try {
-      const [user, admin] = await Promise.all([
-        db.query.users.findFirst({ where: eq(usersTable.id, req.params.userId) }),
-        db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, ownerId) }),
-      ]);
-      if (!user) return res.status(404).json({ error: "Пользователь не найден" });
-      if (!admin) return res.status(404).json({ error: "Администратор не найден" });
-      const now = new Date().toISOString();
-      const [contact] = await db.insert(crmContacts).values({
-        userId: user.id, name: user.name || user.phone, phone: user.phone, email: user.email,
-        source: user.source || "account", stage: user.xp > 0 ? "active" : "lead", workStatus: "in_progress", pipelineStage: "taken", inboxStatus: "taken", ownerId, lastContactAt: now, updatedAt: now,
-      }).onConflictDoUpdate({ target: crmContacts.userId, set: { ownerId, workStatus: "in_progress", pipelineStage: "taken", inboxStatus: "taken", updatedAt: now } }).returning();
-      await db.insert(crmActivities).values({ contactId: contact.id, kind: "note", body: `Взял(а) в работу: ${admin.name}.` });
-      return res.json(contact);
-    } catch (error) {
-      console.error("CRM take user error:", error);
-      return res.status(500).json({ error: "Не удалось взять клиента в работу" });
-    }
-  });
+  app.post(
+    "/api/admin/crm/users/:userId/take",
+    requireAdminAuth,
+    async (req, res) => {
+      const ownerId = Number(req.body?.ownerId);
+      if (!Number.isInteger(ownerId))
+        return res.status(400).json({ error: "Выберите ответственного" });
+      try {
+        const [user, admin] = await Promise.all([
+          db.query.users.findFirst({
+            where: eq(usersTable.id, req.params.userId),
+          }),
+          db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, ownerId) }),
+        ]);
+        if (!user)
+          return res.status(404).json({ error: "Пользователь не найден" });
+        if (!admin)
+          return res.status(404).json({ error: "Администратор не найден" });
+        const now = new Date().toISOString();
+        const [contact] = await db
+          .insert(crmContacts)
+          .values({
+            userId: user.id,
+            name: user.name || user.phone,
+            phone: user.phone,
+            email: user.email,
+            source: user.source || "account",
+            stage: user.xp > 0 ? "active" : "lead",
+            workStatus: "in_progress",
+            pipelineStage: "taken",
+            inboxStatus: "taken",
+            ownerId,
+            lastContactAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: crmContacts.userId,
+            set: {
+              ownerId,
+              workStatus: "in_progress",
+              pipelineStage: "taken",
+              inboxStatus: "taken",
+              updatedAt: now,
+            },
+          })
+          .returning();
+        await db
+          .insert(crmActivities)
+          .values({
+            contactId: contact.id,
+            kind: "note",
+            body: `Взял(а) в работу: ${admin.name}.`,
+          });
+        return res.json(contact);
+      } catch (error) {
+        console.error("CRM take user error:", error);
+        return res
+          .status(500)
+          .json({ error: "Не удалось взять клиента в работу" });
+      }
+    },
+  );
 
   app.post("/api/admin/crm/contacts", requireAdminAuth, async (req, res) => {
     const parsed = insertCrmContactSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Проверьте контакт" });
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({
+          error: parsed.error.errors[0]?.message ?? "Проверьте контакт",
+        });
 
     try {
       const now = new Date().toISOString();
-      const [contact] = await db.insert(crmContacts).values({ ...parsed.data, updatedAt: now }).returning();
-      await db.insert(crmActivities).values({ contactId: contact.id, kind: "note", body: "Контакт добавлен в CRM." });
+      const [contact] = await db
+        .insert(crmContacts)
+        .values({ ...parsed.data, updatedAt: now })
+        .returning();
+      await db
+        .insert(crmActivities)
+        .values({
+          contactId: contact.id,
+          kind: "note",
+          body: "Контакт добавлен в CRM.",
+        });
       return res.status(201).json(contact);
     } catch (error) {
       console.error("CRM contact create error:", error);
@@ -4538,76 +5673,139 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/crm/contacts/bulk", requireAdminAuth, async (req, res) => {
-    const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isInteger).slice(0, 100) : [];
-    const ownerId = req.body?.ownerId === null ? null : Number(req.body?.ownerId);
-    if (!ids.length || (ownerId !== null && !Number.isInteger(ownerId))) return res.status(400).json({ error: "Выберите лиды и ответственного" });
-    try {
-      if (ownerId !== null) {
-        const admin = await db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, ownerId) });
-        if (!admin) return res.status(400).json({ error: "Ответственный не найден" });
+  app.patch(
+    "/api/admin/crm/contacts/bulk",
+    requireAdminAuth,
+    async (req, res) => {
+      const ids = Array.isArray(req.body?.ids)
+        ? req.body.ids.map(Number).filter(Number.isInteger).slice(0, 100)
+        : [];
+      const ownerId =
+        req.body?.ownerId === null ? null : Number(req.body?.ownerId);
+      if (!ids.length || (ownerId !== null && !Number.isInteger(ownerId)))
+        return res
+          .status(400)
+          .json({ error: "Выберите лиды и ответственного" });
+      try {
+        if (ownerId !== null) {
+          const admin = await db.query.crmAdmins.findFirst({
+            where: eq(crmAdmins.id, ownerId),
+          });
+          if (!admin)
+            return res.status(400).json({ error: "Ответственный не найден" });
+        }
+        const pipelineStage =
+          typeof req.body?.pipelineStage === "string"
+            ? req.body.pipelineStage
+            : undefined;
+        const allowedStages = [
+          "new",
+          "taken",
+          "first_contact",
+          "dialog",
+          "booked",
+          "visited",
+          "lost",
+        ];
+        if (pipelineStage && !allowedStages.includes(pipelineStage))
+          return res.status(400).json({ error: "Некорректный этап" });
+        const now = new Date().toISOString();
+        for (const id of ids) {
+          const [contact] = await db
+            .update(crmContacts)
+            .set({
+              ownerId,
+              workStatus: ownerId === null ? "new" : "in_progress",
+              pipelineStage:
+                pipelineStage ?? (ownerId === null ? "new" : "taken"),
+              inboxStatus: ownerId === null ? "new" : "taken",
+              updatedAt: now,
+            })
+            .where(eq(crmContacts.id, id))
+            .returning();
+          if (contact && ownerId !== null)
+            await db
+              .insert(crmActivities)
+              .values({
+                contactId: contact.id,
+                kind: "note",
+                body: "Лид назначен в работу.",
+              });
+        }
+        return res.json({ updated: ids.length });
+      } catch (error) {
+        console.error("CRM bulk update error:", error);
+        return res.status(500).json({ error: "Не удалось обновить лиды" });
       }
-      const pipelineStage = typeof req.body?.pipelineStage === "string" ? req.body.pipelineStage : undefined;
-      const allowedStages = ["new", "taken", "first_contact", "dialog", "booked", "visited", "lost"];
-      if (pipelineStage && !allowedStages.includes(pipelineStage)) return res.status(400).json({ error: "Некорректный этап" });
-      const now = new Date().toISOString();
-      for (const id of ids) {
-        const [contact] = await db.update(crmContacts).set({
-          ownerId,
-          workStatus: ownerId === null ? "new" : "in_progress",
-          pipelineStage: pipelineStage ?? (ownerId === null ? "new" : "taken"),
-          inboxStatus: ownerId === null ? "new" : "taken",
-          updatedAt: now,
-        }).where(eq(crmContacts.id, id)).returning();
-        if (contact && ownerId !== null) await db.insert(crmActivities).values({ contactId: contact.id, kind: "note", body: "Лид назначен в работу." });
+    },
+  );
+
+  app.patch(
+    "/api/admin/crm/contacts/:id",
+    requireAdminAuth,
+    async (req, res) => {
+      const id = Number(req.params.id);
+      const parsed = updateCrmContactSchema.safeParse(req.body);
+      if (!Number.isInteger(id) || !parsed.success)
+        return res.status(400).json({ error: "Проверьте изменения" });
+
+      try {
+        const changes = { ...parsed.data };
+        if (
+          changes.ownerId !== undefined &&
+          changes.inboxStatus === undefined
+        ) {
+          changes.inboxStatus = changes.ownerId === null ? "new" : "taken";
+        }
+        const [contact] = await db
+          .update(crmContacts)
+          .set({ ...changes, updatedAt: new Date().toISOString() })
+          .where(eq(crmContacts.id, id))
+          .returning();
+        if (!contact)
+          return res.status(404).json({ error: "Контакт не найден" });
+        return res.json(contact);
+      } catch (error) {
+        console.error("CRM contact update error:", error);
+        return res.status(500).json({ error: "Не удалось обновить контакт" });
       }
-      return res.json({ updated: ids.length });
-    } catch (error) {
-      console.error("CRM bulk update error:", error);
-      return res.status(500).json({ error: "Не удалось обновить лиды" });
-    }
-  });
+    },
+  );
 
-  app.patch("/api/admin/crm/contacts/:id", requireAdminAuth, async (req, res) => {
-    const id = Number(req.params.id);
-    const parsed = updateCrmContactSchema.safeParse(req.body);
-    if (!Number.isInteger(id) || !parsed.success) return res.status(400).json({ error: "Проверьте изменения" });
+  app.post(
+    "/api/admin/crm/contacts/:id/tasks",
+    requireAdminAuth,
+    async (req, res) => {
+      const contactId = Number(req.params.id);
+      const parsed = insertCrmTaskSchema.safeParse({ ...req.body, contactId });
+      if (!Number.isInteger(contactId) || !parsed.success)
+        return res.status(400).json({ error: "Проверьте задачу" });
 
-    try {
-      const changes = { ...parsed.data };
-      if (changes.ownerId !== undefined && changes.inboxStatus === undefined) {
-        changes.inboxStatus = changes.ownerId === null ? "new" : "taken";
+      try {
+        const [task] = await db
+          .insert(crmTasks)
+          .values(parsed.data)
+          .returning();
+        return res.status(201).json(task);
+      } catch (error) {
+        console.error("CRM task create error:", error);
+        return res.status(500).json({ error: "Не удалось создать задачу" });
       }
-      const [contact] = await db.update(crmContacts).set({ ...changes, updatedAt: new Date().toISOString() }).where(eq(crmContacts.id, id)).returning();
-      if (!contact) return res.status(404).json({ error: "Контакт не найден" });
-      return res.json(contact);
-    } catch (error) {
-      console.error("CRM contact update error:", error);
-      return res.status(500).json({ error: "Не удалось обновить контакт" });
-    }
-  });
-
-  app.post("/api/admin/crm/contacts/:id/tasks", requireAdminAuth, async (req, res) => {
-    const contactId = Number(req.params.id);
-    const parsed = insertCrmTaskSchema.safeParse({ ...req.body, contactId });
-    if (!Number.isInteger(contactId) || !parsed.success) return res.status(400).json({ error: "Проверьте задачу" });
-
-    try {
-      const [task] = await db.insert(crmTasks).values(parsed.data).returning();
-      return res.status(201).json(task);
-    } catch (error) {
-      console.error("CRM task create error:", error);
-      return res.status(500).json({ error: "Не удалось создать задачу" });
-    }
-  });
+    },
+  );
 
   app.patch("/api/admin/crm/tasks/:id", requireAdminAuth, async (req, res) => {
     const id = Number(req.params.id);
     const status = req.body?.status;
-    if (!Number.isInteger(id) || !["open", "done"].includes(status)) return res.status(400).json({ error: "Некорректный статус задачи" });
+    if (!Number.isInteger(id) || !["open", "done"].includes(status))
+      return res.status(400).json({ error: "Некорректный статус задачи" });
 
     try {
-      const [task] = await db.update(crmTasks).set({ status }).where(eq(crmTasks.id, id)).returning();
+      const [task] = await db
+        .update(crmTasks)
+        .set({ status })
+        .where(eq(crmTasks.id, id))
+        .returning();
       if (!task) return res.status(404).json({ error: "Задача не найдена" });
       return res.json(task);
     } catch (error) {
@@ -4616,50 +5814,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/admin/crm/contacts/:id/activities", requireAdminAuth, async (req, res) => {
-    const contactId = Number(req.params.id);
-    const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
-    if (!Number.isInteger(contactId) || body.length < 1 || body.length > 1000) return res.status(400).json({ error: "Введите короткую заметку" });
+  app.post(
+    "/api/admin/crm/contacts/:id/activities",
+    requireAdminAuth,
+    async (req, res) => {
+      const contactId = Number(req.params.id);
+      const body =
+        typeof req.body?.body === "string" ? req.body.body.trim() : "";
+      if (!Number.isInteger(contactId) || body.length < 1 || body.length > 1000)
+        return res.status(400).json({ error: "Введите короткую заметку" });
 
-    try {
-      const [activity] = await db.insert(crmActivities).values({ contactId, kind: "note", body }).returning();
-      await db.update(crmContacts).set({ lastContactAt: new Date().toISOString(), updatedAt: new Date().toISOString() }).where(eq(crmContacts.id, contactId));
-      return res.status(201).json(activity);
-    } catch (error) {
-      console.error("CRM activity create error:", error);
-      return res.status(500).json({ error: "Не удалось сохранить заметку" });
-    }
-  });
+      try {
+        const [activity] = await db
+          .insert(crmActivities)
+          .values({ contactId, kind: "note", body })
+          .returning();
+        await db
+          .update(crmContacts)
+          .set({
+            lastContactAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(crmContacts.id, contactId));
+        return res.status(201).json(activity);
+      } catch (error) {
+        console.error("CRM activity create error:", error);
+        return res.status(500).json({ error: "Не удалось сохранить заметку" });
+      }
+    },
+  );
 
   // Одноразовое заполнение CRM уже существующими заявками лендинга.
-  app.post("/api/admin/crm/sync-bookings", requireAdminAuth, async (_req, res) => {
-    try {
-      const bookings = await db.select().from(ceremonyBookings).orderBy(desc(ceremonyBookings.createdAt));
-      let synced = 0;
-      for (const booking of bookings) {
-        if (!booking.userId) continue;
-        const now = new Date().toISOString();
-        await db.insert(crmContacts).values({
-          userId: booking.userId,
-          name: booking.name,
-          phone: booking.phone,
-          email: booking.email,
-          telegram: booking.telegram,
-          source: booking.source,
-          stage: booking.status === "done" ? "active" : "lead",
-          inboxStatus: booking.status === "done" ? "none" : "new",
-          lastContactAt: booking.createdAt,
-          lastVisitAt: booking.status === "done" ? booking.createdAt : null,
-          updatedAt: now,
-        }).onConflictDoNothing();
-        synced += 1;
+  app.post(
+    "/api/admin/crm/sync-bookings",
+    requireAdminAuth,
+    async (_req, res) => {
+      try {
+        const bookings = await db
+          .select()
+          .from(ceremonyBookings)
+          .orderBy(desc(ceremonyBookings.createdAt));
+        let synced = 0;
+        for (const booking of bookings) {
+          if (!booking.userId) continue;
+          const now = new Date().toISOString();
+          await db
+            .insert(crmContacts)
+            .values({
+              userId: booking.userId,
+              name: booking.name,
+              phone: booking.phone,
+              email: booking.email,
+              telegram: booking.telegram,
+              source: booking.source,
+              stage: booking.status === "done" ? "active" : "lead",
+              inboxStatus: booking.status === "done" ? "none" : "new",
+              lastContactAt: booking.createdAt,
+              lastVisitAt: booking.status === "done" ? booking.createdAt : null,
+              updatedAt: now,
+            })
+            .onConflictDoNothing();
+          synced += 1;
+        }
+        return res.json({ ok: true, synced });
+      } catch (error) {
+        console.error("CRM bookings sync error:", error);
+        return res
+          .status(500)
+          .json({ error: "Не удалось перенести записи в CRM" });
       }
-      return res.json({ ok: true, synced });
-    } catch (error) {
-      console.error("CRM bookings sync error:", error);
-      return res.status(500).json({ error: "Не удалось перенести записи в CRM" });
-    }
-  });
+    },
+  );
 
   // ============================================================
   // Моно-лендинг: запись на чайную церемонию
@@ -4669,18 +5894,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/landing/booking", async (req, res) => {
     try {
       // Honeypot: боты заполняют скрытое поле, живые люди — нет
-      if (typeof req.body?.website === "string" && req.body.website.trim() !== "") {
+      if (
+        typeof req.body?.website === "string" &&
+        req.body.website.trim() !== ""
+      ) {
         return res.status(201).json({ ok: true });
       }
 
       const ip = getClientIp(req);
       if (isLandingRateLimited(ip)) {
-        return res.status(429).json({ error: "Слишком много заявок. Попробуйте позже или напишите нам в Telegram." });
+        return res
+          .status(429)
+          .json({
+            error:
+              "Слишком много заявок. Попробуйте позже или напишите нам в Telegram.",
+          });
       }
 
       const parsed = insertCeremonyBookingSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Проверьте заполнение формы" });
+        return res
+          .status(400)
+          .json({
+            error:
+              parsed.error.errors[0]?.message ?? "Проверьте заполнение формы",
+          });
       }
 
       const data = parsed.data;
@@ -4689,7 +5927,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isGiftOrder = variant === "gift";
 
       if (variant === "ceremony" && data.guests > 4) {
-        return res.status(400).json({ error: "Для церемонии можно записать до 4 гостей. Если вас больше — напишите нам в Telegram." });
+        return res
+          .status(400)
+          .json({
+            error:
+              "Для церемонии можно записать до 4 гостей. Если вас больше — напишите нам в Telegram.",
+          });
       }
 
       // Пользователь попадает в общую базу с пометкой источника
@@ -4698,7 +5941,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!user) {
         const email = data.email || undefined;
-        const emailTaken = email ? await storage.getUserByEmail(email) : undefined;
+        const emailTaken = email
+          ? await storage.getUserByEmail(email)
+          : undefined;
 
         user = await storage.createUser({
           name: data.name,
@@ -4759,11 +6004,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         db.insert(crmActivities).values({
           contactId: contact.id,
           kind: "booking",
-          body: isGiftOrder ? `Новая заявка на набор чая. ${data.comment ?? ""}` : `Новая заявка на церемонию: ${data.guests} ${data.guests === 1 ? "гость" : "гостей"}.`,
+          body: isGiftOrder
+            ? `Новая заявка на набор чая. ${data.comment ?? ""}`
+            : `Новая заявка на церемонию: ${data.guests} ${data.guests === 1 ? "гость" : "гостей"}.`,
         }),
         db.insert(crmTasks).values({
           contactId: contact.id,
-          title: isGiftOrder ? "Подтвердить заказ набора" : "Подтвердить запись на церемонию",
+          title: isGiftOrder
+            ? "Подтвердить заказ набора"
+            : "Подтвердить запись на церемонию",
           kind: "confirm_booking",
           dueAt: now,
         }),
@@ -4785,15 +6034,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin: список заявок с лендинга
-  app.get("/api/admin/ceremony-bookings", requireAdminAuth, async (_req, res) => {
-    try {
-      const entries = await db.select().from(ceremonyBookings).orderBy(desc(ceremonyBookings.id));
-      return res.json(entries);
-    } catch (error) {
-      console.error("Ceremony bookings fetch error:", error);
-      return res.status(500).json({ error: "Не удалось загрузить заявки" });
-    }
-  });
+  app.get(
+    "/api/admin/ceremony-bookings",
+    requireAdminAuth,
+    async (_req, res) => {
+      try {
+        const entries = await db
+          .select()
+          .from(ceremonyBookings)
+          .orderBy(desc(ceremonyBookings.id));
+        return res.json(entries);
+      } catch (error) {
+        console.error("Ceremony bookings fetch error:", error);
+        return res.status(500).json({ error: "Не удалось загрузить заявки" });
+      }
+    },
+  );
 
   // Admin: единое расписание — ручные мероприятия + брони с лендинга
   app.get("/api/admin/calendar-items", requireAdminAuth, async (_req, res) => {
@@ -4805,7 +6061,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const bookingItems = bookings
         .map((booking) => {
-          const start = dateTimeToIso(booking.preferredDate, booking.preferredTime);
+          const start = dateTimeToIso(
+            booking.preferredDate,
+            booking.preferredTime,
+          );
           if (!start) return null;
           return {
             id: `booking:${booking.id}`,
@@ -4848,14 +6107,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const parsed = insertCalendarEventSchema.safeParse(req.body);
       if (!parsed.success) {
-        return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Проверьте событие" });
+        return res
+          .status(400)
+          .json({
+            error: parsed.error.errors[0]?.message ?? "Проверьте событие",
+          });
       }
 
       if (new Date(parsed.data.endAt) <= new Date(parsed.data.startAt)) {
-        return res.status(400).json({ error: "Окончание должно быть позже начала" });
+        return res
+          .status(400)
+          .json({ error: "Окончание должно быть позже начала" });
       }
 
-      const [event] = await db.insert(calendarEvents).values(parsed.data).returning();
+      const [event] = await db
+        .insert(calendarEvents)
+        .values(parsed.data)
+        .returning();
       return res.status(201).json(event);
     } catch (error) {
       console.error("Calendar event create error:", error);
@@ -4863,120 +6131,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/admin/calendar-events/:id", requireAdminAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      if (Number.isNaN(id)) {
-        return res.status(400).json({ error: "Некорректный идентификатор события" });
+  app.patch(
+    "/api/admin/calendar-events/:id",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id, 10);
+        if (Number.isNaN(id)) {
+          return res
+            .status(400)
+            .json({ error: "Некорректный идентификатор события" });
+        }
+
+        const parsed = updateCalendarEventSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res
+            .status(400)
+            .json({
+              error: parsed.error.errors[0]?.message ?? "Проверьте событие",
+            });
+        }
+
+        if (
+          parsed.data.startAt &&
+          parsed.data.endAt &&
+          new Date(parsed.data.endAt) <= new Date(parsed.data.startAt)
+        ) {
+          return res
+            .status(400)
+            .json({ error: "Окончание должно быть позже начала" });
+        }
+
+        const [updated] = await db
+          .update(calendarEvents)
+          .set({ ...parsed.data, updatedAt: new Date().toISOString() })
+          .where(eq(calendarEvents.id, id))
+          .returning();
+
+        if (!updated) {
+          return res.status(404).json({ error: "Событие не найдено" });
+        }
+
+        return res.json(updated);
+      } catch (error) {
+        console.error("Calendar event update error:", error);
+        return res.status(500).json({ error: "Не удалось обновить событие" });
       }
+    },
+  );
 
-      const parsed = updateCalendarEventSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Проверьте событие" });
+  app.delete(
+    "/api/admin/calendar-events/:id",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id, 10);
+        if (Number.isNaN(id)) {
+          return res
+            .status(400)
+            .json({ error: "Некорректный идентификатор события" });
+        }
+
+        await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
+        return res.json({ ok: true });
+      } catch (error) {
+        console.error("Calendar event delete error:", error);
+        return res.status(500).json({ error: "Не удалось удалить событие" });
       }
+    },
+  );
 
-      if (parsed.data.startAt && parsed.data.endAt && new Date(parsed.data.endAt) <= new Date(parsed.data.startAt)) {
-        return res.status(400).json({ error: "Окончание должно быть позже начала" });
+  app.patch(
+    "/api/admin/calendar-bookings/:id",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id, 10);
+        if (Number.isNaN(id)) {
+          return res
+            .status(400)
+            .json({ error: "Некорректный идентификатор заявки" });
+        }
+
+        if (!req.body?.startAt || typeof req.body.startAt !== "string") {
+          return res.status(400).json({ error: "Укажите новое начало брони" });
+        }
+
+        const nextDateTime = isoToMoscowDateTime(req.body.startAt);
+        const [updated] = await db
+          .update(ceremonyBookings)
+          .set(nextDateTime)
+          .where(eq(ceremonyBookings.id, id))
+          .returning();
+
+        if (!updated) {
+          return res.status(404).json({ error: "Заявка не найдена" });
+        }
+
+        return res.json(updated);
+      } catch (error) {
+        console.error("Calendar booking update error:", error);
+        return res.status(500).json({ error: "Не удалось перенести бронь" });
       }
-
-      const [updated] = await db
-        .update(calendarEvents)
-        .set({ ...parsed.data, updatedAt: new Date().toISOString() })
-        .where(eq(calendarEvents.id, id))
-        .returning();
-
-      if (!updated) {
-        return res.status(404).json({ error: "Событие не найдено" });
-      }
-
-      return res.json(updated);
-    } catch (error) {
-      console.error("Calendar event update error:", error);
-      return res.status(500).json({ error: "Не удалось обновить событие" });
-    }
-  });
-
-  app.delete("/api/admin/calendar-events/:id", requireAdminAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      if (Number.isNaN(id)) {
-        return res.status(400).json({ error: "Некорректный идентификатор события" });
-      }
-
-      await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
-      return res.json({ ok: true });
-    } catch (error) {
-      console.error("Calendar event delete error:", error);
-      return res.status(500).json({ error: "Не удалось удалить событие" });
-    }
-  });
-
-  app.patch("/api/admin/calendar-bookings/:id", requireAdminAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      if (Number.isNaN(id)) {
-        return res.status(400).json({ error: "Некорректный идентификатор заявки" });
-      }
-
-      if (!req.body?.startAt || typeof req.body.startAt !== "string") {
-        return res.status(400).json({ error: "Укажите новое начало брони" });
-      }
-
-      const nextDateTime = isoToMoscowDateTime(req.body.startAt);
-      const [updated] = await db
-        .update(ceremonyBookings)
-        .set(nextDateTime)
-        .where(eq(ceremonyBookings.id, id))
-        .returning();
-
-      if (!updated) {
-        return res.status(404).json({ error: "Заявка не найдена" });
-      }
-
-      return res.json(updated);
-    } catch (error) {
-      console.error("Calendar booking update error:", error);
-      return res.status(500).json({ error: "Не удалось перенести бронь" });
-    }
-  });
+    },
+  );
 
   // Admin: смена статуса заявки
-  app.patch("/api/admin/ceremony-bookings/:id", requireAdminAuth, async (req, res) => {
-    try {
-      const id = parseInt(req.params.id, 10);
-      if (Number.isNaN(id)) {
-        return res.status(400).json({ error: "Некорректный идентификатор заявки" });
+  app.patch(
+    "/api/admin/ceremony-bookings/:id",
+    requireAdminAuth,
+    async (req, res) => {
+      try {
+        const id = parseInt(req.params.id, 10);
+        if (Number.isNaN(id)) {
+          return res
+            .status(400)
+            .json({ error: "Некорректный идентификатор заявки" });
+        }
+
+        const parsed = updateCeremonyBookingSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res
+            .status(400)
+            .json({
+              error: parsed.error.errors[0]?.message ?? "Некорректный статус",
+            });
+        }
+
+        const updateData = Object.fromEntries(
+          Object.entries(parsed.data).map(([key, value]) => [
+            key,
+            value === "" ? null : value,
+          ]),
+        );
+
+        if (Object.keys(updateData).length === 0) {
+          return res.status(400).json({ error: "Нет данных для обновления" });
+        }
+
+        const [updated] = await db
+          .update(ceremonyBookings)
+          .set(updateData)
+          .where(eq(ceremonyBookings.id, id))
+          .returning();
+
+        if (!updated) {
+          return res.status(404).json({ error: "Заявка не найдена" });
+        }
+
+        return res.json(updated);
+      } catch (error) {
+        console.error("Ceremony booking update error:", error);
+        return res.status(500).json({ error: "Не удалось обновить заявку" });
       }
-
-      const parsed = updateCeremonyBookingSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Некорректный статус" });
-      }
-
-      const updateData = Object.fromEntries(
-        Object.entries(parsed.data).map(([key, value]) => [key, value === "" ? null : value]),
-      );
-
-      if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ error: "Нет данных для обновления" });
-      }
-
-      const [updated] = await db
-        .update(ceremonyBookings)
-        .set(updateData)
-        .where(eq(ceremonyBookings.id, id))
-        .returning();
-
-      if (!updated) {
-        return res.status(404).json({ error: "Заявка не найдена" });
-      }
-
-      return res.json(updated);
-    } catch (error) {
-      console.error("Ceremony booking update error:", error);
-      return res.status(500).json({ error: "Не удалось обновить заявку" });
-    }
-  });
+    },
+  );
 
   const httpServer = createServer(app);
 
