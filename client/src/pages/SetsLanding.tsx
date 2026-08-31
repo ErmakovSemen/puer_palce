@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { METRIKA_GOALS, trackEvent } from "@/lib/metrics";
+import { METRIKA_GOALS, trackSetsEvent } from "@/lib/metrics";
 import "@/styles/sets.css";
 
 type BundleSpec = {
@@ -109,7 +109,7 @@ export default function SetsLanding() {
   );
 
   useEffect(() => {
-    trackEvent(METRIKA_GOALS.setsLandingViewed);
+    trackSetsEvent(METRIKA_GOALS.setsLandingViewed);
     document.title = "Наборы чая - Пуэр Паб";
     const meta = document.querySelector<HTMLMetaElement>(
       'meta[name="description"]',
@@ -125,8 +125,8 @@ export default function SetsLanding() {
   }, []);
 
   const openOrder = (bundle: ResolvedBundle) => {
-    trackEvent(METRIKA_GOALS.setsCtaClick, { bundle: bundle.id });
-    trackEvent(METRIKA_GOALS.setsAddedToCart, { bundle: bundle.id });
+    trackSetsEvent(METRIKA_GOALS.setsCtaClick, { bundle: bundle.id });
+    trackSetsEvent(METRIKA_GOALS.setsAddedToCart, { bundle: bundle.id });
     setSelectedBundle(bundle);
     setSubmitted(false);
     setFormError("");
@@ -166,7 +166,7 @@ export default function SetsLanding() {
           (await response.json().catch(() => null))?.error ||
             "Не удалось отправить заявку",
         );
-      trackEvent(METRIKA_GOALS.setsOrderSubmitted, {
+      trackSetsEvent(METRIKA_GOALS.setsOrderSubmitted, {
         bundle: selectedBundle.id,
         method: form.method,
       });
@@ -209,7 +209,7 @@ export default function SetsLanding() {
               а мы поможем с каждым шагом.
             </p>
             <div className="sets-primary-wrap">
-              <a className="sets-primary" href="#sets" onClick={() => trackEvent(METRIKA_GOALS.setsHeroCtaClick)}>
+              <a className="sets-primary" href="#sets" onClick={() => trackSetsEvent(METRIKA_GOALS.setsHeroCtaClick)}>
                 <ShoppingBag size={18} />
                 Выбрать набор
               </a>
