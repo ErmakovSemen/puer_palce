@@ -977,6 +977,23 @@ export type CrmTask = typeof crmTasks.$inferSelect;
 export type CrmActivity = typeof crmActivities.$inferSelect;
 export type InsertCrmContact = z.infer<typeof insertCrmContactSchema>;
 
+/** Публичная регистрация участника акции ко Дню города. */
+export const cityDayRegistrationSchema = z.object({
+  name: z.string().min(2, "Введите имя — минимум две буквы").max(80),
+  phone: z.string().min(10, "Введите корректный номер телефона").max(32),
+  activity: z.enum(["registration", "gift", "quiz"]),
+  subscribedVk: z.boolean().default(false),
+  subscribedTelegram: z.boolean().default(false),
+  quizScore: z.number().int().min(0).max(5).optional(),
+  consent: z.literal(true, {
+    errorMap: () => ({ message: "Нужно согласие на обработку номера для участия в акции" }),
+  }),
+  utm: z.string().max(2000).optional().nullable(),
+  website: z.string().max(200).optional(),
+});
+
+export type CityDayRegistration = z.infer<typeof cityDayRegistrationSchema>;
+
 export const insertCalendarEventSchema = createInsertSchema(calendarEvents, {
   title: z.string().min(2, "Введите название события").max(160, "Название слишком длинное"),
   description: z.string().max(1000).optional().nullable(),

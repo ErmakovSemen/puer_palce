@@ -59,6 +59,7 @@ import {
   insertCrmContactSchema,
   updateCrmContactSchema,
   insertCrmTaskSchema,
+  cityDayRegistrationSchema,
 } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
@@ -5275,6 +5276,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Waitlist insert error:", error);
       return res.status(500).json({ error: "Не удалось сохранить заявку" });
+    }
+  });
+
+  // ============================================================
+  // День города: регистрация в CRM из промо-лендинга
+  // ============================================================
+  app.post("/api/day-city/registrations", async (req, res) => {
+    try {
+      // Honeypot: бот получает успешный ответ, но в базу не попадает.
+      if (typeof req.body?.website === "string" && req.body.website.trim() !== "") {
+        return res.status(201).json({ ok: true });
+      }
+
+      const ip = getClientIp(req);
+      if (isLandingRateLimited(ip)) {
+        return res.status(429).json({ error: "Слишком много попыток. Попробуйте чуть позже." });
+      }
+
+      const parsed = cityDayRegistrationSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: parsed.error.errors[0]?.message ?? "Проверьте заполнение формы",
+        });
+      }
+
+      const data = parsed.data;
+      let phone: string;
+      try {
+        phone = normalizePhone(data.phone);
+      } catch {
+        return res.status(400).json({ error: "Введите корректный российский номер телефона" });
+      }
+      const now = new Date().toISOString();
+      const baseTag = "День города Электросталь 2026";
+      const actionTag = data.activity === "gift"
+        ? "Подарок за подписку"
+        : data.activity === "quiz"
+          ? "Чайный квиз"
+          : "Регистрация Дня города";
+
+      const existing = await db.query.crmContacts.findFirst({
+        where: eq(crmContacts.phone, phone),
+      });
+      const tags = Array.from(new Set([...(existing?.tags ?? []), baseTag, actionTag]));
+
+      let contact;
+      if (existing) {
+        [contact] = await db
+          .update(crmContacts)
+          .set({
+            name: data.name,
+            source: "day_city_2026",
+            stage: "lead",
+            inboxStatus: "new",
+            tags,
+            lastContactAt: now,
+            updatedAt: now,
+          })
+          .where(eq(crmContacts.id, existing.id))
+          .returning();
+      } else {
+        [contact] = await db
+          .insert(crmContacts)
+          .values({
+            name: data.name,
+            phone,
+            source: "day_city_2026",
+            stage: "lead",
+            inboxStatus: "new",
+            tags,
+            lastContactAt: now,
+            updatedAt: now,
+          })
+          .returning();
+      }
+
+      const activity = data.activity === "gift"
+        ? `День города: регистрация на подарок за подписку. VK: ${data.subscribedVk ? "да" : "нет"}; Telegram: ${data.subscribedTelegram ? "да" : "нет"}.`
+        : data.activity === "registration"
+          ? "День города: общая регистрация участника."
+          : data.quizScore === undefined
+          ? "День города: регистрация на чайный квиз."
+          : `День города: пройден чайный квиз — ${data.quizScore}/5 правильных ответов.`;
+      await db.insert(crmActivities).values({
+        contactId: contact.id,
+        kind: "note",
+        body: activity,
+      });
+
+      return res.status(201).json({ ok: true, contactId: contact.id });
+    } catch (error) {
+      console.error("Day city registration error:", error);
+      return res.status(500).json({ error: "Не удалось сохранить регистрацию" });
     }
   });
 
