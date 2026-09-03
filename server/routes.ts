@@ -5578,11 +5578,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const tasksByContact = new Map<number, typeof tasks>();
       const activitiesByContact = new Map<number, typeof activities>();
-      for (const task of tasks)
+      for (const task of tasks) {
+        if (!task.contactId) continue;
         tasksByContact.set(task.contactId, [
           ...(tasksByContact.get(task.contactId) ?? []),
           task,
         ]);
+      }
       for (const activity of activities)
         activitiesByContact.set(activity.contactId, [
           ...(activitiesByContact.get(activity.contactId) ?? []),
@@ -5603,6 +5605,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("CRM contacts fetch error:", error);
       return res.status(500).json({ error: "Не удалось загрузить CRM" });
+    }
+  });
+
+  app.get("/api/admin/crm/tasks", requireAdminAuth, async (_req, res) => {
+    try {
+      const [tasks, contacts, admins] = await Promise.all([
+        db.select().from(crmTasks).orderBy(desc(crmTasks.createdAt)),
+        db.select().from(crmContacts),
+        db.select().from(crmAdmins),
+      ]);
+      const contactNames = new Map(contacts.map((contact) => [contact.id, contact.name]));
+      const adminNames = new Map(admins.map((admin) => [admin.id, admin.name]));
+      return res.json(tasks.map((task) => ({
+        ...task,
+        contactName: task.contactId ? (contactNames.get(task.contactId) ?? null) : null,
+        ownerName: task.ownerId ? (adminNames.get(task.ownerId) ?? null) : null,
+      })));
+    } catch (error) {
+      console.error("CRM tasks fetch error:", error);
+      return res.status(500).json({ error: "Не удалось загрузить задачи" });
     }
   });
 
@@ -5876,9 +5898,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Проверьте задачу" });
 
       try {
+        const contact = await db.query.crmContacts.findFirst({
+          where: eq(crmContacts.id, contactId),
+        });
+        if (!contact)
+          return res.status(404).json({ error: "Контакт не найден" });
         const [task] = await db
           .insert(crmTasks)
-          .values(parsed.data)
+          .values({ ...parsed.data, ownerId: parsed.data.ownerId ?? contact.ownerId })
           .returning();
         return res.status(201).json(task);
       } catch (error) {
@@ -5888,16 +5915,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
+  app.post("/api/admin/crm/tasks", requireAdminAuth, async (req, res) => {
+    const parsed = insertCrmTaskSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Проверьте задачу" });
+    try {
+      if (parsed.data.ownerId) {
+        const owner = await db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, parsed.data.ownerId) });
+        if (!owner) return res.status(400).json({ error: "Сотрудник не найден" });
+      }
+      if (parsed.data.contactId) {
+        const contact = await db.query.crmContacts.findFirst({ where: eq(crmContacts.id, parsed.data.contactId) });
+        if (!contact) return res.status(400).json({ error: "Контакт не найден" });
+      }
+      const [task] = await db.insert(crmTasks).values(parsed.data).returning();
+      return res.status(201).json(task);
+    } catch (error) {
+      console.error("CRM task create error:", error);
+      return res.status(500).json({ error: "Не удалось создать задачу" });
+    }
+  });
+
   app.patch("/api/admin/crm/tasks/:id", requireAdminAuth, async (req, res) => {
     const id = Number(req.params.id);
     const status = req.body?.status;
-    if (!Number.isInteger(id) || !["open", "done"].includes(status))
-      return res.status(400).json({ error: "Некорректный статус задачи" });
+    const ownerId = req.body?.ownerId;
+    if (!Number.isInteger(id) || (status !== undefined && !["open", "in_progress", "done"].includes(status)) || (ownerId !== undefined && ownerId !== null && !Number.isInteger(ownerId)))
+      return res.status(400).json({ error: "Проверьте изменения задачи" });
 
     try {
+      if (ownerId) {
+        const owner = await db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, ownerId) });
+        if (!owner) return res.status(400).json({ error: "Сотрудник не найден" });
+      }
       const [task] = await db
         .update(crmTasks)
-        .set({ status })
+        .set({ ...(status !== undefined ? { status } : {}), ...(ownerId !== undefined ? { ownerId } : {}) })
         .where(eq(crmTasks.id, id))
         .returning();
       if (!task) return res.status(404).json({ error: "Задача не найдена" });

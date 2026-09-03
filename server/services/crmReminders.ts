@@ -19,6 +19,7 @@ export async function dispatchCrmReminders() {
 
   for (const task of tasks) {
     if (task.status !== "open" || task.reminderSentAt || !task.dueAt || new Date(task.dueAt).getTime() > now) continue;
+    if (!task.contactId) continue;
     const contact = contactById.get(task.contactId);
     if (!contact) continue;
     const owner = contact.ownerId ? adminById.get(contact.ownerId) : undefined;

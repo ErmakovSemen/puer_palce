@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import CrmTaskKanban from "@/components/CrmTaskKanban";
 
 type AdminFetch = (url: string, options?: RequestInit) => Promise<any>;
 type Lifecycle = "lead" | "active" | "regular" | "at_risk" | "inactive";
@@ -89,7 +90,7 @@ type Customer = {
   ownerName: string | null;
   crmContactId: number | null;
 };
-type View = "queue" | "inbox" | "pipeline" | "customers" | "contacts";
+type View = "queue" | "inbox" | "pipeline" | "tasks" | "customers" | "contacts";
 
 const LIFECYCLE: Record<Lifecycle, { label: string; className: string }> = {
   lead: {
@@ -461,6 +462,7 @@ export default function AdminCRM({
             </span>
           </TabsTrigger>
           <TabsTrigger value="pipeline">Воронка</TabsTrigger>
+          <TabsTrigger value="tasks">Задачи</TabsTrigger>
           <TabsTrigger value="contacts">Все контакты</TabsTrigger>
         </TabsList>
       </Tabs>
@@ -510,6 +512,9 @@ export default function AdminCRM({
                 busy={take.isPending || takeCustomer.isPending}
               />
             </DndContext>
+          )}
+          {view === "tasks" && (
+            <CrmTaskKanban adminFetch={adminFetch} enabled={enabled} />
           )}
           {view === "contacts" && (
             <ContactList

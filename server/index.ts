@@ -210,7 +210,8 @@ app.use((req, res, next) => {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS crm_tasks (
         id SERIAL PRIMARY KEY,
-        contact_id INTEGER NOT NULL REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        contact_id INTEGER REFERENCES crm_contacts(id) ON DELETE CASCADE,
+        owner_id INTEGER REFERENCES crm_admins(id) ON DELETE SET NULL,
         title TEXT NOT NULL,
         kind TEXT NOT NULL DEFAULT 'follow_up',
         due_at TEXT,
@@ -229,9 +230,12 @@ app.use((req, res, next) => {
       )
     `);
     await pool.query(`ALTER TABLE crm_contacts ADD COLUMN IF NOT EXISTS inbox_status TEXT NOT NULL DEFAULT 'none'`);
+    await pool.query(`ALTER TABLE crm_tasks ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES crm_admins(id) ON DELETE SET NULL`);
+    await pool.query(`ALTER TABLE crm_tasks ALTER COLUMN contact_id DROP NOT NULL`);
     await pool.query(`CREATE INDEX IF NOT EXISTS crm_contacts_inbox_status_idx ON crm_contacts(inbox_status, updated_at DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS crm_contacts_pipeline_stage_idx ON crm_contacts(pipeline_stage, owner_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS crm_tasks_contact_status_idx ON crm_tasks(contact_id, status, due_at)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS crm_tasks_owner_status_idx ON crm_tasks(owner_id, status, due_at)`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS calendar_events (
         id SERIAL PRIMARY KEY,

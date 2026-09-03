@@ -926,11 +926,12 @@ export const crmContacts = pgTable("crm_contacts", {
 
 export const crmTasks = pgTable("crm_tasks", {
   id: serial("id").primaryKey(),
-  contactId: integer("contact_id").notNull().references(() => crmContacts.id, { onDelete: "cascade" }),
+  contactId: integer("contact_id").references(() => crmContacts.id, { onDelete: "cascade" }),
+  ownerId: integer("owner_id").references(() => crmAdmins.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   kind: text("kind").notNull().default("follow_up"), // follow_up | confirm_booking | retention
   dueAt: text("due_at"),
-  status: text("status").notNull().default("open"), // open | done
+  status: text("status").notNull().default("open"), // open | in_progress | done
   reminderSentAt: text("reminder_sent_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -969,6 +970,8 @@ export const insertCrmTaskSchema = createInsertSchema(crmTasks, {
   title: z.string().min(2, "Укажите задачу").max(200),
   kind: z.enum(["follow_up", "confirm_booking", "retention", "call", "message"]).optional(),
   dueAt: z.string().nullable().optional(),
+  contactId: z.number().int().positive().nullable().optional(),
+  ownerId: z.number().int().positive().nullable().optional(),
 }).omit({ id: true, status: true, reminderSentAt: true, createdAt: true });
 
 export type CrmContact = typeof crmContacts.$inferSelect;
@@ -984,7 +987,7 @@ export const cityDayRegistrationSchema = z.object({
   activity: z.enum(["registration", "gift", "quiz"]),
   subscribedVk: z.boolean().default(false),
   subscribedTelegram: z.boolean().default(false),
-  quizScore: z.number().int().min(0).max(5).optional(),
+  quizScore: z.number().int().min(0).max(15).optional(),
   consent: z.literal(true, {
     errorMap: () => ({ message: "Нужно согласие на обработку номера для участия в акции" }),
   }),
