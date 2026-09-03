@@ -130,12 +130,12 @@ export default function CityDayLanding() {
         <header><a className="city-day-logo" href="/">Пуэр Паб <span>茶</span></a><span>День города</span></header>
         <section className="city-day-hero">
           <p>Электросталь · День города</p>
-          <h1>Чайный подарок<br />и <em>квиз</em></h1>
           <img
             className="city-day-mascot"
-            src="/mascot/red-panda-tea-master-v1.png"
+            src="/mascot/red-panda-tea-master-transparent-v2.png"
             alt="Красная панда — чайный мастер Пуэр Паба"
           />
+          <h1>Чайный подарок<br />и <em>квиз</em></h1>
           <div className="city-day-actions">
             <button onClick={() => select("gift")} className="city-day-choice city-day-choice-gift"><Gift size={24} /><strong>Розыгрыш подарков</strong><small>Подписка → чайный пробник</small></button>
             <button onClick={() => select("quiz")} className="city-day-choice"><Sparkles size={24} /><strong>Чайный квиз</strong><small>5 вопросов → приз за знания</small></button>
