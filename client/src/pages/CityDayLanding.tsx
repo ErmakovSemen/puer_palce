@@ -14,7 +14,19 @@ const QUIZ = [
   { question: "Какой чай заваривают короткими проливами?", options: ["Китайский листовой", "Растворимый", "Пакетированный"], answer: 0 },
   { question: "Как выбрать чай по вкусу?", options: ["Рассказать, что люблю", "Выбрать самый дорогой", "Заварить всё кипятком"], answer: 0 },
   { question: "Зачем прогревают посуду перед завариванием?", options: ["Чтобы тепло держалось ровнее", "Только для красоты", "Чтобы чай стал слаще"], answer: 0 },
+  { question: "Как переводится название Те Гуань Инь?", options: ["Железная богиня милосердия", "Нефритовый дракон", "Чай императора"], answer: 0 },
+  { question: "Что означает название Да Хун Пао?", options: ["Большой красный халат", "Красная гора", "Императорский улун"], answer: 0 },
+  { question: "Как переводится Би Ло Чунь?", options: ["Изумрудные спирали весны", "Зелёный жемчуг", "Весенний ветер"], answer: 0 },
+  { question: "Что буквально означает Дянь Хун?", options: ["Юньнаньский красный чай", "Красный дракон", "Красный чай пяти гор"], answer: 0 },
+  { question: "Сколько основных типов чая выделяют в китайской классификации?", options: ["Шесть", "Четыре", "Восемь"], answer: 0 },
+  { question: "Какой чай в Китае называют «красным», хотя в России его часто называют чёрным?", options: ["Хун ча", "Хэй ча", "Бай ча"], answer: 0 },
+  { question: "Чем шу пуэр прежде всего отличается от шен пуэра?", options: ["Проходит ускоренное влажное скирдование во дуй", "Его всегда коптят", "Его не прессуют"], answer: 0 },
+  { question: "Какой этап отличает жёлтый чай от зелёного?", options: ["Томление для лёгкого пожелтения листа", "Копчение на сосне", "Добавление цветов"], answer: 0 },
+  { question: "Для какого чая обычно нужна вода заметно прохладнее кипятка?", options: ["Для зелёного", "Для шу пуэра", "Для чёрного хэй ча"], answer: 0 },
+  { question: "Что делают с воздухом при производстве GABA-чая?", options: ["Заменяют его азотом для бескислородной ферментации", "Насыщают лист кислородом", "Замораживают чай"], answer: 0 },
 ] as const;
+
+const QUIZ_PRIZE_SCORE = 10;
 
 function formatRussianPhone(value: string) {
   let digits = value.replace(/\D/g, "");
@@ -138,7 +150,7 @@ export default function CityDayLanding() {
           <h1>Чайный подарок<br />и <em>квиз</em></h1>
           <div className="city-day-actions">
             <button onClick={() => select("gift")} className="city-day-choice city-day-choice-gift"><Gift size={24} /><strong>Розыгрыш подарков</strong><small>Подписка → чайный пробник</small></button>
-            <button onClick={() => select("quiz")} className="city-day-choice"><Sparkles size={24} /><strong>Чайный квиз</strong><small>5 вопросов → приз за знания</small></button>
+            <button onClick={() => select("quiz")} className="city-day-choice"><Sparkles size={24} /><strong>Чайный квиз</strong><small>{QUIZ.length} вопросов → приз от {QUIZ_PRIZE_SCORE} верных</small></button>
           </div>
         </section>
 
@@ -152,7 +164,7 @@ export default function CityDayLanding() {
           </> : selected === "gift" ? <>
             {giftDone ? <div className="city-day-result"><Check size={26} /><div><strong>Готово</strong><span>Покажите этот экран бариста и заберите пробник.</span></div><button onClick={() => select("quiz")}>Пройти квиз</button></div> : <><h2>Подарок за подписку</h2><div className="city-day-subscription"><span>Подпишитесь на нас</span><label><input type="checkbox" checked={vk} onChange={(event) => setVk(event.target.checked)} /> VK</label><label><input type="checkbox" checked={telegram} onChange={(event) => setTelegram(event.target.checked)} /> Telegram</label></div>{error && <p className="city-day-error" role="alert">{error}</p>}<button onClick={registerGift} disabled={pending !== null} className="city-day-submit">{pending === "gift" ? <Loader2 className="animate-spin" size={18} /> : <Gift size={18} />} Получить подарок</button></>}
           </> : selected === "quiz" ? <>
-            {quizDone ? <div className="city-day-result"><Trophy size={26} /><div><strong>{score >= 4 ? `${score}/5 — приз ваш` : `${score}/5 — спасибо за игру`}</strong><span>{score >= 4 ? "Покажите экран бариста." : "Попробуйте чайный пробник за подписку."}</span></div></div> : <div className="city-day-question"><p>{quizIndex + 1} / {QUIZ.length}</p><h3>{QUIZ[quizIndex].question}</h3>{QUIZ[quizIndex].options.map((option, index) => <button key={option} onClick={() => answerQuestion(index)} disabled={pending !== null}>{option}</button>)}</div>}
+            {quizDone ? <div className="city-day-result"><Trophy size={26} /><div><strong>{score >= QUIZ_PRIZE_SCORE ? `${score}/${QUIZ.length} — приз ваш` : `${score}/${QUIZ.length} — спасибо за игру`}</strong><span>{score >= QUIZ_PRIZE_SCORE ? "Покажите экран бариста." : "Попробуйте чайный пробник за подписку."}</span></div></div> : <div className="city-day-question"><p>{quizIndex + 1} / {QUIZ.length}</p><h3>{QUIZ[quizIndex].question}</h3>{QUIZ[quizIndex].options.map((option, index) => <button key={option} onClick={() => answerQuestion(index)} disabled={pending !== null}>{option}</button>)}</div>}
           </> : <div className="city-day-result"><Check size={26} /><div><strong>Вы зарегистрированы</strong><span>Теперь выберите подарок или квиз выше.</span></div></div>}
         </section>
 
