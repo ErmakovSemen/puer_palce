@@ -55,10 +55,12 @@ import {
   crmAdmins,
   crmContacts,
   crmTasks,
+  crmTaskComments,
   crmActivities,
   insertCrmContactSchema,
   updateCrmContactSchema,
   insertCrmTaskSchema,
+  insertCrmTaskCommentSchema,
   cityDayRegistrationSchema,
 } from "@shared/schema";
 import { eq, sql, desc, and } from "drizzle-orm";
@@ -5628,6 +5630,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/admin/crm/tasks/:id/comments", requireAdminAuth, async (req, res) => {
+    const taskId = Number(req.params.id);
+    if (!Number.isInteger(taskId))
+      return res.status(400).json({ error: "Некорректная задача" });
+
+    try {
+      const task = await db.query.crmTasks.findFirst({ where: eq(crmTasks.id, taskId) });
+      if (!task) return res.status(404).json({ error: "Задача не найдена" });
+      const [comments, admins] = await Promise.all([
+        db.select().from(crmTaskComments).where(eq(crmTaskComments.taskId, taskId)).orderBy(crmTaskComments.createdAt),
+        db.select().from(crmAdmins),
+      ]);
+      const adminNames = new Map(admins.map((admin) => [admin.id, admin.name]));
+      return res.json(comments.map((comment) => ({
+        ...comment,
+        authorName: comment.authorId ? (adminNames.get(comment.authorId) ?? null) : null,
+      })));
+    } catch (error) {
+      console.error("CRM task comments fetch error:", error);
+      return res.status(500).json({ error: "Не удалось загрузить комментарии" });
+    }
+  });
+
   // Полный каталог аккаунтов. Пароли и технические данные авторизации намеренно не выдаются.
   app.get("/api/admin/crm/users", requireAdminAuth, async (_req, res) => {
     try {
@@ -5906,8 +5931,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const [task] = await db
           .insert(crmTasks)
           .values({ ...parsed.data, ownerId: parsed.data.ownerId ?? contact.ownerId })
+          .onConflictDoNothing()
           .returning();
-        return res.status(201).json(task);
+        return res.status(task ? 201 : 200).json({ task: task ?? null, deduplicated: !task });
       } catch (error) {
         console.error("CRM task create error:", error);
         return res.status(500).json({ error: "Не удалось создать задачу" });
@@ -5928,8 +5954,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const contact = await db.query.crmContacts.findFirst({ where: eq(crmContacts.id, parsed.data.contactId) });
         if (!contact) return res.status(400).json({ error: "Контакт не найден" });
       }
-      const [task] = await db.insert(crmTasks).values(parsed.data).returning();
-      return res.status(201).json(task);
+      const [task] = await db
+        .insert(crmTasks)
+        .values(parsed.data)
+        .onConflictDoNothing()
+        .returning();
+      return res.status(task ? 201 : 200).json({ task: task ?? null, deduplicated: !task });
     } catch (error) {
       console.error("CRM task create error:", error);
       return res.status(500).json({ error: "Не удалось создать задачу" });
@@ -5958,6 +5988,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("CRM task update error:", error);
       return res.status(500).json({ error: "Не удалось обновить задачу" });
+    }
+  });
+
+  app.post("/api/admin/crm/tasks/:id/comments", requireAdminAuth, async (req, res) => {
+    const taskId = Number(req.params.id);
+    const parsed = insertCrmTaskCommentSchema.safeParse({ ...req.body, taskId });
+    if (!Number.isInteger(taskId) || !parsed.success)
+      return res.status(400).json({ error: parsed.success ? "Проверьте комментарий" : parsed.error.errors[0]?.message ?? "Проверьте комментарий" });
+
+    try {
+      const [task, author] = await Promise.all([
+        db.query.crmTasks.findFirst({ where: eq(crmTasks.id, taskId) }),
+        parsed.data.authorId
+          ? db.query.crmAdmins.findFirst({ where: eq(crmAdmins.id, parsed.data.authorId) })
+          : Promise.resolve(null),
+      ]);
+      if (!task) return res.status(404).json({ error: "Задача не найдена" });
+      if (parsed.data.authorId && !author)
+        return res.status(400).json({ error: "Сотрудник не найден" });
+      const [comment] = await db.insert(crmTaskComments).values(parsed.data).returning();
+      return res.status(201).json({ ...comment, authorName: author?.name ?? null });
+    } catch (error) {
+      console.error("CRM task comment create error:", error);
+      return res.status(500).json({ error: "Не удалось сохранить комментарий" });
     }
   });
 

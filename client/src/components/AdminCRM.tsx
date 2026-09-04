@@ -514,7 +514,11 @@ export default function AdminCRM({
             </DndContext>
           )}
           {view === "tasks" && (
-            <CrmTaskKanban adminFetch={adminFetch} enabled={enabled} />
+            <CrmTaskKanban
+              adminFetch={adminFetch}
+              enabled={enabled}
+              currentAdminId={ownerId}
+            />
           )}
           {view === "contacts" && (
             <ContactList

@@ -221,6 +221,15 @@ app.use((req, res, next) => {
       )
     `);
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS crm_task_comments (
+        id SERIAL PRIMARY KEY,
+        task_id INTEGER NOT NULL REFERENCES crm_tasks(id) ON DELETE CASCADE,
+        author_id INTEGER REFERENCES crm_admins(id) ON DELETE SET NULL,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS crm_activities (
         id SERIAL PRIMARY KEY,
         contact_id INTEGER NOT NULL REFERENCES crm_contacts(id) ON DELETE CASCADE,
@@ -236,6 +245,44 @@ app.use((req, res, next) => {
     await pool.query(`CREATE INDEX IF NOT EXISTS crm_contacts_pipeline_stage_idx ON crm_contacts(pipeline_stage, owner_id)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS crm_tasks_contact_status_idx ON crm_tasks(contact_id, status, due_at)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS crm_tasks_owner_status_idx ON crm_tasks(owner_id, status, due_at)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS crm_task_comments_task_created_idx ON crm_task_comments(task_id, created_at)`);
+    // Скрываем уже созданные повторы, сохраняя их историю, и запрещаем новые.
+    await pool.query(`
+      WITH ranked_tasks AS (
+        SELECT
+          id,
+          ROW_NUMBER() OVER (
+            PARTITION BY
+              COALESCE(contact_id, -1),
+              COALESCE(owner_id, -1),
+              LOWER(BTRIM(title)),
+              kind,
+              COALESCE(due_at, '')
+            ORDER BY
+              CASE status WHEN 'in_progress' THEN 0 ELSE 1 END,
+              created_at ASC,
+              id ASC
+          ) AS duplicate_rank
+        FROM crm_tasks
+        WHERE status IN ('open', 'in_progress')
+      )
+      UPDATE crm_tasks AS task
+      SET status = 'duplicate'
+      USING ranked_tasks
+      WHERE task.id = ranked_tasks.id
+        AND ranked_tasks.duplicate_rank > 1
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS crm_tasks_open_unique_idx
+      ON crm_tasks (
+        (COALESCE(contact_id, -1)),
+        (COALESCE(owner_id, -1)),
+        (LOWER(BTRIM(title))),
+        kind,
+        (COALESCE(due_at, ''))
+      )
+      WHERE status IN ('open', 'in_progress')
+    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS calendar_events (
         id SERIAL PRIMARY KEY,

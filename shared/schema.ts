@@ -936,6 +936,14 @@ export const crmTasks = pgTable("crm_tasks", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const crmTaskComments = pgTable("crm_task_comments", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").notNull().references(() => crmTasks.id, { onDelete: "cascade" }),
+  authorId: integer("author_id").references(() => crmAdmins.id, { onDelete: "set null" }),
+  body: text("body").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const crmActivities = pgTable("crm_activities", {
   id: serial("id").primaryKey(),
   contactId: integer("contact_id").notNull().references(() => crmContacts.id, { onDelete: "cascade" }),
@@ -974,9 +982,15 @@ export const insertCrmTaskSchema = createInsertSchema(crmTasks, {
   ownerId: z.number().int().positive().nullable().optional(),
 }).omit({ id: true, status: true, reminderSentAt: true, createdAt: true });
 
+export const insertCrmTaskCommentSchema = createInsertSchema(crmTaskComments, {
+  body: z.string().trim().min(1, "Введите комментарий").max(1000),
+  authorId: z.number().int().positive().nullable().optional(),
+}).omit({ id: true, createdAt: true });
+
 export type CrmContact = typeof crmContacts.$inferSelect;
 export type CrmAdmin = typeof crmAdmins.$inferSelect;
 export type CrmTask = typeof crmTasks.$inferSelect;
+export type CrmTaskComment = typeof crmTaskComments.$inferSelect;
 export type CrmActivity = typeof crmActivities.$inferSelect;
 export type InsertCrmContact = z.infer<typeof insertCrmContactSchema>;
 
