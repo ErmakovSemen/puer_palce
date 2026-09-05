@@ -144,8 +144,12 @@ export default function CityDayLanding() {
           <p>Электросталь · День города</p>
           <img
             className="city-day-mascot"
-            src="/mascot/red-panda-tea-master-transparent-v2.png"
+            src="/mascot/red-panda-tea-master-transparent-640.png"
             alt="Красная панда — чайный мастер Пуэр Паба"
+            width={624}
+            height={640}
+            loading="lazy"
+            decoding="async"
           />
           <h1>Чайный подарок<br />и <em>квиз</em></h1>
           <div className="city-day-actions">
