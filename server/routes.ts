@@ -5360,7 +5360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? "День города: общая регистрация участника."
           : data.quizScore === undefined
           ? "День города: регистрация на чайный квиз."
-          : `День города: пройден чайный квиз — ${data.quizScore}/5 правильных ответов.`;
+          : `День города: пройден чайный квиз — ${data.quizScore}/15 правильных ответов.`;
       await db.insert(crmActivities).values({
         contactId: contact.id,
         kind: "note",
