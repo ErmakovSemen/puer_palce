@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { z } from "zod";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
@@ -5607,6 +5608,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("CRM contacts fetch error:", error);
       return res.status(500).json({ error: "Не удалось загрузить CRM" });
+    }
+  });
+
+  app.post("/api/admin/crm/contacts/:id/outreach", requireAdminAuth, async (req, res) => {
+    const id = Number(req.params.id);
+    const parsed = z.object({
+      ownerId: z.number().int().positive(),
+      outcome: z.enum(["take", "no_answer", "message", "interested", "booked", "visited", "refused"]),
+      note: z.string().trim().max(1000).default(""),
+      dueAt: z.string().datetime().nullable().optional(),
+    }).safeParse(req.body);
+    if (!Number.isInteger(id) || id <= 0 || !parsed.success)
+      return res.status(400).json({ error: "Выберите сотрудника и проверьте результат контакта" });
+    const data = parsed.data;
+    try {
+      const result = await db.transaction(async tx => {
+        const [admin] = await tx.select().from(crmAdmins).where(eq(crmAdmins.id, data.ownerId));
+        if (!admin?.isActive) return { code: 400, error: "Сотрудник не найден или неактивен" };
+        const [contact] = await tx.select().from(crmContacts).where(eq(crmContacts.id, id)).for("update");
+        if (!contact) return { code: 404, error: "Лид не найден" };
+        if (contact.ownerId && contact.ownerId !== data.ownerId)
+          return { code: 409, error: "Лида уже взял другой сотрудник. Обновите список" };
+        if (data.outcome !== "take" && contact.ownerId !== data.ownerId)
+          return { code: 409, error: "Сначала возьмите лида себе в работу" };
+        if (data.outcome === "take" && contact.ownerId === data.ownerId) return { code: 200 };
+        const now = new Date().toISOString();
+        const labels = { take: "Взят в работу", no_answer: "Не ответил", message: "Написали", interested: "Заинтересован", booked: "Записался", visited: "Пришёл", refused: "Отказ / не писать" };
+        const stages = { take: "taken", no_answer: contact.pipelineStage, message: "first_contact", interested: "dialog", booked: "booked", visited: "visited", refused: "lost" };
+        const closed = data.outcome === "visited" || data.outcome === "refused";
+        await tx.update(crmContacts).set({
+          ownerId: data.ownerId, pipelineStage: stages[data.outcome],
+          workStatus: closed ? "done" : data.outcome === "no_answer" || data.outcome === "message" ? "waiting" : "in_progress",
+          inboxStatus: "taken", updatedAt: now,
+          ...(data.outcome !== "take" ? { lastContactAt: now } : {}),
+        }).where(eq(crmContacts.id, id));
+        await tx.insert(crmActivities).values({ contactId: id, kind: "note", body: `${admin.name}: ${labels[data.outcome]}${data.note ? `\n${data.note}` : ""}` });
+        if (closed) await tx.update(crmTasks).set({ status: "done" }).where(and(eq(crmTasks.contactId, id), sql`${crmTasks.status} IN ('open', 'in_progress')`));
+        if (!closed && data.dueAt) await tx.insert(crmTasks).values({ contactId: id, ownerId: data.ownerId, title: "Повторно связаться с лидом", kind: data.outcome === "message" ? "message" : "call", dueAt: data.dueAt }).onConflictDoNothing();
+        return { code: 200 };
+      });
+      return res.status(result.code).json("error" in result ? { error: result.error } : { ok: true });
+    } catch (error) {
+      console.error("CRM outreach error:", error);
+      return res.status(500).json({ error: "Не удалось сохранить результат контакта" });
     }
   });
 

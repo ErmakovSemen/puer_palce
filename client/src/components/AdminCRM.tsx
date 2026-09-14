@@ -42,6 +42,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import CrmTaskKanban from "@/components/CrmTaskKanban";
+import CrmLeadWorkbench from "@/components/CrmLeadWorkbench";
 
 type AdminFetch = (url: string, options?: RequestInit) => Promise<any>;
 type Lifecycle = "lead" | "active" | "regular" | "at_risk" | "inactive";
@@ -56,13 +57,15 @@ type Task = {
   status: "open" | "done";
   createdAt: string;
 };
-type Contact = {
+export type Contact = {
   id: number;
   name: string;
   phone: string | null;
   telegram: string | null;
   profileUrl: string | null;
   source: string;
+  externalId?: string | null;
+  notes?: string | null;
   stage: Lifecycle;
   pipelineStage: Pipeline;
   inboxStatus: "none" | "new" | "taken";
@@ -90,7 +93,7 @@ type Customer = {
   ownerName: string | null;
   crmContactId: number | null;
 };
-type View = "queue" | "inbox" | "pipeline" | "tasks" | "customers" | "contacts";
+type View = "leads" | "queue" | "inbox" | "pipeline" | "tasks" | "customers" | "contacts";
 
 const LIFECYCLE: Record<Lifecycle, { label: string; className: string }> = {
   lead: {
@@ -151,7 +154,7 @@ export default function AdminCRM({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [view, setView] = useState<View>("queue");
+  const [view, setView] = useState<View>("leads");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Contact | null>(null);
   const [activeOwnerId, setActiveOwnerId] = useState(
@@ -166,7 +169,7 @@ export default function AdminCRM({
   const [taskTitle, setTaskTitle] = useState("");
   const [taskKind, setTaskKind] = useState("call");
   const [dueAt, setDueAt] = useState("");
-  const { data: contacts = [], isLoading } = useQuery<Contact[]>({
+  const { data: contacts = [], isLoading, isError, refetch } = useQuery<Contact[]>({
     queryKey: ["/api/admin/crm/contacts"],
     queryFn: () => adminFetch("/api/admin/crm/contacts"),
     enabled,
@@ -448,6 +451,7 @@ export default function AdminCRM({
       </div>
       <Tabs value={view} onValueChange={(value) => setView(value as View)}>
         <TabsList className="h-auto w-full justify-start overflow-x-auto rounded-md bg-muted/50 p-1">
+          <TabsTrigger value="leads">Лиды ({contacts.filter(c => c.externalId || c.stage === "lead").length})</TabsTrigger>
           <TabsTrigger value="queue">Моя очередь</TabsTrigger>
           <TabsTrigger value="customers">
             Клиенты{" "}
@@ -466,10 +470,13 @@ export default function AdminCRM({
           <TabsTrigger value="contacts">Все контакты</TabsTrigger>
         </TabsList>
       </Tabs>
-      {isLoading ? (
+      {isError ? (
+        <div role="alert">Не удалось загрузить контакты. <Button variant="outline" onClick={() => refetch()}>Повторить</Button></div>
+      ) : isLoading ? (
         <Empty title="Загружаем CRM" text="" />
       ) : (
         <>
+          {view === "leads" && <CrmLeadWorkbench contacts={contacts} ownerId={ownerId} adminFetch={adminFetch} />}
           {view === "queue" && (
             <Queue
               ownerId={ownerId}
@@ -531,7 +538,7 @@ export default function AdminCRM({
         </>
       )}
       <LeadDialog
-        contact={selected}
+        contact={selected ? contacts.find(c => c.id === selected.id) ?? selected : null}
         close={() => setSelected(null)}
         admins={admins}
         ownerId={ownerId}
