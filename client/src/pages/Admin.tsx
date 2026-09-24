@@ -12,6 +12,7 @@ import AdminCeremonyBookings from "@/components/AdminCeremonyBookings";
 import AdminBannerManagement from "@/components/AdminBannerManagement";
 import AdminTVDisplay from "@/components/AdminTVDisplay";
 import AdminExperiments from "@/components/AdminExperiments";
+import AdminInventory from "@/components/AdminInventory";
 import AdminMedia from "@/components/AdminMedia";
 import AdminCRM from "@/components/AdminCRM";
 import AdminCustomerDirectory from "@/components/AdminCustomerDirectory";
@@ -400,10 +401,12 @@ export default function Admin() {
           </div>
         </div>
 
-        <Tabs defaultValue="crm" className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
+        <Tabs defaultValue={['warehouse', 'users'].includes(new URLSearchParams(location.search).get('tab') || '') ? new URLSearchParams(location.search).get('tab')! : 'crm'} className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
           <aside className="h-fit lg:sticky lg:top-6">
             <TabsList className="h-auto w-full flex-row flex-wrap justify-start gap-1 bg-transparent p-0 lg:flex-col lg:items-stretch">
               <TabsTrigger value="crm" data-testid="tab-crm" className="justify-start">CRM</TabsTrigger>
+              <TabsTrigger value="warehouse" className="justify-start">Склад</TabsTrigger>
+              <TabsTrigger value="users" className="justify-start">Продажи и XP</TabsTrigger>
               <TabsTrigger value="clients" data-testid="tab-clients" className="justify-start">База клиентов</TabsTrigger>
               <TabsTrigger value="ceremony-bookings" data-testid="tab-ceremony-bookings" className="justify-start">Расписание</TabsTrigger>
               <TabsTrigger value="orders" data-testid="tab-orders" className="justify-start">Заказы</TabsTrigger>
@@ -413,7 +416,6 @@ export default function Admin() {
             <details className="mt-3 border-t pt-3">
               <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-muted-foreground">Дополнительно</summary>
               <TabsList className="mt-1 h-auto w-full flex-row flex-wrap justify-start gap-1 bg-transparent p-0 lg:flex-col lg:items-stretch">
-                <TabsTrigger value="users" data-testid="tab-users" className="justify-start">Аккаунты и лояльность</TabsTrigger>
                 <TabsTrigger value="banners" data-testid="tab-banners" className="justify-start">Баннеры</TabsTrigger>
                 <TabsTrigger value="tv-display" data-testid="tab-tv-display" className="justify-start">ТВ-дисплей</TabsTrigger>
                 <TabsTrigger value="media" data-testid="tab-media" className="justify-start">Истории</TabsTrigger>
@@ -429,6 +431,7 @@ export default function Admin() {
           <TabsContent value="crm" className="mt-0">
             <AdminCRM adminFetch={adminFetch} enabled={!!adminPassword} />
           </TabsContent>
+          <TabsContent value="warehouse" className="mt-0"><AdminInventory adminFetch={adminFetch} /></TabsContent>
 
           <TabsContent value="clients" className="mt-0">
             <AdminCustomerDirectory adminFetch={adminFetch} enabled={!!adminPassword} />
@@ -562,10 +565,7 @@ export default function Admin() {
           <TabsContent value="users">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6">
               <div>
-                <h2 className="font-serif text-2xl font-semibold">Управление пользователями</h2>
-                <p className="text-muted-foreground mt-2">
-                  Поиск пользователей и управление их уровнем лояльности
-                </p>
+                <h2 className="font-serif text-2xl font-semibold">Продажи и XP</h2>
               </div>
               <Button
                 variant="outline"
@@ -887,6 +887,7 @@ export default function Admin() {
               fixedQuantityOnly: editingProduct.fixedQuantityOnly,
               fixedQuantity: editingProduct.fixedQuantity,
               outOfStock: editingProduct.outOfStock,
+              inventoryOnly: editingProduct.inventoryOnly,
               cardType: editingProduct.cardType as "classic" | "media",
             } : undefined}
             isSubmitting={createProductMutation.isPending || updateProductMutation.isPending}

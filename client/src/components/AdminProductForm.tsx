@@ -50,6 +50,7 @@ const productSchema = z.object({
   fixedQuantityOnly: z.boolean(),
   fixedQuantity: z.number().int().positive().optional().nullable(),
   outOfStock: z.boolean(),
+  inventoryOnly: z.boolean(),
   cardType: z.enum(["classic", "media"], {
     errorMap: () => ({ message: "Выберите тип карточки" })
   }),
@@ -255,6 +256,7 @@ export default function AdminProductForm({
       fixedQuantityOnly: defaultValues?.fixedQuantityOnly || false,
       fixedQuantity: defaultValues?.fixedQuantity || null,
       outOfStock: (defaultValues as any)?.outOfStock || false,
+      inventoryOnly: defaultValues?.inventoryOnly || false,
       cardType: (defaultValues as any)?.cardType || "classic",
     },
   });
@@ -791,6 +793,21 @@ export default function AdminProductForm({
             </FormItem>
           )}
         />
+
+        {defaultValues?.inventoryOnly && (
+          <FormField
+            control={form.control}
+            name="inventoryOnly"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center space-x-3 space-y-0 rounded-md border p-4">
+                <FormControl>
+                  <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                </FormControl>
+                <FormLabel>Только в CRM, не показывать на сайте</FormLabel>
+              </FormItem>
+            )}
+          />
+        )}
 
         <FormField
           control={form.control}

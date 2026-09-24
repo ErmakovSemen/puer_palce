@@ -335,6 +335,7 @@ export class MemStorage {
       fixedQuantityOnly: insertProduct.fixedQuantityOnly ?? false,
       fixedQuantity: insertProduct.fixedQuantity ?? null,
       outOfStock: insertProduct.outOfStock ?? false,
+      inventoryOnly: insertProduct.inventoryOnly ?? false,
       cardType: insertProduct.cardType ?? "classic",
     };
     this.products.set(id, product);
@@ -353,6 +354,7 @@ export class MemStorage {
       fixedQuantityOnly: insertProduct.fixedQuantityOnly ?? false,
       fixedQuantity: insertProduct.fixedQuantity ?? null,
       outOfStock: insertProduct.outOfStock ?? false,
+      inventoryOnly: insertProduct.inventoryOnly ?? false,
       cardType: insertProduct.cardType ?? "classic",
     };
     this.products.set(id, updated);

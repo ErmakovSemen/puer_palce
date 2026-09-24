@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { InventorySale } from "./AdminInventory";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -376,6 +377,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
 
   return (
     <div className="space-y-6">
+      <InventorySale adminPassword={adminPassword} customer={user} onChanged={() => { if (user) refetchUser(); }} />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
           <CardTitle>Поиск пользователя</CardTitle>
@@ -469,6 +471,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
           
           <Button 
             variant="outline" 
+            className="h-auto w-full whitespace-normal py-2 sm:w-auto"
             onClick={() => setShowRecentUsers(!showRecentUsers)}
             data-testid="button-toggle-recent-users"
           >

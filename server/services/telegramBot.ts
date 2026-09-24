@@ -1039,7 +1039,7 @@ async function handleMenuCategory(chatId: string, category: "tea" | "teaware") {
     const productList = await db
       .select()
       .from(products)
-      .where(eq(products.category, category));
+      .where(and(eq(products.category, category), eq(products.inventoryOnly, false)));
 
     if (productList.length === 0) {
       const emptyText = category === "tea" 
@@ -1126,7 +1126,7 @@ async function handleTeaTypeProductsByHash(chatId: string, hash: string) {
     const productList = await db
       .select()
       .from(products)
-      .where(eq(products.category, "tea"));
+      .where(and(eq(products.category, "tea"), eq(products.inventoryOnly, false)));
 
     const normalizeTeaType = (teaType: string): string => {
       const normalized = teaType.toLowerCase().trim();
@@ -1273,7 +1273,7 @@ async function handleAddToCart(chatId: string, productId: number, quantity: numb
   // Get product info
   const [product] = await db.select().from(products).where(eq(products.id, productId));
   console.log("[TelegramBot] AddToCart - product found:", product?.name);
-  if (!product) {
+  if (!product || product.inventoryOnly) {
     await sendMessage(chatId, "Товар не найден.");
     return;
   }
@@ -1709,7 +1709,7 @@ async function handleProductDetail(chatId: string, productId: number, username?:
       .from(products)
       .where(eq(products.id, productId));
 
-    if (!product) {
+    if (!product || product.inventoryOnly) {
       await sendMessage(chatId, "Товар не найден.");
       return;
     }

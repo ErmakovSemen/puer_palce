@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, serial, real, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, serial, real, boolean, integer, uuid, jsonb, timestamp, index, check } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -124,6 +124,7 @@ export const products = pgTable("products", {
   fixedQuantityOnly: boolean("fixed_quantity_only").notNull().default(false), // If true, only sell in fixed quantity
   fixedQuantity: integer("fixed_quantity"), // Fixed quantity in grams (e.g., 357g for tea cake) or pieces
   outOfStock: boolean("out_of_stock").notNull().default(false), // If true, product is out of stock and cannot be ordered
+  inventoryOnly: boolean("inventory_only").notNull().default(false),
   cardType: text("card_type").notNull().default("classic"), // "classic" or "media" - card display type on homepage
 });
 
@@ -160,6 +161,39 @@ export const insertProductSchema = createInsertSchema(products, {
 
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type Product = typeof products.$inferSelect;
+
+export const inventoryStock = pgTable("inventory_stock", {
+  productId: integer("product_id").primaryKey().references(() => products.id, {onDelete: "restrict"}),
+  quantity: integer("quantity").default(0),
+  revision: integer("revision").notNull().default(0),
+}, (table) => [check("inventory_stock_quantity_check", sql`${table.quantity} >= 0`)]);
+
+export const inventorySales = pgTable("inventory_sales", {
+  id: serial("id").primaryKey(),
+  requestId: uuid("request_id").notNull().unique(),
+  payload: jsonb("payload").notNull(),
+  userId: varchar("user_id").references(() => users.id, {onDelete: "set null"}),
+  buyer: text("buyer").notNull(),
+  actor: text("actor").notNull(),
+  lines: jsonb("lines").notNull(),
+  totalCents: integer("total_cents").notNull(),
+  xp: integer("xp").notNull().default(0),
+  status: text("status").notNull().default("completed"),
+  createdAt: timestamp("created_at", {withTimezone: true}).notNull().defaultNow(),
+});
+
+export const inventoryMovements = pgTable("inventory_movements", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id, {onDelete: "restrict"}),
+  saleId: integer("sale_id").references(() => inventorySales.id),
+  delta: integer("delta").notNull(),
+  balance: integer("balance"),
+  priceCents: integer("price_cents").notNull(),
+  kind: text("kind").notNull(),
+  reason: text("reason").notNull(),
+  actor: text("actor").notNull(),
+  createdAt: timestamp("created_at", {withTimezone: true}).notNull().defaultNow(),
+}, (table) => [index("inventory_movements_product_idx").on(table.productId, table.id.desc())]);
 
 // Quiz types
 export interface QuizOption {

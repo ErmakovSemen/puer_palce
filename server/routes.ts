@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { registerInventory } from "./inventory";
 import { z } from "zod";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -219,11 +220,14 @@ function firstCsvValue(row: Record<string, string>, candidates: string[]) {
 }
 
 // Admin authentication middleware
-function requireAdminAuth(req: any, res: any, next: any) {
+function isAdminRequest(req: any) {
   const adminPassword = process.env.ADMIN_PASSWORD || "admin123"; // Default for development
   const providedPassword = req.headers["x-admin-password"];
+  return providedPassword === adminPassword;
+}
 
-  if (providedPassword !== adminPassword) {
+function requireAdminAuth(req: any, res: any, next: any) {
+  if (!isAdminRequest(req)) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
@@ -509,6 +513,7 @@ function scheduleReceiptFallback(
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  await registerInventory(app, requireAdminAuth);
   // Setup user authentication (email/password)
   setupAuth(app);
 
@@ -654,10 +659,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Product routes
-  app.get("/api/products", async (_req, res) => {
+  app.get("/api/products", async (req, res) => {
     try {
       const products = await storage.getProducts();
-      res.json(products);
+      res.json(isAdminRequest(req) ? products : products.filter((p) => !p.inventoryOnly));
     } catch (error) {
       res.status(500).json({ error: "Failed to get products" });
     }
@@ -666,7 +671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all unique tags (types and effects) from products
   app.get("/api/tags", async (_req, res) => {
     try {
-      const products = await storage.getProducts();
+      const products = (await storage.getProducts()).filter((p) => !p.inventoryOnly);
 
       // Extract unique types
       const types = Array.from(
@@ -692,7 +697,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       const product = await storage.getProduct(id);
-      if (!product) {
+      if (!product || (product.inventoryOnly && !isAdminRequest(req))) {
         res.status(404).json({ error: "Product not found" });
         return;
       }
@@ -723,7 +728,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/products/:id", requireAdminAuth, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const product = insertProductSchema.parse(req.body);
+      const existing = await storage.getProduct(id);
+      const product = insertProductSchema.parse({
+        ...req.body,
+        inventoryOnly: req.body.inventoryOnly ?? existing?.inventoryOnly ?? false,
+      });
       const updated = await storage.updateProduct(id, product);
       if (!updated) {
         res.status(404).json({ error: "Product not found" });
@@ -751,7 +760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Helper function to generate YML feed
   async function generateYMLFeed(baseUrl: string): Promise<string> {
-    const products = await storage.getProducts();
+    const products = (await storage.getProducts()).filter((p) => !p.inventoryOnly);
 
     // Get current date in ISO format
     const currentDate =
