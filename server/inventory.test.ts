@@ -14,8 +14,8 @@ test("warehouse, anonymous/customer sales, retries, rollback and cancellation", 
     CREATE TABLE products(id serial PRIMARY KEY,name text,category text,pricing_unit text,price_per_gram real,description text,tea_type text,out_of_stock boolean DEFAULT false);
     CREATE TABLE users(id varchar PRIMARY KEY,name text,phone text,xp integer NOT NULL DEFAULT 0);
     CREATE TABLE crm_admins(id serial PRIMARY KEY,name text,is_active boolean);
-    CREATE TABLE settings(xp_multiplier integer);
-    INSERT INTO settings VALUES(1);
+    CREATE TABLE site_settings(xp_multiplier integer);
+    INSERT INTO site_settings VALUES(1);
     CREATE TABLE xp_transactions(id serial PRIMARY KEY,user_id varchar,amount integer,reason text,description text,created_by text);
     INSERT INTO crm_admins VALUES(1,'Test admin',true);
     INSERT INTO users VALUES('customer','Test customer','000',10);
@@ -187,7 +187,7 @@ test("warehouse, anonymous/customer sales, retries, rollback and cancellation", 
       (await call("")).find((p: any) => p.id === 1).price_cents,
       525,
     );
-    await db.exec("UPDATE settings SET xp_multiplier=2");
+    await db.exec("UPDATE site_settings SET xp_multiplier=2");
     const bonusSale = await call("/sales", "POST", {
       ...payload,
       requestId: crypto.randomUUID(),

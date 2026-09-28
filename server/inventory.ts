@@ -238,7 +238,7 @@ export async function createInventorySale(
     if (!Number.isSafeInteger(total) || total > 2000000000)
       throw new InventoryError(400, "Слишком большая сумма продажи");
     const multiplier = Number(
-      (await client.query("SELECT xp_multiplier FROM settings LIMIT 1")).rows[0]
+      (await client.query("SELECT xp_multiplier FROM site_settings LIMIT 1")).rows[0]
         ?.xp_multiplier ?? 1,
     );
     const xp = data.userId ? Math.floor((total / 100) * multiplier) : 0;
