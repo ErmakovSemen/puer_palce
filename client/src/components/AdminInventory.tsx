@@ -7,6 +7,7 @@ import {
   RefreshCw,
   ArrowLeft,
   ArrowRight,
+  ChevronsUpDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,14 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/api-config";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 
 type Item = {
   id: number;
@@ -59,7 +68,15 @@ const validPrice = (value: string) =>
   priceCents(value) > 0 &&
   priceCents(value) <= 10000000;
 
-function saleLineError(lines: SaleLine[], items: Item[]): string | null {
+export const filledSaleLines = (lines: SaleLine[]) =>
+  lines.filter((line) =>
+    [line.productId, line.quantity, line.newTeaName, line.pricePerGram].some(
+      (value) => value.trim() !== "",
+    ),
+  );
+
+export function saleLineError(lines: SaleLine[], items: Item[]): string | null {
+  if (!lines.length) return "Добавьте чай или посуду.";
   const seen = new Set<string>();
   for (const line of lines) {
     if (!line.productId) return "Выберите товар или «Новый чай».";
@@ -399,6 +416,11 @@ export function InventorySale({
       "auto",
     ),
     [lines, setLines] = useState<SaleLine[]>([emptyLine()]);
+  const [openProductIndex, setOpenProductIndex] = useState<number | null>(null);
+  const [productSearch, setProductSearch] = useState("");
+  useEffect(() => {
+    if (customer?.id) setBuyerMode("customer");
+  }, [customer?.id]);
   const [showValidation, setShowValidation] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID()),
     [receipt, setReceipt] = useState<any>(null),
@@ -411,6 +433,7 @@ export function InventorySale({
     queryFn: () => adminFetch("/api/admin/inventory/sales"),
   });
   const items = inventory.data || [];
+  const saleLines = filledSaleLines(lines);
   const total = lines.reduce(
     (sum, l) =>
       sum +
@@ -432,10 +455,10 @@ export function InventorySale({
   const validationError = !employee
     ? "Выберите сотрудника перед продажей."
     : !anonymous && !customer
-      ? "Выберите клиента в поиске ниже или отметьте анонимного покупателя."
+      ? "Выберите клиента в поиске выше или отметьте анонимного покупателя."
       : inventory.isError
         ? "Не удалось загрузить товары. Обновите страницу."
-        : saleLineError(lines, items);
+        : saleLineError(saleLines, items);
   const submit = useMutation({
     mutationFn: (payload: any) =>
       adminFetch("/api/admin/inventory/sales", json(payload)),
@@ -499,7 +522,7 @@ export function InventorySale({
             ? "Без начисления XP"
             : customer
               ? `${customer.name || "Клиент"} · ${customer.phone}`
-              : "Выберите клиента в поиске ниже"}
+              : "Выберите клиента в поиске выше"}
         </p>
         {inventory.isError && <p role="alert">Не удалось загрузить товары.</p>}
         {lines.map((line, index) => {
@@ -509,29 +532,89 @@ export function InventorySale({
               key={index}
               className="grid grid-cols-[minmax(0,1fr)_6rem_2.5rem] gap-2"
             >
-              <select
-                aria-label={`Товар ${index + 1}`}
-                className={`${selectClass} col-span-3 w-full sm:col-span-1`}
-                value={line.productId}
-                onChange={(e) =>
-                  setLines(
-                    lines.map((l, n) =>
-                      n === index ? { ...l, productId: e.target.value } : l,
-                    ),
-                  )
-                }
+              <Popover
+                open={openProductIndex === index}
+                onOpenChange={(open) => {
+                  setOpenProductIndex(open ? index : null);
+                  setProductSearch("");
+                }}
               >
-                <option value="">Выберите чай или посуду</option>
-                {items.map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name} · {rub(i.price_cents)}/{units(i)} ·{" "}
-                    {i.quantity === null
-                      ? "остаток не указан"
-                      : `остаток ${i.quantity}`}
-                  </option>
-                ))}
-                <option value={newTeaValue}>Новый чай</option>
-              </select>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-label={`Товар ${index + 1}`}
+                    aria-expanded={openProductIndex === index}
+                    className="col-span-3 h-10 min-w-0 justify-between font-normal sm:col-span-1"
+                  >
+                    <span className="truncate text-left">
+                      {line.productId === newTeaValue
+                        ? line.newTeaName || "Новый чай"
+                        : item?.name || "Выберите чай или посуду"}
+                    </span>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[min(28rem,calc(100vw-2rem))] p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Найти чай или посуду"
+                      value={productSearch}
+                      onValueChange={setProductSearch}
+                      autoFocus
+                    />
+                    <CommandList>
+                      <CommandGroup>
+                        <CommandItem
+                          value="new-tea"
+                          onSelect={() => {
+                            setLines((current) =>
+                              current.map((l, n) =>
+                                n === index
+                                  ? {
+                                      ...l,
+                                      productId: newTeaValue,
+                                      newTeaName: productSearch.trim() || l.newTeaName,
+                                    }
+                                  : l,
+                              ),
+                            );
+                            setOpenProductIndex(null);
+                            setProductSearch("");
+                          }}
+                        >
+                          <Plus className="h-4 w-4" /> Новый чай
+                        </CommandItem>
+                        {items.filter((i) =>
+                          i.name.toLocaleLowerCase("ru-RU").includes(
+                            productSearch.trim().toLocaleLowerCase("ru-RU"),
+                          ),
+                        ).map((i) => (
+                          <CommandItem
+                            key={i.id}
+                            value={`${i.name} ${i.category} ${i.id}`}
+                            onSelect={() => {
+                              setLines((current) =>
+                                current.map((l, n) =>
+                                  n === index ? { ...l, productId: String(i.id) } : l,
+                                ),
+                              );
+                              setOpenProductIndex(null);
+                              setProductSearch("");
+                            }}
+                          >
+                            <span className="min-w-0 flex-1 truncate">{i.name}</span>
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {rub(i.price_cents)}/{units(i)}
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               {line.productId === newTeaValue && (
                 <div className="col-span-3 grid gap-2 sm:grid-cols-2">
                   <Input
@@ -590,7 +673,10 @@ export function InventorySale({
                 size="icon"
                 aria-label={`Удалить позицию ${index + 1}`}
                 disabled={lines.length === 1}
-                onClick={() => setLines(lines.filter((_, n) => n !== index))}
+                onClick={() => {
+                  setLines(lines.filter((_, n) => n !== index));
+                  setOpenProductIndex(null);
+                }}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -609,7 +695,18 @@ export function InventorySale({
           <Button
             variant="outline"
             disabled={lines.length >= 50}
-            onClick={() => setLines([...lines, emptyLine()])}
+            onClick={() => {
+              setProductSearch("");
+              const emptyIndex = lines.findIndex(
+                (line) => !filledSaleLines([line]).length,
+              );
+              if (emptyIndex >= 0) {
+                setOpenProductIndex(emptyIndex);
+              } else {
+                setLines([...lines, emptyLine()]);
+                setOpenProductIndex(lines.length);
+              }
+            }}
           >
             <Plus className="mr-2 h-4 w-4" />
             Ещё товар
@@ -642,7 +739,7 @@ export function InventorySale({
             requestId,
             actorId: Number(employee),
             userId: buyer?.id || null,
-            lines: lines.map((l) =>
+            lines: saleLines.map((l) =>
               l.productId === newTeaValue
                 ? {
                     newTeaName: l.newTeaName.trim().replace(/\s+/g, " "),

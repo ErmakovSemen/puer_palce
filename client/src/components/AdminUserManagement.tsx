@@ -23,6 +23,7 @@ interface AdminUserManagementProps {
 
 export default function AdminUserManagement({ adminPassword }: AdminUserManagementProps) {
   const [searchPhone, setSearchPhone] = useState("");
+  const [searchedPhone, setSearchedPhone] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [xpAmount, setXpAmount] = useState<string>("100");
   const [discountAmount, setDiscountAmount] = useState<string>("");
@@ -77,6 +78,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
       setCreatePassword("");
       // Auto-search created user
       setSearchPhone(data.phone);
+      setSearchedPhone(data.phone);
       setShouldAutoRefetch(true);
     },
     onError: (error: Error) => {
@@ -112,10 +114,10 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
 
   // Search user query
   const { data: user, isLoading: isLoadingUser, refetch: refetchUser, error: searchError } = useQuery({
-    queryKey: ['/api/admin/users/search', searchPhone],
+    queryKey: ['/api/admin/users/search', searchedPhone],
     enabled: false, // Manual trigger
     queryFn: async () => {
-      const res = await fetch(getApiUrl(`/api/admin/users/search?phone=${encodeURIComponent(searchPhone)}`), {
+      const res = await fetch(getApiUrl(`/api/admin/users/search?phone=${encodeURIComponent(searchedPhone)}`), {
         headers: { 'X-Admin-Password': adminPassword },
         credentials: 'include',
       });
@@ -139,11 +141,11 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
 
   // Auto-refetch when searchPhone changes and shouldAutoRefetch is true
   useEffect(() => {
-    if (shouldAutoRefetch && searchPhone.trim()) {
+    if (shouldAutoRefetch && searchedPhone.trim()) {
       refetchUser();
       setShouldAutoRefetch(false);
     }
-  }, [searchPhone, shouldAutoRefetch, refetchUser]);
+  }, [searchedPhone, shouldAutoRefetch, refetchUser]);
 
   // Handle search errors
   useEffect(() => {
@@ -266,6 +268,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
       queryClient.invalidateQueries({ queryKey: ['/api/admin/users/recent'] });
       setSelectedUserId(null);
       setSearchPhone("");
+      setSearchedPhone("");
       toast({
         title: "Успешно",
         description: "Пользователь удален",
@@ -288,7 +291,12 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   };
 
   const handleSearch = () => {
-    if (searchPhone.trim()) {
+    const phone = searchPhone.trim();
+    if (phone && phone !== searchedPhone) {
+      setSelectedUserId(null);
+      setSearchedPhone(phone);
+      setShouldAutoRefetch(true);
+    } else if (phone) {
       refetchUser();
     }
   };
@@ -368,19 +376,31 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   const loyaltyProgress = user ? getLoyaltyProgress(user.xp) : null;
 
   const handleSelectUser = (selectedUser: UserWithoutPassword) => {
-    // Update search phone and trigger auto-refetch
+    queryClient.setQueryData(
+      ['/api/admin/users/search', selectedUser.phone || ''],
+      selectedUser,
+    );
     setSearchPhone(selectedUser.phone || "");
+    setSearchedPhone(selectedUser.phone || "");
     setSelectedUserId(selectedUser.id);
     setShowRecentUsers(false);
     setShouldAutoRefetch(true);
   };
 
+  const saleCustomer = selectedUserId === user?.id ? user : null;
+
   return (
     <div className="space-y-6">
-      <InventorySale adminPassword={adminPassword} customer={user} onChanged={() => { if (user) refetchUser(); }} />
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
-          <CardTitle>Поиск пользователя</CardTitle>
+          <div>
+            <CardTitle>Клиент для продажи</CardTitle>
+            {saleCustomer && (
+              <p className="mt-1 text-sm text-muted-foreground" role="status">
+                Выбран: {saleCustomer.name || saleCustomer.phone || saleCustomer.email}
+              </p>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -528,6 +548,8 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
           )}
         </CardContent>
       </Card>
+
+      <InventorySale adminPassword={adminPassword} customer={saleCustomer} onChanged={() => { if (saleCustomer) refetchUser(); }} />
 
       {user && loyaltyProgress && (
         <>
