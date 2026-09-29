@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Minus, Trophy, Copy, Check, Trash2, MessageCircle, RefreshCw, CheckCircle2, XCircle, HelpCircle, UserPlus, X } from "lucide-react";
+import { Plus, Minus, Trophy, Copy, Check, Trash2, MessageCircle, RefreshCw, CheckCircle2, XCircle, HelpCircle, UserPlus, X } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { format } from "date-fns";
@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { User, DbOrder } from "@shared/schema";
 
 interface UserWithoutPassword extends Omit<User, 'password'> {}
+type UserSuggestion = Pick<UserWithoutPassword, 'id' | 'name' | 'phone' | 'xp'>;
 
 interface AdminUserManagementProps {
   adminPassword: string;
@@ -24,7 +25,10 @@ interface AdminUserManagementProps {
 export default function AdminUserManagement({ adminPassword }: AdminUserManagementProps) {
   const [buyerMode, setBuyerMode] = useState<"guest" | "customer">("guest");
   const [saleLocked, setSaleLocked] = useState(false);
-  const [searchPhone, setSearchPhone] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [searchedPhone, setSearchedPhone] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [xpAmount, setXpAmount] = useState<string>("100");
@@ -77,7 +81,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
       setCreatePhone("");
       setCreateName("");
       // Auto-search created user
-      setSearchPhone(data.phone);
+      setSearchInput(data.phone);
       setSearchedPhone(data.phone);
       setSelectedUserId(data.id);
       setShouldAutoRefetch(true);
@@ -111,8 +115,35 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     },
   });
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchInput.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  const searchLength = /[A-Za-zА-Яа-яЁё]/.test(searchInput)
+    ? searchInput.trim().length
+    : searchInput.replace(/\D/g, "").length;
+  const canSuggest = buyerMode === "customer" && searchLength >= 3 && !selectedUserId;
+  const { data: suggestions, isFetching: isFetchingSuggestions, isError: suggestionsError } = useQuery<UserSuggestion[]>({
+    queryKey: ['/api/admin/users/suggest', debouncedSearch],
+    enabled: canSuggest && debouncedSearch === searchInput.trim(),
+    queryFn: async () => {
+      const res = await fetch(getApiUrl(`/api/admin/users/suggest?q=${encodeURIComponent(debouncedSearch)}`), {
+        headers: { 'X-Admin-Password': adminPassword },
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Не удалось найти клиентов');
+      return await res.json() as UserSuggestion[];
+    },
+  });
+  useEffect(() => {
+    if (activeSuggestion >= 0) {
+      document.getElementById(`customer-suggestion-${activeSuggestion}`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [activeSuggestion]);
+
   // Search user query
-  const { data: user, isLoading: isLoadingUser, refetch: refetchUser, error: searchError } = useQuery({
+  const { data: user, refetch: refetchUser, error: searchError } = useQuery({
     queryKey: ['/api/admin/users/search', searchedPhone],
     enabled: false, // Manual trigger
     queryFn: async () => {
@@ -128,17 +159,10 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     },
   });
 
-  // Track when we need to auto-refetch after selecting from recent users
+  // Track when the full profile needs loading after a selection.
   const [shouldAutoRefetch, setShouldAutoRefetch] = useState(false);
 
-  // Update selectedUserId when user is found
-  useEffect(() => {
-    if (user) {
-      setSelectedUserId(user.id);
-    }
-  }, [user]);
-
-  // Auto-refetch when searchPhone changes and shouldAutoRefetch is true
+  // Load the full profile after selecting a suggestion or creating a customer.
   useEffect(() => {
     if (shouldAutoRefetch && searchedPhone.trim()) {
       refetchUser();
@@ -266,7 +290,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
       queryClient.invalidateQueries({ queryKey: ['/api/admin/users/search'] });
       queryClient.invalidateQueries({ queryKey: ['/api/admin/users/recent'] });
       setSelectedUserId(null);
-      setSearchPhone("");
+      setSearchInput("");
       setSearchedPhone("");
       toast({
         title: "Успешно",
@@ -286,17 +310,6 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     if (!user) return;
     if (window.confirm(`Вы уверены, что хотите удалить пользователя ${user.phone || user.email}? Это действие нельзя отменить.`)) {
       deleteUserMutation.mutate(user.id);
-    }
-  };
-
-  const handleSearch = () => {
-    const phone = searchPhone.trim();
-    if (phone && phone !== searchedPhone) {
-      setSelectedUserId(null);
-      setSearchedPhone(phone);
-      setShouldAutoRefetch(true);
-    } else if (phone) {
-      refetchUser();
     }
   };
 
@@ -374,14 +387,12 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
 
   const loyaltyProgress = user ? getLoyaltyProgress(user.xp) : null;
 
-  const handleSelectUser = (selectedUser: UserWithoutPassword) => {
-    queryClient.setQueryData(
-      ['/api/admin/users/search', selectedUser.phone || ''],
-      selectedUser,
-    );
-    setSearchPhone(selectedUser.phone || "");
+  const handleSelectUser = (selectedUser: UserSuggestion) => {
+    setSearchInput(selectedUser.phone || "");
     setSearchedPhone(selectedUser.phone || "");
     setSelectedUserId(selectedUser.id);
+    setSuggestionsOpen(false);
+    setActiveSuggestion(-1);
     setShowRecentUsers(false);
     setShouldAutoRefetch(true);
     setBuyerMode("customer");
@@ -431,7 +442,11 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
               variant="outline"
               size="sm"
               onClick={() => {
-                if (!showCreateForm) setCreatePhone(searchPhone);
+                if (!showCreateForm) {
+                  const searchingByName = /[A-Za-zА-Яа-яЁё]/.test(searchInput);
+                  setCreatePhone(searchingByName ? "" : searchInput);
+                  setCreateName(searchingByName ? searchInput.trim() : "");
+                }
                 setShowCreateForm(!showCreateForm);
               }}
               data-testid="button-toggle-create-form"
@@ -490,27 +505,80 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
               </Button>
             </div>
           )}
-          <div className="flex gap-2 mb-4">
+          <div
+            className="relative mb-4"
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                setSuggestionsOpen(false);
+                setActiveSuggestion(-1);
+              }
+            }}
+          >
             <Input
-              type="tel"
-              autoComplete="tel"
-              placeholder="Введите номер телефона"
-              value={searchPhone}
+              type="search"
+              autoComplete="off"
+              placeholder="Имя или телефон"
+              value={searchInput}
+              onFocus={() => setSuggestionsOpen(true)}
               onChange={(e) => {
-                setSearchPhone(e.target.value);
+                setSearchInput(e.target.value);
                 setSelectedUserId(null);
+                setSuggestionsOpen(true);
+                setActiveSuggestion(-1);
               }}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              data-testid="input-search-phone"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setSuggestionsOpen(false);
+                  setActiveSuggestion(-1);
+                }
+                const ready = suggestionsOpen && debouncedSearch === searchInput.trim() && !isFetchingSuggestions && !suggestionsError && !!suggestions?.length;
+                if (ready && e.key === 'ArrowDown') {
+                  e.preventDefault();
+                  setActiveSuggestion((index) => Math.min(index + 1, suggestions.length - 1));
+                }
+                if (ready && e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setActiveSuggestion((index) => Math.max(index - 1, 0));
+                }
+                if (ready && e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSelectUser(suggestions[Math.max(activeSuggestion, 0)]);
+                }
+              }}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={suggestionsOpen && canSuggest}
+              aria-controls="customer-suggestions"
+              aria-activedescendant={activeSuggestion >= 0 ? `customer-suggestion-${activeSuggestion}` : undefined}
+              data-testid="input-search-user"
             />
-            <Button 
-              onClick={handleSearch} 
-              disabled={!searchPhone.trim() || isLoadingUser}
-              data-testid="button-search-user"
-            >
-              <Search className="h-4 w-4 mr-2" />
-              Найти
-            </Button>
+            {suggestionsOpen && canSuggest && (
+              <div className="absolute z-20 mt-1 w-full border bg-background p-1 shadow-lg" id="customer-suggestions">
+                <div role="listbox" aria-label="Найденные клиенты" className="max-h-64 overflow-auto">
+                  {debouncedSearch !== searchInput.trim() || isFetchingSuggestions ? (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">Ищем…</p>
+                  ) : suggestionsError ? (
+                    <p className="px-3 py-2 text-sm text-destructive">Не удалось найти клиентов</p>
+                  ) : suggestions?.length ? suggestions.map((candidate, index) => (
+                    <button
+                      key={candidate.id}
+                      id={`customer-suggestion-${index}`}
+                      type="button"
+                      role="option"
+                      aria-selected={activeSuggestion === index}
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none aria-selected:bg-muted"
+                      onMouseEnter={() => setActiveSuggestion(index)}
+                      onClick={() => handleSelectUser(candidate)}
+                    >
+                      <span className="min-w-0 truncate font-medium">{candidate.name || candidate.phone}</span>
+                      <span className="shrink-0 text-muted-foreground">{candidate.phone} · {candidate.xp} XP</span>
+                    </button>
+                  )) : (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">Клиент не найден</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           
           <Button 

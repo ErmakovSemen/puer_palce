@@ -21,6 +21,7 @@ import { ObjectStorageService } from "./objectStorage";
 import { sendOrderNotification } from "./resend";
 import { setupAuth, hashPassword } from "./auth";
 import { normalizePhone } from "./utils";
+import { userSearchTerm } from "./user-search";
 import {
   getTelegramUpdates,
   sendOrderNotification as sendTelegramOrderNotification,
@@ -65,7 +66,7 @@ import {
   insertCrmTaskCommentSchema,
   cityDayRegistrationSchema,
 } from "@shared/schema";
-import { eq, sql, desc, and } from "drizzle-orm";
+import { eq, sql, desc, and, ilike, like } from "drizzle-orm";
 import { getTinkoffClient } from "./tinkoff";
 import { sendReceiptSms } from "./sms-ru";
 import {
@@ -1414,6 +1415,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin user management routes
+  app.get("/api/admin/users/suggest", requireAdminAuth, async (req, res) => {
+    const term = userSearchTerm(req.query.q);
+    if (!term) return res.json([]);
+
+    try {
+      const users = await db
+        .select({
+          id: usersTable.id,
+          name: usersTable.name,
+          phone: usersTable.phone,
+          xp: usersTable.xp,
+        })
+        .from(usersTable)
+        .where(term.kind === "name"
+          ? ilike(usersTable.name, term.pattern)
+          : like(usersTable.phone, term.pattern))
+        .orderBy(usersTable.name, usersTable.phone)
+        .limit(10);
+      res.json(users);
+    } catch (error) {
+      console.error("[Admin] User suggestions error:", error);
+      res.status(500).json({ error: "Не удалось найти клиентов" });
+    }
+  });
+
   app.get("/api/admin/users/search", requireAdminAuth, async (req, res) => {
     try {
       const phone = req.query.phone as string;
