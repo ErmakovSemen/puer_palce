@@ -22,6 +22,8 @@ interface AdminUserManagementProps {
 }
 
 export default function AdminUserManagement({ adminPassword }: AdminUserManagementProps) {
+  const [buyerMode, setBuyerMode] = useState<"guest" | "customer">("guest");
+  const [saleLocked, setSaleLocked] = useState(false);
   const [searchPhone, setSearchPhone] = useState("");
   const [searchedPhone, setSearchedPhone] = useState("");
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -32,7 +34,6 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createPhone, setCreatePhone] = useState("");
   const [createName, setCreateName] = useState("");
-  const [createPassword, setCreatePassword] = useState("");
   const { toast } = useToast();
 
   const handleCopyLeaderboardLink = async () => {
@@ -56,7 +57,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
 
   // Create user mutation
   const createUserMutation = useMutation({
-    mutationFn: async ({ phone, name, password }: { phone: string; name: string; password: string }) => {
+    mutationFn: async ({ phone, name }: { phone: string; name: string }) => {
       const res = await fetch(getApiUrl('/api/admin/users/create'), {
         method: 'POST',
         headers: {
@@ -64,21 +65,21 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
           'X-Admin-Password': adminPassword,
         },
         credentials: 'include',
-        body: JSON.stringify({ phone, name: name || undefined, password }),
+        body: JSON.stringify({ phone, name: name || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка создания пользователя');
       return data as { id: string; phone: string; name: string | null; phoneVerified: boolean };
     },
     onSuccess: (data) => {
-      toast({ title: "Пользователь создан", description: `Телефон: ${data.phone}` });
+      toast({ title: "Клиент создан", description: "Выбран для продажи с XP" });
       setShowCreateForm(false);
       setCreatePhone("");
       setCreateName("");
-      setCreatePassword("");
       // Auto-search created user
       setSearchPhone(data.phone);
       setSearchedPhone(data.phone);
+      setSelectedUserId(data.id);
       setShouldAutoRefetch(true);
     },
     onError: (error: Error) => {
@@ -87,13 +88,11 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   });
 
   const handleCreateUser = () => {
+    if (createUserMutation.isPending) return;
     if (!createPhone.trim()) {
       return toast({ title: "Ошибка", description: "Укажите номер телефона", variant: "destructive" });
     }
-    if (createPassword.length < 4) {
-      return toast({ title: "Ошибка", description: "Пароль должен быть не менее 4 символов", variant: "destructive" });
-    }
-    createUserMutation.mutate({ phone: createPhone.trim(), name: createName.trim(), password: createPassword });
+    createUserMutation.mutate({ phone: createPhone.trim(), name: createName.trim() });
   };
 
   // Recent users query
@@ -385,12 +384,38 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
     setSelectedUserId(selectedUser.id);
     setShowRecentUsers(false);
     setShouldAutoRefetch(true);
+    setBuyerMode("customer");
   };
 
-  const saleCustomer = selectedUserId === user?.id ? user : null;
+  const saleCustomer = buyerMode === "customer" && selectedUserId === user?.id ? user : null;
 
   return (
     <div className="space-y-6">
+      <fieldset disabled={saleLocked || createUserMutation.isPending} className="space-y-6">
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Покупатель</p>
+          <div role="group" aria-label="Тип покупателя" className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={buyerMode === "guest" ? "default" : "outline"}
+              aria-pressed={buyerMode === "guest"}
+              onClick={() => setBuyerMode("guest")}
+              data-testid="button-buyer-guest"
+            >
+              Анонимный · без XP
+            </Button>
+            <Button
+              type="button"
+              variant={buyerMode === "customer" ? "default" : "outline"}
+              aria-pressed={buyerMode === "customer"}
+              onClick={() => setBuyerMode("customer")}
+              data-testid="button-buyer-customer"
+            >
+              Клиент · начислить XP
+            </Button>
+          </div>
+        </div>
+      {buyerMode === "customer" && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
           <div>
@@ -405,7 +430,10 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setShowCreateForm(!showCreateForm)}
+              onClick={() => {
+                if (!showCreateForm) setCreatePhone(searchPhone);
+                setShowCreateForm(!showCreateForm);
+              }}
               data-testid="button-toggle-create-form"
             >
               {showCreateForm ? (
@@ -437,6 +465,8 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
               <p className="text-sm font-medium">Новый пользователь</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Input
+                  type="tel"
+                  autoComplete="tel"
                   placeholder="Телефон (+7...)"
                   value={createPhone}
                   onChange={(e) => setCreatePhone(e.target.value)}
@@ -451,31 +481,25 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
                   data-testid="input-create-name"
                 />
               </div>
-              <div className="flex gap-2">
-                <Input
-                  type="password"
-                  placeholder="Временный пароль (мин. 4 символа)"
-                  value={createPassword}
-                  onChange={(e) => setCreatePassword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleCreateUser()}
-                  data-testid="input-create-password"
-                  className="flex-1"
-                />
-                <Button
-                  onClick={handleCreateUser}
-                  disabled={createUserMutation.isPending}
-                  data-testid="button-create-user-submit"
-                >
-                  {createUserMutation.isPending ? "Создание..." : "Создать"}
-                </Button>
-              </div>
+              <Button
+                onClick={handleCreateUser}
+                disabled={createUserMutation.isPending}
+                data-testid="button-create-user-submit"
+              >
+                {createUserMutation.isPending ? "Создание..." : "Создать клиента"}
+              </Button>
             </div>
           )}
           <div className="flex gap-2 mb-4">
             <Input
+              type="tel"
+              autoComplete="tel"
               placeholder="Введите номер телефона"
               value={searchPhone}
-              onChange={(e) => setSearchPhone(e.target.value)}
+              onChange={(e) => {
+                setSearchPhone(e.target.value);
+                setSelectedUserId(null);
+              }}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               data-testid="input-search-phone"
             />
@@ -548,10 +572,18 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
           )}
         </CardContent>
       </Card>
+      )}
+      </fieldset>
 
-      <InventorySale adminPassword={adminPassword} customer={saleCustomer} onChanged={() => { if (saleCustomer) refetchUser(); }} />
+      <InventorySale
+        adminPassword={adminPassword}
+        buyerMode={buyerMode}
+        customer={saleCustomer}
+        onBusyChange={setSaleLocked}
+        onChanged={() => { if (saleCustomer) refetchUser(); }}
+      />
 
-      {user && loyaltyProgress && (
+      {buyerMode === "customer" && user && selectedUserId === user.id && loyaltyProgress && (
         <>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-4">
@@ -869,13 +901,6 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
         </>
       )}
 
-      {!user && searchPhone && !isLoadingUser && (
-        <Card>
-          <CardContent className="py-8 text-center text-muted-foreground">
-            Пользователь не найден
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

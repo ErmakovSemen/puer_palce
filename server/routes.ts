@@ -1465,13 +1465,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!phone || typeof phone !== "string") {
         return res.status(400).json({ error: "Укажите номер телефона" });
       }
-      if (!password || typeof password !== "string" || password.length < 4) {
+      if (password !== undefined && (typeof password !== "string" || password.length < 4)) {
         return res
           .status(400)
           .json({ error: "Пароль должен быть не менее 4 символов" });
       }
 
-      const normalizedPhone = normalizePhone(phone);
+      let normalizedPhone: string;
+      try {
+        normalizedPhone = normalizePhone(phone);
+      } catch {
+        return res.status(400).json({ error: "Проверьте номер телефона" });
+      }
       const existing = await storage.getUserByPhone(normalizedPhone);
       if (existing) {
         return res
@@ -1482,10 +1487,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({
         phone: normalizedPhone,
         name: name?.trim() || null,
-        password: await hashPassword(password),
+        password: await hashPassword(password ?? randomBytes(24).toString("hex")),
       });
 
-      await storage.markPhoneVerified(user.id);
+      if (password) await storage.markPhoneVerified(user.id);
 
       console.log(
         `[Admin] Created user manually: ${normalizedPhone} (id=${user.id})`,

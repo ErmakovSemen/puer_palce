@@ -392,14 +392,17 @@ export default function AdminInventory({
   );
 }
 
-// Reuses the customer selected on the existing XP screen; null means an explicit guest sale.
 export function InventorySale({
   adminPassword,
+  buyerMode,
   customer,
+  onBusyChange,
   onChanged,
 }: {
   adminPassword: string;
+  buyerMode: "guest" | "customer";
   customer?: { id: string; name: string | null; phone: string } | null;
+  onBusyChange?: (busy: boolean) => void;
   onChanged?: () => void;
 }) {
   const adminFetch: Fetcher = async (url, options = {}) => {
@@ -412,15 +415,9 @@ export function InventorySale({
     return body;
   };
   const { inventory, employee, staff, refresh } = useWarehouse(adminFetch);
-  const [buyerMode, setBuyerMode] = useState<"auto" | "customer" | "guest">(
-      "auto",
-    ),
-    [lines, setLines] = useState<SaleLine[]>([emptyLine()]);
+  const [lines, setLines] = useState<SaleLine[]>([emptyLine()]);
   const [openProductIndex, setOpenProductIndex] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState("");
-  useEffect(() => {
-    if (customer?.id) setBuyerMode("customer");
-  }, [customer?.id]);
   const [showValidation, setShowValidation] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID()),
     [receipt, setReceipt] = useState<any>(null),
@@ -445,8 +442,7 @@ export function InventorySale({
         Number(l.quantity),
     0,
   );
-  const anonymous =
-    buyerMode === "guest" || (buyerMode === "auto" && !customer);
+  const anonymous = buyerMode === "guest";
   const buyer = anonymous ? null : customer;
   const settings = useQuery<{ xpMultiplier?: number }>({
     queryKey: ["/api/settings"],
@@ -455,7 +451,7 @@ export function InventorySale({
   const validationError = !employee
     ? "Выберите сотрудника перед продажей."
     : !anonymous && !customer
-      ? "Выберите клиента в поиске выше или отметьте анонимного покупателя."
+      ? "Выберите или создайте клиента выше."
       : inventory.isError
         ? "Не удалось загрузить товары. Обновите страницу."
         : saleLineError(saleLines, items);
@@ -480,6 +476,9 @@ export function InventorySale({
         variant: "destructive",
       }),
   });
+  useEffect(() => {
+    onBusyChange?.(locked || submit.isPending);
+  }, [locked, submit.isPending, onBusyChange]);
   const cancel = useMutation({
     mutationFn: (id: number) =>
       adminFetch(
@@ -496,34 +495,11 @@ export function InventorySale({
   });
   return (
     <section className="space-y-4 border-y py-5">
-      <h3 className="text-xl font-semibold">Продажа и начисление XP</h3>
+      <h3 className="text-xl font-semibold">
+        {anonymous ? "Продажа" : "Продажа и начисление XP"}
+      </h3>
       {staff}
       <fieldset disabled={locked} className="space-y-3">
-        <div className="flex flex-wrap gap-4">
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              checked={!anonymous}
-              onChange={() => setBuyerMode("customer")}
-            />
-            Выбранный клиент
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              checked={anonymous}
-              onChange={() => setBuyerMode("guest")}
-            />
-            Анонимный покупатель
-          </label>
-        </div>
-        <p className="text-sm">
-          {anonymous
-            ? "Без начисления XP"
-            : customer
-              ? `${customer.name || "Клиент"} · ${customer.phone}`
-              : "Выберите клиента в поиске выше"}
-        </p>
         {inventory.isError && <p role="alert">Не удалось загрузить товары.</p>}
         {lines.map((line, index) => {
           const item = items.find((i) => i.id === Number(line.productId));
@@ -714,11 +690,8 @@ export function InventorySale({
         )}
       </fieldset>
       <p className="font-semibold">
-        Итого: {rub(total)} ·{" "}
-        {buyer
-          ? Math.floor((total / 100) * (settings.data?.xpMultiplier ?? 1))
-          : 0}{" "}
-        XP
+        Итого: {rub(total)}
+        {buyer && ` · ${Math.floor((total / 100) * (settings.data?.xpMultiplier ?? 1))} XP`}
       </p>
       {showValidation && validationError && (
         <p role="alert" className="text-sm text-destructive">
@@ -779,8 +752,8 @@ export function InventorySale({
       )}
       {receipt && (
         <p role="status">
-          Продажа №{receipt.id}: {rub(receipt.total_cents)}, начислено{" "}
-          {receipt.xp} XP.
+          Продажа №{receipt.id}: {rub(receipt.total_cents)}
+          {receipt.xp > 0 ? `, начислено ${receipt.xp} XP` : ""}.
         </p>
       )}
       <details>
