@@ -401,7 +401,7 @@ export default function Admin() {
           </div>
         </div>
 
-        <Tabs defaultValue={['warehouse', 'users'].includes(new URLSearchParams(location.search).get('tab') || '') ? new URLSearchParams(location.search).get('tab')! : 'crm'} className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
+        <Tabs defaultValue={['warehouse', 'users', 'stats'].includes(new URLSearchParams(location.search).get('tab') || '') ? new URLSearchParams(location.search).get('tab')! : 'crm'} className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
           <aside className="h-fit lg:sticky lg:top-6">
             <TabsList className="h-auto w-full flex-row flex-wrap justify-start gap-1 bg-transparent p-0 lg:flex-col lg:items-stretch">
               <TabsTrigger value="crm" data-testid="tab-crm" className="justify-start">CRM</TabsTrigger>

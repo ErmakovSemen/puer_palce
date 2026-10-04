@@ -242,6 +242,7 @@ export class MemStorage {
       xp: 0,
       firstOrderDiscountUsed: false,
       customDiscount: null,
+      offlineSignupBonusAvailable: false,
       walletBalance: 0,
       analytics: null,
       source: null,

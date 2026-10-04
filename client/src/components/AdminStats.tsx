@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import AdminSalesLedger from "./AdminSalesLedger";
 import { Card } from "@/components/ui/card";
 import { 
   LineChart, 
@@ -105,7 +106,7 @@ export default function AdminStats({ adminFetch }: AdminStatsProps) {
     queryFn: () => adminFetch("/api/admin/stats"),
   });
 
-  if (isLoading || !stats) {
+  if (isLoading) {
     return (
       <div className="p-8 text-center text-muted-foreground">
         Загрузка статистики...
@@ -113,10 +114,13 @@ export default function AdminStats({ adminFetch }: AdminStatsProps) {
     );
   }
 
+  if (!stats) return <div className="p-6 space-y-4"><AdminSalesLedger adminFetch={adminFetch} /><p role="alert">Не удалось загрузить статистику интернет-заказов.</p></div>;
+
   const { overview } = stats;
 
   return (
     <div className="space-y-6 p-6">
+      <AdminSalesLedger adminFetch={adminFetch} />
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4">

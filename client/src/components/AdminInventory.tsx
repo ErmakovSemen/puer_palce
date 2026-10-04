@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/api-config";
+import { getLoyaltyDiscountFromSettings } from "@shared/pricing";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -104,6 +105,8 @@ export function saleLineError(lines: SaleLine[], items: Item[]): string | null {
     }
     const item = items.find((i) => i.id === Number(line.productId));
     if (!item) return "Товар не найден. Обновите страницу.";
+    if (line.pricePerGram && !validPrice(line.pricePerGram))
+      return "Проверьте цену товара: положительное число до двух знаков после запятой.";
     if (item.quantity !== null && amount > item.quantity)
       return `«${item.name}»: доступно ${item.quantity} ${units(item)}.`;
     if (seen.has(line.productId))
@@ -401,7 +404,7 @@ export function InventorySale({
 }: {
   adminPassword: string;
   buyerMode: "guest" | "customer";
-  customer?: { id: string; name: string | null; phone: string } | null;
+  customer?: { id: string; name: string | null; phone: string; xp?: number; phoneVerified?: boolean; customDiscount?: number | null; offlineSignupBonusAvailable?: boolean; firstOrderDiscountUsed?: boolean } | null;
   onBusyChange?: (busy: boolean) => void;
   onChanged?: () => void;
 }) {
@@ -416,6 +419,13 @@ export function InventorySale({
   };
   const { inventory, employee, staff, refresh } = useWarehouse(adminFetch);
   const [lines, setLines] = useState<SaleLine[]>([emptyLine()]);
+  const [saleFormat, setSaleFormat] = useState<"loose" | "teapot" | "ceremony" | "cup">("loose");
+  const [servicePrice, setServicePrice] = useState("");
+  const [customerDiscount, setCustomerDiscount] = useState("");
+  const [extraDiscount, setExtraDiscount] = useState("0");
+  const [bonusKind, setBonusKind] = useState<"gift" | "discount" | "">("");
+  const [giftProductId, setGiftProductId] = useState("");
+  const [giftQuantity, setGiftQuantity] = useState("");
   const [openProductIndex, setOpenProductIndex] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState("");
   const [showValidation, setShowValidation] = useState(false);
@@ -431,29 +441,59 @@ export function InventorySale({
   });
   const items = inventory.data || [];
   const saleLines = filledSaleLines(lines);
-  const total = lines.reduce(
+  const goodsTotal = lines.reduce(
     (sum, l) =>
       sum +
       (l.productId === newTeaValue
         ? validPrice(l.pricePerGram)
           ? priceCents(l.pricePerGram)
           : 0
-        : items.find((i) => i.id === Number(l.productId))?.price_cents || 0) *
+        : l.pricePerGram && validPrice(l.pricePerGram) ? priceCents(l.pricePerGram) : items.find((i) => i.id === Number(l.productId))?.price_cents || 0) *
         Number(l.quantity),
     0,
   );
   const anonymous = buyerMode === "guest";
   const buyer = anonymous ? null : customer;
-  const settings = useQuery<{ xpMultiplier?: number }>({
+  const bonusAvailable = !!buyer?.offlineSignupBonusAvailable && !buyer.firstOrderDiscountUsed;
+  useEffect(() => {
+    setCustomerDiscount("");
+    setBonusKind("");
+    setGiftProductId("");
+    setGiftQuantity("");
+  }, [buyer?.id]);
+  const settings = useQuery<{ xpMultiplier?: number; loyaltyLevel2MinXP?: number; loyaltyLevel2Discount?: number; loyaltyLevel3MinXP?: number; loyaltyLevel3Discount?: number; loyaltyLevel4MinXP?: number; loyaltyLevel4Discount?: number }>({
     queryKey: ["/api/settings"],
     queryFn: () => adminFetch("/api/settings"),
   });
+  const baseDiscount = bonusAvailable && bonusKind === "discount"
+    ? 20
+    : buyer?.customDiscount ?? (buyer?.phoneVerified
+      ? getLoyaltyDiscountFromSettings(buyer.xp || 0, settings.data) : 0);
+  const appliedDiscount = bonusKind === "discount" && bonusAvailable
+    ? 20 : customerDiscount === "" ? baseDiscount : Number(customerDiscount);
+  const subtotal = saleFormat === "loose" ? goodsTotal : validPrice(servicePrice) ? priceCents(servicePrice) : 0;
+  const afterCustomerDiscount = Math.round(subtotal * (100 - appliedDiscount) / 100);
+  const total = Math.round(afterCustomerDiscount * (100 - Number(extraDiscount || 0)) / 100);
+  const discountAmount = subtotal - total;
+  const giftItem = items.find((item) => item.id === Number(giftProductId));
+  const giftSoldQuantity = saleLines.filter((line) => line.productId === giftProductId).reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
   const validationError = !employee
     ? "Выберите сотрудника перед продажей."
     : !anonymous && !customer
       ? "Выберите или создайте клиента выше."
       : inventory.isError
         ? "Не удалось загрузить товары. Обновите страницу."
+        : saleFormat !== "loose" && (!validPrice(servicePrice) || servicePrice === "0")
+          ? "Укажите цену выбранного формата."
+        : !Number.isInteger(appliedDiscount) || appliedDiscount < 0 || appliedDiscount > 100 ||
+          !Number.isInteger(Number(extraDiscount)) || Number(extraDiscount) < 0 || Number(extraDiscount) > 100
+          ? "Скидки должны быть целыми процентами от 0 до 100."
+        : bonusAvailable && !bonusKind
+          ? "Выберите бонус новому клиенту: подарок или скидку."
+        : bonusKind === "gift" && (!giftProductId || !Number.isInteger(Number(giftQuantity)) || Number(giftQuantity) < 1)
+          ? "Выберите подарочный чай и укажите граммовку."
+        : bonusKind === "gift" && giftItem?.quantity !== null && giftItem?.quantity !== undefined && Number(giftQuantity) + giftSoldQuantity > giftItem.quantity
+          ? `Недостаточно чая «${giftItem.name}» для продажи и подарка.`
         : saleLineError(saleLines, items);
   const submit = useMutation({
     mutationFn: (payload: any) =>
@@ -461,6 +501,13 @@ export function InventorySale({
     onSuccess: (r) => {
       setReceipt(r);
       setLines([emptyLine()]);
+      setSaleFormat("loose");
+      setServicePrice("");
+      setCustomerDiscount("");
+      setExtraDiscount("0");
+      setBonusKind("");
+      setGiftProductId("");
+      setGiftQuantity("");
       setRequestId(crypto.randomUUID());
       setPendingPayload(null);
       setLocked(false);
@@ -500,6 +547,36 @@ export function InventorySale({
       </h3>
       {staff}
       <fieldset disabled={locked} className="space-y-3">
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Формат продажи</p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Формат продажи">
+            {([
+              ["loose", "Рассыпной чай"], ["teapot", "Чайник"],
+              ["ceremony", "Церемония"], ["cup", "Кружка с собой"],
+            ] as const).map(([format, label]) => (
+              <Button key={format} type="button" variant={saleFormat === format ? "default" : "outline"}
+                aria-pressed={saleFormat === format} onClick={() => {
+                  setSaleFormat(format);
+                  setServicePrice(format === "cup" ? "300" : format === "teapot" ? "450" : format === "ceremony" ? "850" : "");
+                  if (format !== "loose") setLines((current) => {
+                    const tea = current.filter((line) => !line.productId || line.productId === newTeaValue || items.find((item) => item.id === Number(line.productId))?.category === "tea");
+                    return tea.length ? tea : [emptyLine()];
+                  });
+                }}>{label}</Button>
+            ))}
+          </div>
+        </div>
+        {saleFormat !== "loose" && (
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="space-y-1 text-sm">Цена продажи, ₽
+              <Input aria-label="Цена продажи" inputMode="decimal" value={servicePrice}
+                onChange={(e) => setServicePrice(e.target.value)} className="w-36" />
+            </label>
+            {(saleFormat === "teapot" ? [450, 550, 650] : saleFormat === "ceremony" ? [850, 950] : [300]).map((price) => (
+              <Button key={price} type="button" size="sm" variant="outline" onClick={() => setServicePrice(String(price))}>{price} ₽</Button>
+            ))}
+          </div>
+        )}
         {inventory.isError && <p role="alert">Не удалось загрузить товары.</p>}
         {lines.map((line, index) => {
           const item = items.find((i) => i.id === Number(line.productId));
@@ -527,7 +604,7 @@ export function InventorySale({
                     <span className="truncate text-left">
                       {line.productId === newTeaValue
                         ? line.newTeaName || "Новый чай"
-                        : item?.name || "Выберите чай или посуду"}
+                        : item?.name || (saleFormat === "loose" ? "Выберите чай или посуду" : "Выберите чай")}
                     </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -535,7 +612,7 @@ export function InventorySale({
                 <PopoverContent className="w-[min(28rem,calc(100vw-2rem))] p-0" align="start">
                   <Command shouldFilter={false}>
                     <CommandInput
-                      placeholder="Найти чай или посуду"
+                      placeholder={saleFormat === "loose" ? "Найти чай или посуду" : "Найти чай"}
                       value={productSearch}
                       onValueChange={setProductSearch}
                       autoFocus
@@ -563,7 +640,7 @@ export function InventorySale({
                           <Plus className="h-4 w-4" /> Новый чай
                         </CommandItem>
                         {items.filter((i) =>
-                          i.name.toLocaleLowerCase("ru-RU").includes(
+                          (saleFormat === "loose" || i.category === "tea") && i.name.toLocaleLowerCase("ru-RU").includes(
                             productSearch.trim().toLocaleLowerCase("ru-RU"),
                           ),
                         ).map((i) => (
@@ -573,7 +650,7 @@ export function InventorySale({
                             onSelect={() => {
                               setLines((current) =>
                                 current.map((l, n) =>
-                                  n === index ? { ...l, productId: String(i.id) } : l,
+                                  n === index ? { ...l, productId: String(i.id), pricePerGram: String(i.price_cents / 100) } : l,
                                 ),
                               );
                               setOpenProductIndex(null);
@@ -644,6 +721,13 @@ export function InventorySale({
                   )
                 }
               />
+              {item && saleFormat === "loose" && (
+                <label className="col-span-3 text-xs text-muted-foreground">Цена за 1 {units(item)}, ₽
+                  <Input aria-label={`Цена за единицу ${index + 1}`} inputMode="decimal"
+                    value={line.pricePerGram || String(item.price_cents / 100)}
+                    onChange={(e) => setLines(lines.map((l, n) => n === index ? { ...l, pricePerGram: e.target.value } : l))} />
+                </label>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -689,10 +773,35 @@ export function InventorySale({
           </Button>
         )}
       </fieldset>
-      <p className="font-semibold">
-        Итого: {rub(total)}
-        {buyer && ` · ${Math.floor((total / 100) * (settings.data?.xpMultiplier ?? 1))} XP`}
-      </p>
+      {bonusAvailable && (
+        <div className="space-y-2 border-y py-3">
+          <p className="font-medium">Бонус за регистрацию: выбор клиента</p>
+          <div className="flex gap-2">
+            <Button type="button" variant={bonusKind === "gift" ? "default" : "outline"} onClick={() => setBonusKind("gift")}>Чай в подарок</Button>
+            <Button type="button" variant={bonusKind === "discount" ? "default" : "outline"} onClick={() => setBonusKind("discount")}>Скидка 20%</Button>
+          </div>
+          {bonusKind === "gift" && <div className="flex flex-wrap gap-2">
+            <select aria-label="Подарочный чай" className={selectClass} value={giftProductId} onChange={(e) => setGiftProductId(e.target.value)}>
+              <option value="">Выберите подарочный чай</option>
+              {items.filter((item) => item.category === "tea").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+            <Input aria-label="Граммы подарочного чая" type="number" min="1" step="1" placeholder="Граммы" className="w-28" value={giftQuantity} onChange={(e) => setGiftQuantity(e.target.value)} />
+          </div>}
+        </div>
+      )}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {buyer && <label className="text-sm">Скидка клиента, %
+          <Input type="number" min="0" max="100" step="1" value={bonusKind === "discount" ? "20" : customerDiscount}
+            placeholder={String(baseDiscount)} disabled={bonusKind === "discount"} onChange={(e) => setCustomerDiscount(e.target.value)} />
+        </label>}
+        <label className="text-sm">Дополнительная скидка, %
+          <Input type="number" min="0" max="100" step="1" value={extraDiscount} onChange={(e) => setExtraDiscount(e.target.value)} />
+        </label>
+      </div>
+      <div className="text-sm">
+        <p>Цена: {rub(subtotal)} · скидка: −{rub(discountAmount)}</p>
+        <p className="font-semibold">Итого: {rub(total)}{buyer && ` · ${Math.floor((total / 100) * (settings.data?.xpMultiplier ?? 1))} XP`}</p>
+      </div>
       {showValidation && validationError && (
         <p role="alert" className="text-sm text-destructive">
           {validationError}
@@ -712,6 +821,12 @@ export function InventorySale({
             requestId,
             actorId: Number(employee),
             userId: buyer?.id || null,
+            saleFormat,
+            servicePriceCents: saleFormat === "loose" ? undefined : priceCents(servicePrice),
+            customerDiscountPercent: buyer && bonusKind !== "discount" && customerDiscount !== "" ? Number(customerDiscount) : undefined,
+            extraDiscountPercent: Number(extraDiscount),
+            bonusKind: bonusAvailable ? bonusKind || null : null,
+            gift: bonusKind === "gift" ? { productId: Number(giftProductId), quantity: Number(giftQuantity) } : null,
             lines: saleLines.map((l) =>
               l.productId === newTeaValue
                 ? {
@@ -722,8 +837,8 @@ export function InventorySale({
                 : {
                     productId: Number(l.productId),
                     quantity: Number(l.quantity),
-                    priceCents: items.find((i) => i.id === Number(l.productId))!
-                      .price_cents,
+                    priceCents: saleFormat === "loose" ? priceCents(l.pricePerGram || String(items.find((i) => i.id === Number(l.productId))!.price_cents / 100)) : items.find((i) => i.id === Number(l.productId))!.price_cents,
+                    priceOverride: saleFormat === "loose" && priceCents(l.pricePerGram || String(items.find((i) => i.id === Number(l.productId))!.price_cents / 100)) !== items.find((i) => i.id === Number(l.productId))!.price_cents,
                   },
             ),
           };

@@ -12,7 +12,7 @@ test("warehouse, anonymous/customer sales, retries, rollback and cancellation", 
   const db = new PGlite();
   await db.exec(`
     CREATE TABLE products(id serial PRIMARY KEY,name text,category text,pricing_unit text,price_per_gram real,description text,tea_type text,out_of_stock boolean DEFAULT false);
-    CREATE TABLE users(id varchar PRIMARY KEY,name text,phone text,xp integer NOT NULL DEFAULT 0);
+    CREATE TABLE users(id varchar PRIMARY KEY,name text,phone text,xp integer NOT NULL DEFAULT 0,phone_verified boolean NOT NULL DEFAULT false,custom_discount integer,first_order_discount_used boolean NOT NULL DEFAULT false);
     CREATE TABLE crm_admins(id serial PRIMARY KEY,name text,is_active boolean);
     CREATE TABLE site_settings(xp_multiplier integer);
     INSERT INTO site_settings VALUES(1);
@@ -305,4 +305,92 @@ test("warehouse, anonymous/customer sales, retries, rollback and cancellation", 
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await db.close();
   }
+});
+
+test("service sale, signup gift, discount and audited correction", async () => {
+  const { registerInventory } = await import("./inventory");
+  const db = new PGlite();
+  await db.exec(`
+    CREATE TABLE products(id serial PRIMARY KEY,name text,category text,pricing_unit text,price_per_gram real,description text,tea_type text,out_of_stock boolean DEFAULT false);
+    CREATE TABLE users(id varchar PRIMARY KEY,name text,phone text,xp integer NOT NULL DEFAULT 0,phone_verified boolean NOT NULL DEFAULT false,custom_discount integer,first_order_discount_used boolean NOT NULL DEFAULT false);
+    CREATE TABLE crm_admins(id serial PRIMARY KEY,name text,is_active boolean);
+    CREATE TABLE site_settings(xp_multiplier integer);
+    INSERT INTO site_settings VALUES(1);
+    CREATE TABLE xp_transactions(id serial PRIMARY KEY,user_id varchar,amount integer,reason text,description text,created_by text);
+    INSERT INTO crm_admins VALUES(1,'Даня',true);
+    INSERT INTO users(id,name,phone,xp,phone_verified,custom_discount) VALUES('new','Новый','+79990000000',0,true,10);
+    INSERT INTO products(id,name,category,pricing_unit,price_per_gram) VALUES(1,'Пуэр','tea','gram',25),(2,'Улун','tea','gram',20);
+    CREATE FUNCTION pg_advisory_xact_lock(integer) RETURNS void LANGUAGE SQL AS 'SELECT NULL::void';
+  `);
+  const pool = {
+    query: (query: string, args?: any[]) => query.includes("CREATE TABLE") ? db.exec(query) : db.query(query, args),
+    connect: async () => ({ query: (query: string, args?: any[]) => db.query(query, args), release() {} }),
+  };
+  const app = express(); app.use(express.json());
+  await registerInventory(app, (_req, _res, next) => next(), pool);
+  await db.exec("UPDATE users SET offline_signup_bonus_available=true WHERE id='new'");
+  await db.exec("INSERT INTO inventory_stock(product_id,quantity) VALUES(1,100),(2,100)");
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const base = `http://127.0.0.1:${(server.address() as any).port}/api/admin/inventory`;
+  const call = async (path: string, method = "GET", body?: any) => {
+    const response = await fetch(base + path, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const result = await response.json();
+    assert.equal(response.status, 200, JSON.stringify(result));
+    return result;
+  };
+  try {
+    const first = await call("/sales", "POST", {
+      requestId: crypto.randomUUID(), actorId: 1, userId: "new", saleFormat: "teapot", servicePriceCents: 55000,
+      extraDiscountPercent: 5, bonusKind: "gift", gift: { productId: 2, quantity: 3 },
+      lines: [{ productId: 1, quantity: 5, priceCents: 2500 }],
+    });
+    assert.equal(first.subtotal_cents, 55000);
+    assert.equal(first.discount_percent, 10);
+    assert.equal(first.used_custom_discount, true);
+    assert.equal(first.discount_cents, 7975);
+    assert.equal(first.total_cents, 47025);
+    assert.equal(first.xp, 470);
+    assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=1")).rows[0].quantity, 95);
+    assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=2")).rows[0].quantity, 97);
+    assert.equal((await db.query("SELECT offline_signup_bonus_available FROM users WHERE id='new'")).rows[0].offline_signup_bonus_available, false);
+    assert.equal((await db.query("SELECT custom_discount FROM users WHERE id='new'")).rows[0].custom_discount, null);
+    const correctionPayload = {
+      requestId: crypto.randomUUID(), actorId: 1, userId: "new", saleFormat: "teapot", servicePriceCents: 65000,
+      extraDiscountPercent: 0, bonusKind: "discount", gift: null,
+      lines: [{ productId: 1, quantity: 6, priceCents: 2500 }],
+    };
+    const corrected = await call(`/sales/${first.id}/correct`, "POST", correctionPayload);
+    assert.equal((await call(`/sales/${first.id}/correct`, "POST", correctionPayload)).id, corrected.id);
+    assert.equal(corrected.discount_percent, 20);
+    assert.equal((await db.query("SELECT custom_discount FROM users WHERE id='new'")).rows[0].custom_discount, 10);
+    assert.equal(corrected.total_cents, 52000);
+    assert.equal(corrected.xp, 520);
+    assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=1")).rows[0].quantity, 94);
+    assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=2")).rows[0].quantity, 100);
+    assert.equal((await db.query("SELECT count(*)::int AS count FROM inventory_sale_edits")).rows[0].count, 1);
+    assert.equal((await db.query("SELECT status FROM inventory_sales WHERE id=$1", [first.id])).rows[0].status, "corrected");
+    const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+    const summary = await call(`/sales/summary?date=${date}&period=day`);
+    assert.equal(summary[0].count, 1);
+    assert.equal(summary[0].total_cents, 52000);
+    assert.equal(summary[0].bonus_discount_count, 1);
+    assert.equal((await call(`/sales/summary?date=${date}&period=week`))[0].count, 1);
+    assert.equal((await call(`/sales/summary?date=${date}&period=month`))[0].count, 1);
+    await call(`/sales/${corrected.id}/cancel`, "POST", { actorId: 1 });
+    assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=1")).rows[0].quantity, 100);
+    assert.equal((await db.query("SELECT xp FROM users WHERE id='new'")).rows[0].xp, 0);
+    assert.equal((await db.query("SELECT offline_signup_bonus_available,first_order_discount_used FROM users WHERE id='new'")).rows[0].offline_signup_bonus_available, true);
+    assert.equal((await db.query("SELECT first_order_discount_used FROM users WHERE id='new'")).rows[0].first_order_discount_used, false);
+    assert.equal((await db.query("SELECT count(*)::int AS count FROM inventory_sale_edits")).rows[0].count, 2);
+  } finally {
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await db.close();
+  }
+});
+
+test("daily report starts after 00:05 Moscow time and targets the previous day", async () => {
+  const { dueSalesReportDate } = await import("./inventory");
+  assert.equal(dueSalesReportDate(new Date("2026-10-03T21:04:00Z")), null);
+  assert.equal(dueSalesReportDate(new Date("2026-10-03T21:05:00Z")), "2026-10-03");
 });

@@ -1516,6 +1516,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: await hashPassword(password ?? randomBytes(24).toString("hex")),
       });
 
+      await db.execute(sql`UPDATE users SET offline_signup_bonus_available = true WHERE id = ${user.id}`);
+
       if (password) await storage.markPhoneVerified(user.id);
 
       console.log(

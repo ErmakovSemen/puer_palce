@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   xp: integer("xp").notNull().default(0),
   firstOrderDiscountUsed: boolean("first_order_discount_used").notNull().default(false),
   customDiscount: integer("custom_discount"), // Индивидуальная скидка в процентах (nullable)
+  offlineSignupBonusAvailable: boolean("offline_signup_bonus_available").notNull().default(false),
   walletBalance: integer("wallet_balance").notNull().default(0), // Баланс кошелька в копейках
   analytics: text("analytics"), // JSON: A/B test assignments {testId: variantId}
   source: text("source"), // Откуда пришёл пользователь: 'mono_landing:ceremony' и т.п.
