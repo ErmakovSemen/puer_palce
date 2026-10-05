@@ -17,6 +17,8 @@ const blank = () => ({
   quantity: "",
   newTeaName: "",
   pricePerGram: "",
+  saleFormat: "loose" as const,
+  servicePrice: "",
 });
 
 test("an untouched extra row does not block a sale", () => {
@@ -38,4 +40,18 @@ test("a sale without products is rejected", () => {
 test("new tea can be sold without a known balance", () => {
   const lines = [{ ...blank(), productId: "new-tea", newTeaName: "Габа", pricePerGram: "40", quantity: "5" }];
   assert.equal(saleLineError(filledSaleLines(lines), [tea]), null);
+});
+
+test("different formats and the same tea can share one sale", () => {
+  const lines = [
+    { ...blank(), productId: "1", quantity: "5", saleFormat: "teapot" as const, servicePrice: "700" },
+    { ...blank(), productId: "1", quantity: "3", saleFormat: "cup" as const, servicePrice: "300" },
+  ];
+  assert.equal(saleLineError(filledSaleLines(lines), [{ ...tea, quantity: 8 }]), null);
+  assert.match(saleLineError(filledSaleLines(lines), [{ ...tea, quantity: 7 }]) || "", /доступно 7/);
+});
+
+test("a format selected on an extra row requires a product", () => {
+  const lines = [{ ...blank(), productId: "1", quantity: "5" }, { ...blank(), saleFormat: "cup" as const, servicePrice: "300" }];
+  assert.match(saleLineError(filledSaleLines(lines), [tea]) || "", /Выберите товар/);
 });

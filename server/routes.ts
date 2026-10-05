@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { registerInventory } from "./inventory";
+import { isAdminRequest } from "./admin-auth";
 import { z } from "zod";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -218,13 +219,6 @@ function firstCsvValue(row: Record<string, string>, candidates: string[]) {
     if (value?.trim()) return value.trim();
   }
   return "";
-}
-
-// Admin authentication middleware
-function isAdminRequest(req: any) {
-  const adminPassword = process.env.ADMIN_PASSWORD || "admin123"; // Default for development
-  const providedPassword = req.headers["x-admin-password"];
-  return providedPassword === adminPassword;
 }
 
 function requireAdminAuth(req: any, res: any, next: any) {
@@ -1430,7 +1424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(usersTable)
         .where(term.kind === "name"
           ? ilike(usersTable.name, term.pattern)
-          : like(usersTable.phone, term.pattern))
+          : like(sql<string>`regexp_replace(${usersTable.phone}, '[^0-9]', '', 'g')`, term.pattern))
         .orderBy(usersTable.name, usersTable.phone)
         .limit(10);
       res.json(users);

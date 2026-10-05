@@ -6,12 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Minus, Trophy, Copy, Check, Trash2, MessageCircle, RefreshCw, CheckCircle2, XCircle, HelpCircle, UserPlus, X } from "lucide-react";
+import { Plus, Minus, Trophy, Check, Trash2, MessageCircle, RefreshCw, CheckCircle2, XCircle, HelpCircle, UserPlus } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { getApiUrl } from "@/lib/api-config";
+import { formatCustomerSearchInput, formatRussianPhoneInput } from "@/lib/admin-phone";
 import { useToast } from "@/hooks/use-toast";
 import type { User, DbOrder } from "@shared/schema";
 
@@ -405,108 +406,80 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
       <fieldset disabled={saleLocked || createUserMutation.isPending} className="space-y-6">
         <div className="space-y-2">
           <p className="text-sm font-medium">Покупатель</p>
-          <div role="group" aria-label="Тип покупателя" className="flex flex-wrap gap-2">
+          <div role="group" aria-label="Тип покупателя" className="flex flex-wrap gap-1.5">
             <Button
               type="button"
               variant={buyerMode === "guest" ? "default" : "outline"}
               aria-pressed={buyerMode === "guest"}
-              onClick={() => setBuyerMode("guest")}
+              size="sm"
+              onClick={() => { setBuyerMode("guest"); setShowCreateForm(false); }}
               data-testid="button-buyer-guest"
             >
-              Анонимный · без XP
+              Анонимный
             </Button>
             <Button
               type="button"
-              variant={buyerMode === "customer" ? "default" : "outline"}
-              aria-pressed={buyerMode === "customer"}
-              onClick={() => setBuyerMode("customer")}
+              variant={buyerMode === "customer" && !showCreateForm ? "default" : "outline"}
+              aria-pressed={buyerMode === "customer" && !showCreateForm}
+              size="sm"
+              onClick={() => { setBuyerMode("customer"); setShowCreateForm(false); }}
               data-testid="button-buyer-customer"
             >
-              Клиент · начислить XP
+              Клиент
+            </Button>
+            <Button
+              type="button"
+              variant={buyerMode === "customer" && showCreateForm ? "default" : "outline"}
+              aria-pressed={buyerMode === "customer" && showCreateForm}
+              size="sm"
+              onClick={() => {
+                setBuyerMode("customer");
+                setShowCreateForm(true);
+                setSelectedUserId(null);
+                const searchingByName = /[A-Za-zА-Яа-яЁё]/.test(searchInput);
+                setCreatePhone(searchingByName ? "" : formatRussianPhoneInput(searchInput));
+                setCreateName(searchingByName ? searchInput.trim() : "");
+              }}
+              data-testid="button-toggle-create-form"
+            >
+              <UserPlus className="mr-1.5 h-4 w-4" /> Новый покупатель
             </Button>
           </div>
         </div>
       {buyerMode === "customer" && (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap">
-          <div>
-            <CardTitle>Клиент для продажи</CardTitle>
-            {saleCustomer && (
-              <p className="mt-1 text-sm text-muted-foreground" role="status">
-                Выбран: {saleCustomer.name || saleCustomer.phone || saleCustomer.email}
-              </p>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                if (!showCreateForm) {
-                  const searchingByName = /[A-Za-zА-Яа-яЁё]/.test(searchInput);
-                  setCreatePhone(searchingByName ? "" : searchInput);
-                  setCreateName(searchingByName ? searchInput.trim() : "");
-                }
-                setShowCreateForm(!showCreateForm);
-              }}
-              data-testid="button-toggle-create-form"
-            >
-              {showCreateForm ? (
-                <X className="h-4 w-4 mr-2" />
-              ) : (
-                <UserPlus className="h-4 w-4 mr-2" />
-              )}
-              {showCreateForm ? "Отмена" : "Создать"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCopyLeaderboardLink}
-              data-testid="button-copy-leaderboard"
-            >
-              {isCopied ? (
-                <Check className="h-4 w-4 mr-2 text-green-500" />
-              ) : (
-                <Trophy className="h-4 w-4 mr-2" />
-              )}
-              {isCopied ? "Скопировано!" : "Лидерборд"}
-              {!isCopied && <Copy className="h-3 w-3 ml-1.5" />}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
+      <div className="max-w-3xl space-y-2 border-l-2 border-border pl-3">
           {showCreateForm && (
-            <div className="mb-6 p-4 rounded-md border bg-muted/30 space-y-3">
-              <p className="text-sm font-medium">Новый пользователь</p>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
                 <Input
                   type="tel"
+                  inputMode="tel"
                   autoComplete="tel"
+                  aria-label="Телефон нового покупателя"
                   placeholder="Телефон (+7...)"
                   value={createPhone}
-                  onChange={(e) => setCreatePhone(e.target.value)}
+                  onChange={(e) => setCreatePhone(formatRussianPhoneInput(e.target.value))}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateUser()}
                   data-testid="input-create-phone"
                 />
                 <Input
-                  placeholder="Имя клиента (необязательно)"
+                  aria-label="Имя нового покупателя"
+                  placeholder="Имя (необязательно)"
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateUser()}
                   data-testid="input-create-name"
                 />
+                <Button type="button" onClick={handleCreateUser} disabled={createUserMutation.isPending} data-testid="button-create-user-submit">
+                  {createUserMutation.isPending ? "Создаём..." : "Создать"}
+                </Button>
               </div>
-              <Button
-                onClick={handleCreateUser}
-                disabled={createUserMutation.isPending}
-                data-testid="button-create-user-submit"
-              >
-                {createUserMutation.isPending ? "Создание..." : "Создать клиента"}
-              </Button>
             </div>
           )}
+          {!showCreateForm && <>
+          {saleCustomer && <p className="text-sm text-muted-foreground" role="status">Выбран: {saleCustomer.name || saleCustomer.phone || saleCustomer.email} · {saleCustomer.phone}</p>}
           <div
-            className="relative mb-4"
+            className="relative"
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget)) {
                 setSuggestionsOpen(false);
@@ -516,12 +489,13 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
           >
             <Input
               type="search"
+              inputMode="search"
               autoComplete="off"
               placeholder="Имя или телефон"
               value={searchInput}
               onFocus={() => setSuggestionsOpen(true)}
               onChange={(e) => {
-                setSearchInput(e.target.value);
+                setSearchInput(formatCustomerSearchInput(e.target.value));
                 setSelectedUserId(null);
                 setSuggestionsOpen(true);
                 setActiveSuggestion(-1);
@@ -581,14 +555,22 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
             )}
           </div>
           
-          <Button 
+          <details className="text-sm">
+            <summary className="cursor-pointer text-muted-foreground">Последние клиенты и ссылки</summary>
+          <div className="mt-2 flex flex-wrap gap-2">
+          <Button
             variant="outline" 
-            className="h-auto w-full whitespace-normal py-2 sm:w-auto"
+            size="sm"
             onClick={() => setShowRecentUsers(!showRecentUsers)}
             data-testid="button-toggle-recent-users"
           >
             {showRecentUsers ? 'Скрыть последних пользователей' : 'Показать последних 10 пользователей'}
           </Button>
+          <Button variant="outline" size="sm" onClick={handleCopyLeaderboardLink} data-testid="button-copy-leaderboard">
+            {isCopied ? <Check className="mr-1 h-4 w-4" /> : <Trophy className="mr-1 h-4 w-4" />}
+            {isCopied ? "Скопировано" : "Лидерборд"}
+          </Button>
+          </div>
           
           {showRecentUsers && (
             <div className="mt-4">
@@ -638,8 +620,9 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+          </details>
+          </>}
+      </div>
       )}
       </fieldset>
 

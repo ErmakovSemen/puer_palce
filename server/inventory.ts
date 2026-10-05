@@ -51,11 +51,16 @@ CREATE INDEX IF NOT EXISTS inventory_movements_product_idx ON inventory_movement
 
 const actor = z.number().int().positive();
 const quantity = z.number().int().min(0).max(10000000);
+const saleFormat = z.enum(["loose", "teapot", "ceremony", "cup"]);
+const lineFormat = {
+  saleFormat: saleFormat.optional(),
+  servicePriceCents: z.number().int().min(0).max(10000000).optional(),
+};
 const saleSchema = z.object({
   requestId: z.string().uuid(),
   actorId: actor,
   userId: z.string().min(1).nullable(),
-  saleFormat: z.enum(["loose", "teapot", "ceremony", "cup"]).default("loose"),
+  saleFormat: saleFormat.default("loose"),
   servicePriceCents: z.number().int().min(1).max(10000000).optional(),
   extraDiscountPercent: z.number().int().min(0).max(100).default(0),
   customerDiscountPercent: z.number().int().min(0).max(100).optional(),
@@ -70,6 +75,7 @@ const saleSchema = z.object({
           quantity: quantity.min(1),
           priceCents: z.number().int().min(0).max(10000000),
           priceOverride: z.boolean().optional(),
+          ...lineFormat,
         }),
         z.object({
           newTeaName: z
@@ -80,6 +86,7 @@ const saleSchema = z.object({
             .transform((name) => name.replace(/\s+/g, " ")),
           quantity: quantity.min(1),
           priceCents: z.number().int().min(1).max(10000000),
+          ...lineFormat,
         }),
       ]),
     )
@@ -146,8 +153,17 @@ export async function createInventorySale(input: unknown, connectionPool: any = 
 }
 
 async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client: any) {
-  if (data.saleFormat !== "loose" && data.servicePriceCents === undefined)
+  const perLinePricing = data.lines.some((line) => line.saleFormat !== undefined);
+  if (perLinePricing && data.lines.some((line) => !line.saleFormat ||
+    (line.saleFormat !== "loose" && line.servicePriceCents === undefined)))
+    throw new InventoryError(400, "Укажите формат и цену каждой позиции");
+  if (!perLinePricing && data.saleFormat !== "loose" && data.servicePriceCents === undefined)
     throw new InventoryError(400, "Укажите цену формата продажи");
+  if (!perLinePricing) {
+    const ids = data.lines.filter((line) => "productId" in line).map((line) => line.productId);
+    if (new Set(ids).size !== ids.length)
+      throw new InventoryError(400, "Объедините одинаковые позиции");
+  }
   if (data.bonusKind && !data.userId)
     throw new InventoryError(400, "Бонус доступен только новому клиенту");
   if (!data.userId && data.customerDiscountPercent)
@@ -156,13 +172,6 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
     throw new InventoryError(400, "Выберите подарочный чай и граммовку");
   if (data.bonusKind !== "gift" && data.gift)
     throw new InventoryError(400, "Подарок не выбран");
-  const existingIds = data.lines
-    .filter(
-      (l): l is Extract<typeof l, { productId: number }> => "productId" in l,
-    )
-    .map((l) => l.productId);
-  if (new Set(existingIds).size !== existingIds.length)
-    throw new InventoryError(400, "Объедините повторяющиеся позиции");
   const newNames = data.lines
     .filter(
       (l): l is Extract<typeof l, { newTeaName: string }> => "newTeaName" in l,
@@ -208,8 +217,14 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
     if (data.bonusKind && (!customer?.offline_signup_bonus_available || customer.first_order_discount_used))
       throw new InventoryError(409, "Бонус за регистрацию уже использован или недоступен");
     const lines = [];
-    let total = 0;
+    let goodsTotal = 0;
+    let pricedTotal = 0;
+    const reserved = new Map<number, number>();
     for (const line of data.lines) {
+      const format = line.saleFormat ?? data.saleFormat;
+      const lineCharge = perLinePricing && format !== "loose"
+        ? line.servicePriceCents!
+        : line.priceCents * line.quantity;
       if ("newTeaName" in line) {
         await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
           `inventory-tea:${line.newTeaName.toLocaleLowerCase("ru-RU")}`,
@@ -237,7 +252,8 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
           "INSERT INTO inventory_stock(product_id,quantity) VALUES($1,NULL)",
           [created.id],
         );
-        total += line.priceCents * line.quantity;
+        goodsTotal += line.priceCents * line.quantity;
+        pricedTotal += lineCharge;
         lines.push({
           productId: created.id,
           quantity: line.quantity,
@@ -245,6 +261,9 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
           name: line.newTeaName,
           unit: "г",
           balance: null,
+          saleFormat: format,
+          servicePriceCents: format === "loose" ? null : line.servicePriceCents ?? data.servicePriceCents ?? null,
+          lineTotalCents: perLinePricing ? lineCharge : null,
         });
         continue;
       }
@@ -254,7 +273,7 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
         ])
       ).rows[0];
       if (!product) throw new InventoryError(404, "Товар не найден");
-      if (data.saleFormat !== "loose" && product.category !== "tea")
+      if (format !== "loose" && product.category !== "tea")
         throw new InventoryError(400, "Для этого формата выберите чай");
       const price = Math.round(Number(product.price_per_gram) * 100);
       if (price !== line.priceCents && !line.priceOverride)
@@ -272,25 +291,34 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
           [line.productId],
         )
       ).rows[0];
-      if (stock.quantity !== null && stock.quantity < line.quantity)
+      const previouslyReserved = reserved.get(line.productId) || 0;
+      if (stock.quantity !== null && stock.quantity < line.quantity + previouslyReserved)
         throw new InventoryError(
           409,
-          `Недостаточно остатка «${product.name}»: ${stock.quantity}`,
+          `Недостаточно остатка «${product.name}»: ${stock.quantity - previouslyReserved}`,
         );
-      total += line.priceCents * line.quantity;
+      reserved.set(line.productId, previouslyReserved + line.quantity);
+      goodsTotal += line.priceCents * line.quantity;
+      pricedTotal += lineCharge;
       lines.push({
         ...line,
         name: product.name,
         unit: product.pricing_unit === "piece" ? "шт" : "г",
         balance:
-          stock.quantity === null ? null : stock.quantity - line.quantity,
+          stock.quantity === null ? null : stock.quantity - previouslyReserved - line.quantity,
+        saleFormat: format,
+        servicePriceCents: format === "loose" ? null : line.servicePriceCents ?? data.servicePriceCents ?? null,
+        lineTotalCents: perLinePricing ? lineCharge : null,
       });
     }
-    if (!Number.isSafeInteger(total) || total > 2000000000)
+    if (!Number.isSafeInteger(goodsTotal) || !Number.isSafeInteger(pricedTotal) ||
+      goodsTotal > 2000000000 || pricedTotal > 2000000000)
       throw new InventoryError(400, "Слишком большая сумма продажи");
     const settings = (await client.query("SELECT * FROM site_settings LIMIT 1")).rows[0] || {};
     const multiplier = Number(settings.xp_multiplier ?? 1);
-    const subtotal = data.saleFormat === "loose" ? total : data.servicePriceCents!;
+    const subtotal = perLinePricing ? pricedTotal : data.saleFormat === "loose" ? goodsTotal : data.servicePriceCents!;
+    const formats = new Set(lines.map((line) => line.saleFormat));
+    const receiptFormat = formats.size === 1 ? lines[0].saleFormat : "mixed";
     const loyalty = customer?.phone_verified
       ? getLoyaltyDiscountFromSettings(Number(customer.xp), {
           loyaltyLevel2MinXP: settings.loyalty_level2_min_xp,
@@ -336,7 +364,7 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
           JSON.stringify(lines),
           finalTotal,
           xp,
-          data.saleFormat,
+          receiptFormat,
           subtotal,
           discountCents,
           discountPercent,
@@ -454,7 +482,7 @@ async function sendDailySalesReport(connectionPool: any) {
   const discounts = rows.reduce((sum: number, row: any) => sum + row.discounts, 0);
   const gifts = rows.reduce((sum: number, row: any) => sum + row.gift_count, 0);
   const bonusDiscounts = rows.reduce((sum: number, row: any) => sum + row.bonus_discount_count, 0);
-  const labels: Record<string, string> = { loose: "Рассыпной", teapot: "Чайник", ceremony: "Церемония", cup: "Кружка" };
+  const labels: Record<string, string> = { loose: "Рассыпной", teapot: "Чайник", ceremony: "Церемония", cup: "Кружка", mixed: "Смешанный чек" };
   const message = `Продажи чая за ${date}\nПродаж: ${count}\nВыручка: ${money(total)}\nСкидки: ${money(discounts)}\nБонусы новым клиентам: подарки ${gifts}, скидки ${bonusDiscounts}\n` +
     rows.map((row: any) => `${labels[row.sale_format] || row.sale_format}: ${row.count} · ${money(row.total)}`).join("\n");
   await inventoryTransaction(async (client) => {
@@ -511,7 +539,7 @@ export async function registerInventory(
       async () =>
         (
           await pool.query(
-            "SELECT p.id,p.name,p.category,p.pricing_unit AS unit,ROUND((p.price_per_gram*100)::numeric)::integer AS price_cents,CASE WHEN s.product_id IS NULL AND p.category='tea' THEN NULL WHEN s.product_id IS NULL THEN 0 ELSE s.quantity END AS quantity,COALESCE(s.revision,0) AS revision FROM products p LEFT JOIN inventory_stock s ON s.product_id=p.id ORDER BY p.name",
+            "SELECT p.id,p.name,p.category,p.tea_type,p.pricing_unit AS unit,ROUND((p.price_per_gram*100)::numeric)::integer AS price_cents,CASE WHEN s.product_id IS NULL AND p.category='tea' THEN NULL WHEN s.product_id IS NULL THEN 0 ELSE s.quantity END AS quantity,COALESCE(s.revision,0) AS revision FROM products p LEFT JOIN inventory_stock s ON s.product_id=p.id ORDER BY p.name",
           )
         ).rows,
     ),

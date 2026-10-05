@@ -20,6 +20,7 @@ test("warehouse, anonymous/customer sales, retries, rollback and cancellation", 
     INSERT INTO crm_admins VALUES(1,'Test admin',true);
     INSERT INTO users VALUES('customer','Test customer','000',10);
     INSERT INTO products(id,name,category,pricing_unit,price_per_gram) VALUES(1,'Tea','tea','gram',5.25),(2,'Cup','teaware','piece',300),(3,'Uncounted tea','tea','gram',6.5);
+    UPDATE products SET tea_type='Шу Пуэр' WHERE id=1;
     SELECT setval(pg_get_serial_sequence('products','id'),3);
     -- PGlite is single-connection: this suite tests SQL/rollback, not PostgreSQL lock concurrency.
     CREATE FUNCTION pg_advisory_xact_lock(integer) RETURNS void LANGUAGE SQL AS 'SELECT NULL::void';
@@ -59,6 +60,7 @@ test("warehouse, anonymous/customer sales, retries, rollback and cancellation", 
   const scalar = async (sql: string) =>
     Object.values((await db.query(sql)).rows[0] as any)[0];
   try {
+    assert.equal((await call("/")).find((item: any) => item.id === 1).tea_type, "Шу Пуэр");
     await call("/1", "PATCH", {
       actorId: 1,
       revision: 0,
@@ -383,6 +385,22 @@ test("service sale, signup gift, discount and audited correction", async () => {
     assert.equal((await db.query("SELECT offline_signup_bonus_available,first_order_discount_used FROM users WHERE id='new'")).rows[0].offline_signup_bonus_available, true);
     assert.equal((await db.query("SELECT first_order_discount_used FROM users WHERE id='new'")).rows[0].first_order_discount_used, false);
     assert.equal((await db.query("SELECT count(*)::int AS count FROM inventory_sale_edits")).rows[0].count, 2);
+
+    const mixed = await call("/sales", "POST", {
+      requestId: crypto.randomUUID(), actorId: 1, userId: null,
+      lines: [
+        { productId: 1, quantity: 5, priceCents: 2500, saleFormat: "teapot", servicePriceCents: 70000 },
+        { productId: 1, quantity: 3, priceCents: 2500, saleFormat: "cup", servicePriceCents: 30000 },
+      ],
+    });
+    assert.equal(mixed.sale_format, "mixed");
+    assert.equal(mixed.subtotal_cents, 100000);
+    assert.equal(mixed.total_cents, 100000);
+    assert.equal(mixed.xp, 0);
+    assert.deepEqual(mixed.lines.map((line: any) => line.balance), [95, 92]);
+    assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=1")).rows[0].quantity, 92);
+    await call(`/sales/${mixed.id}/cancel`, "POST", { actorId: 1 });
+    assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=1")).rows[0].quantity, 100);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await db.close();

@@ -1,6 +1,7 @@
 import { type User, type InsertUser, type QuizConfig, type Product, type InsertProduct, type Settings, type UpdateSettings, type DbOrder, type TeaType, type InsertTeaType, type CartItem as DbCartItem, type InsertCartItem, type SmsVerification, type SavedAddress, type InsertSavedAddress, type XpTransaction, type InsertXpTransaction, type TvSlide, type InsertTvSlide, type UpdateTvSlide, type Experiment, type InsertExperiment, type UpdateExperiment, type AbEvent, type InsertAbEvent, type DeviceUserMapping, type InsertDeviceUserMapping, type Media, type InsertMedia, type UpdateMedia } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { normalizePhone } from "./utils";
+import { phoneSearchDigits } from "./user-search";
 
 // modify the interface with any CRUD methods
 // you might need
@@ -220,13 +221,11 @@ export class MemStorage {
   }
 
   async searchUserByPhone(phone: string): Promise<User | undefined> {
-    // Extract only digits for flexible search (supports partial phone numbers)
-    const digitsOnly = phone.replace(/\D/g, '');
-    // Require at least 3 digits to prevent false positives
-    if (digitsOnly.length < 3) return undefined;
+    const digitsOnly = phoneSearchDigits(phone);
+    if (phone.replace(/\D/g, '').length < 3) return undefined;
     
     return Array.from(this.users.values()).find(
-      (user) => user.phone && user.phone.includes(digitsOnly),
+      (user) => user.phone && user.phone.replace(/\D/g, '').includes(digitsOnly),
     );
   }
 
@@ -784,13 +783,11 @@ export class DbStorage implements IStorage {
   }
 
   async searchUserByPhone(phone: string): Promise<User | undefined> {
-    const { like } = await import("drizzle-orm");
-    // Extract only digits for flexible search (supports partial phone numbers)
-    const digitsOnly = phone.replace(/\D/g, '');
-    // Require at least 3 digits to prevent false positives
-    if (digitsOnly.length < 3) return undefined;
+    const { like, sql } = await import("drizzle-orm");
+    const digitsOnly = phoneSearchDigits(phone);
+    if (phone.replace(/\D/g, '').length < 3) return undefined;
     
-    const [user] = await db.select().from(usersTable).where(like(usersTable.phone, `%${digitsOnly}%`));
+    const [user] = await db.select().from(usersTable).where(like(sql<string>`regexp_replace(${usersTable.phone}, '[^0-9]', '', 'g')`, `%${digitsOnly}%`));
     return user;
   }
 

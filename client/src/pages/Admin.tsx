@@ -42,9 +42,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+const localAdmin = import.meta.env.DEV &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+
 export default function Admin() {
   const [adminPassword, setAdminPassword] = useState<string | null>(
-    sessionStorage.getItem("adminPassword")
+    localAdmin ? "local-dev" : sessionStorage.getItem("adminPassword")
   );
   const [passwordInput, setPasswordInput] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -93,6 +96,7 @@ export default function Admin() {
   };
 
   const handleLogout = () => {
+    if (localAdmin) return;
     sessionStorage.removeItem("adminPassword");
     setAdminPassword(null);
   };
@@ -110,9 +114,8 @@ export default function Admin() {
     });
 
     if (response.status === 401) {
-      // Invalid password
-      handleLogout();
-      throw new Error("Неверный пароль");
+      if (!localAdmin) handleLogout();
+      throw new Error(localAdmin ? "Локальный API недоступен без авторизации" : "Неверный пароль");
     }
 
     if (!response.ok) {
@@ -389,7 +392,7 @@ export default function Admin() {
                 {settings?.designMode === "minimalist" ? "Классический" : "Минималистичный"}
               </span>
             </Button>
-            <Button
+            {!localAdmin && <Button
               variant="outline"
               onClick={handleLogout}
               data-testid="button-admin-logout"
@@ -397,7 +400,7 @@ export default function Admin() {
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline ml-2">Выйти</span>
-            </Button>
+            </Button>}
           </div>
         </div>
 

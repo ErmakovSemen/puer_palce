@@ -20,6 +20,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/api-config";
 import { getLoyaltyDiscountFromSettings } from "@shared/pricing";
+import { getTeaTypeColor } from "@/lib/tea-colors";
+import { useTeaTypes } from "@/hooks/use-tea-types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -33,6 +35,7 @@ type Item = {
   id: number;
   name: string;
   category: string;
+  tea_type?: string | null;
   unit: string;
   price_cents: number;
   quantity: number | null;
@@ -54,12 +57,16 @@ type SaleLine = {
   quantity: string;
   newTeaName: string;
   pricePerGram: string;
+  saleFormat: "loose" | "teapot" | "ceremony" | "cup";
+  servicePrice: string;
 };
 const emptyLine = (): SaleLine => ({
   productId: "",
   quantity: "",
   newTeaName: "",
   pricePerGram: "",
+  saleFormat: "loose",
+  servicePrice: "",
 });
 const newTeaValue = "new-tea";
 const priceCents = (value: string) =>
@@ -73,14 +80,17 @@ export const filledSaleLines = (lines: SaleLine[]) =>
   lines.filter((line) =>
     [line.productId, line.quantity, line.newTeaName, line.pricePerGram].some(
       (value) => value.trim() !== "",
-    ),
+    ) || line.saleFormat !== "loose",
   );
 
 export function saleLineError(lines: SaleLine[], items: Item[]): string | null {
   if (!lines.length) return "Добавьте чай или посуду.";
-  const seen = new Set<string>();
+  const newNames = new Set<string>();
+  const reserved = new Map<string, number>();
   for (const line of lines) {
     if (!line.productId) return "Выберите товар или «Новый чай».";
+    if (line.saleFormat !== "loose" && !validPrice(line.servicePrice))
+      return "Укажите цену выбранного формата.";
     const amount = Number(line.quantity);
     if (!Number.isInteger(amount) || amount < 1 || amount > 10000000)
       return "Укажите количество целым числом больше нуля.";
@@ -99,19 +109,20 @@ export function saleLineError(lines: SaleLine[], items: Item[]): string | null {
       )
         return "Этот чай уже есть в списке. Выберите существующую позицию.";
       const key = `new:${name.toLocaleLowerCase("ru-RU")}`;
-      if (seen.has(key)) return "Объедините одинаковые позиции в одну строку.";
-      seen.add(key);
+      if (newNames.has(key)) return "Новый чай с таким названием уже есть в чеке.";
+      newNames.add(key);
       continue;
     }
     const item = items.find((i) => i.id === Number(line.productId));
     if (!item) return "Товар не найден. Обновите страницу.";
+    if (line.saleFormat !== "loose" && item.category !== "tea")
+      return "Для чайника, церемонии или кружки выберите чай.";
     if (line.pricePerGram && !validPrice(line.pricePerGram))
       return "Проверьте цену товара: положительное число до двух знаков после запятой.";
-    if (item.quantity !== null && amount > item.quantity)
-      return `«${item.name}»: доступно ${item.quantity} ${units(item)}.`;
-    if (seen.has(line.productId))
-      return "Объедините одинаковые позиции в одну строку.";
-    seen.add(line.productId);
+    const used = (reserved.get(line.productId) || 0) + amount;
+    if (item.quantity !== null && used > item.quantity)
+      return `«${item.name}»: доступно ${item.quantity} ${units(item)} на все позиции.`;
+    reserved.set(line.productId, used);
   }
   return null;
 }
@@ -418,16 +429,17 @@ export function InventorySale({
     return body;
   };
   const { inventory, employee, staff, refresh } = useWarehouse(adminFetch);
+  const { data: teaTypePalette } = useTeaTypes();
   const [lines, setLines] = useState<SaleLine[]>([emptyLine()]);
-  const [saleFormat, setSaleFormat] = useState<"loose" | "teapot" | "ceremony" | "cup">("loose");
-  const [servicePrice, setServicePrice] = useState("");
   const [customerDiscount, setCustomerDiscount] = useState("");
   const [extraDiscount, setExtraDiscount] = useState("0");
   const [bonusKind, setBonusKind] = useState<"gift" | "discount" | "">("");
   const [giftProductId, setGiftProductId] = useState("");
   const [giftQuantity, setGiftQuantity] = useState("");
   const [openProductIndex, setOpenProductIndex] = useState<number | null>(null);
+  const [openPriceIndex, setOpenPriceIndex] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState("");
+  const [teaTypeFilter, setTeaTypeFilter] = useState<string | null>(null);
   const [showValidation, setShowValidation] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID()),
     [receipt, setReceipt] = useState<any>(null),
@@ -440,16 +452,18 @@ export function InventorySale({
     queryFn: () => adminFetch("/api/admin/inventory/sales"),
   });
   const items = inventory.data || [];
+  const teaTypes = Array.from(new Set(items.filter((item) => item.category === "tea" && item.tea_type).map((item) => item.tea_type!))).sort((a, b) => a.localeCompare(b, "ru-RU"));
+  const teaTypeColor = (type: string) => teaTypePalette?.find((entry) => entry.name === type)?.backgroundColor || getTeaTypeColor(type);
   const saleLines = filledSaleLines(lines);
-  const goodsTotal = lines.reduce(
+  const subtotal = saleLines.reduce(
     (sum, l) =>
-      sum +
+      sum + (!l.productId || !Number(l.quantity) ? 0 : l.saleFormat !== "loose" ? validPrice(l.servicePrice) ? priceCents(l.servicePrice) : 0 :
       (l.productId === newTeaValue
         ? validPrice(l.pricePerGram)
           ? priceCents(l.pricePerGram)
           : 0
         : l.pricePerGram && validPrice(l.pricePerGram) ? priceCents(l.pricePerGram) : items.find((i) => i.id === Number(l.productId))?.price_cents || 0) *
-        Number(l.quantity),
+        Number(l.quantity)),
     0,
   );
   const anonymous = buyerMode === "guest";
@@ -471,7 +485,6 @@ export function InventorySale({
       ? getLoyaltyDiscountFromSettings(buyer.xp || 0, settings.data) : 0);
   const appliedDiscount = bonusKind === "discount" && bonusAvailable
     ? 20 : customerDiscount === "" ? baseDiscount : Number(customerDiscount);
-  const subtotal = saleFormat === "loose" ? goodsTotal : validPrice(servicePrice) ? priceCents(servicePrice) : 0;
   const afterCustomerDiscount = Math.round(subtotal * (100 - appliedDiscount) / 100);
   const total = Math.round(afterCustomerDiscount * (100 - Number(extraDiscount || 0)) / 100);
   const discountAmount = subtotal - total;
@@ -483,8 +496,6 @@ export function InventorySale({
       ? "Выберите или создайте клиента выше."
       : inventory.isError
         ? "Не удалось загрузить товары. Обновите страницу."
-        : saleFormat !== "loose" && (!validPrice(servicePrice) || servicePrice === "0")
-          ? "Укажите цену выбранного формата."
         : !Number.isInteger(appliedDiscount) || appliedDiscount < 0 || appliedDiscount > 100 ||
           !Number.isInteger(Number(extraDiscount)) || Number(extraDiscount) < 0 || Number(extraDiscount) > 100
           ? "Скидки должны быть целыми процентами от 0 до 100."
@@ -501,8 +512,6 @@ export function InventorySale({
     onSuccess: (r) => {
       setReceipt(r);
       setLines([emptyLine()]);
-      setSaleFormat("loose");
-      setServicePrice("");
       setCustomerDiscount("");
       setExtraDiscount("0");
       setBonusKind("");
@@ -541,55 +550,50 @@ export function InventorySale({
     onError: (e: Error) => toast({ title: e.message, variant: "destructive" }),
   });
   return (
-    <section className="space-y-4 border-y py-5">
-      <h3 className="text-xl font-semibold">
-        {anonymous ? "Продажа" : "Продажа и начисление XP"}
-      </h3>
-      {staff}
-      <fieldset disabled={locked} className="space-y-3">
-        <div className="space-y-2">
-          <p className="text-sm font-medium">Формат продажи</p>
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Формат продажи">
-            {([
-              ["loose", "Рассыпной чай"], ["teapot", "Чайник"],
-              ["ceremony", "Церемония"], ["cup", "Кружка с собой"],
-            ] as const).map(([format, label]) => (
-              <Button key={format} type="button" variant={saleFormat === format ? "default" : "outline"}
-                aria-pressed={saleFormat === format} onClick={() => {
-                  setSaleFormat(format);
-                  setServicePrice(format === "cup" ? "300" : format === "teapot" ? "450" : format === "ceremony" ? "850" : "");
-                  if (format !== "loose") setLines((current) => {
-                    const tea = current.filter((line) => !line.productId || line.productId === newTeaValue || items.find((item) => item.id === Number(line.productId))?.category === "tea");
-                    return tea.length ? tea : [emptyLine()];
-                  });
-                }}>{label}</Button>
-            ))}
-          </div>
-        </div>
-        {saleFormat !== "loose" && (
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="space-y-1 text-sm">Цена продажи, ₽
-              <Input aria-label="Цена продажи" inputMode="decimal" value={servicePrice}
-                onChange={(e) => setServicePrice(e.target.value)} className="w-36" />
-            </label>
-            {(saleFormat === "teapot" ? [450, 550, 650] : saleFormat === "ceremony" ? [850, 950] : [300]).map((price) => (
-              <Button key={price} type="button" size="sm" variant="outline" onClick={() => setServicePrice(String(price))}>{price} ₽</Button>
-            ))}
-          </div>
-        )}
-        {inventory.isError && <p role="alert">Не удалось загрузить товары.</p>}
+    <section className="max-w-4xl space-y-3 border-t py-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-lg font-semibold">Продажа{!anonymous && " · XP"}</h3>
+        {staff}
+      </div>
+      <fieldset disabled={locked} className="space-y-2">
+        {inventory.isError && <p role="alert" className="flex items-center gap-2 text-sm text-destructive">Не удалось загрузить товары. <Button type="button" size="sm" variant="outline" onClick={() => inventory.refetch()}>Повторить</Button></p>}
         {lines.map((line, index) => {
           const item = items.find((i) => i.id === Number(line.productId));
+          const matches = items.filter((candidate) =>
+            (line.saleFormat === "loose" || candidate.category === "tea") &&
+            (!teaTypeFilter || (candidate.category === "tea" && candidate.tea_type === teaTypeFilter)) &&
+            candidate.name.toLocaleLowerCase("ru-RU").includes(productSearch.trim().toLocaleLowerCase("ru-RU")));
           return (
             <div
               key={index}
-              className="grid grid-cols-[minmax(0,1fr)_6rem_2.5rem] gap-2"
+              className="flex flex-wrap items-start gap-2 border-b border-border/70 py-2 last:border-b-0"
             >
+              <select
+                aria-label={`Формат позиции ${index + 1}`}
+                className={`${selectClass} w-36 shrink-0`}
+                value={line.saleFormat}
+                onChange={(e) => {
+                  const format = e.target.value as SaleLine["saleFormat"];
+                  setLines(lines.map((current, n) => n === index ? {
+                    ...current,
+                    saleFormat: format,
+                    servicePrice: format === "cup" ? "300" : format === "teapot" ? "450" : format === "ceremony" ? "850" : "",
+                    productId: format !== "loose" && item?.category !== "tea" ? "" : current.productId,
+                  } : current));
+                }}
+              >
+                <option value="loose">Рассыпной</option>
+                <option value="teapot">Чайник</option>
+                <option value="ceremony">Церемония</option>
+                <option value="cup">Кружка с собой</option>
+              </select>
+              <div className="min-w-0 flex-[1_1_14rem]">
               <Popover
                 open={openProductIndex === index}
                 onOpenChange={(open) => {
                   setOpenProductIndex(open ? index : null);
                   setProductSearch("");
+                  setTeaTypeFilter(null);
                 }}
               >
                 <PopoverTrigger asChild>
@@ -599,12 +603,13 @@ export function InventorySale({
                     role="combobox"
                     aria-label={`Товар ${index + 1}`}
                     aria-expanded={openProductIndex === index}
-                    className="col-span-3 h-10 min-w-0 justify-between font-normal sm:col-span-1"
+                    title={item ? `${item.name} · ${item.quantity === null ? "остаток не указан" : `${item.quantity} ${units(item)} в наличии`}` : undefined}
+                    className="h-10 w-full min-w-0 justify-between font-normal"
                   >
                     <span className="truncate text-left">
                       {line.productId === newTeaValue
                         ? line.newTeaName || "Новый чай"
-                        : item?.name || (saleFormat === "loose" ? "Выберите чай или посуду" : "Выберите чай")}
+                        : item?.name || (line.saleFormat === "loose" ? "Выберите товар" : "Выберите чай")}
                     </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
@@ -612,67 +617,117 @@ export function InventorySale({
                 <PopoverContent className="w-[min(28rem,calc(100vw-2rem))] p-0" align="start">
                   <Command shouldFilter={false}>
                     <CommandInput
-                      placeholder={saleFormat === "loose" ? "Найти чай или посуду" : "Найти чай"}
+                      placeholder={line.saleFormat === "loose" ? "Найти чай или посуду" : "Найти чай"}
                       value={productSearch}
                       onValueChange={setProductSearch}
                       autoFocus
                     />
-                    <CommandList>
+                    {!!teaTypes.length && <div role="group" aria-label="Фильтр по типу чая" className="flex flex-wrap items-center gap-1.5 border-b px-3 py-2">
+                      <button type="button" aria-label="Все типы чая" title="Все типы чая" aria-pressed={!teaTypeFilter}
+                        className={`h-5 rounded-full border px-1.5 text-xs ${!teaTypeFilter ? "border-foreground font-semibold" : "border-border text-muted-foreground"}`}
+                        onClick={() => setTeaTypeFilter(null)}>Все</button>
+                      {teaTypes.map((type) => <button key={type} type="button" aria-label={`Тип: ${type}`} title={type} aria-pressed={teaTypeFilter === type}
+                        className={`h-5 w-5 rounded-full border-2 ${teaTypeFilter === type ? "border-foreground ring-2 ring-offset-1" : "border-transparent"}`}
+                        style={{ backgroundColor: teaTypeColor(type) }}
+                        onClick={() => setTeaTypeFilter(teaTypeFilter === type ? null : type)} />)}
+                    </div>}
+                    <CommandList className="max-h-[min(20rem,50vh)] overflow-y-auto">
+                      {inventory.isLoading && <p className="px-3 py-3 text-sm text-muted-foreground">Загружаем товары…</p>}
+                      {inventory.isError && <div className="flex items-center justify-between gap-2 px-3 py-3 text-sm text-destructive">
+                        <span>Товары недоступны</span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => inventory.refetch()}>Повторить</Button>
+                      </div>}
                       <CommandGroup>
-                        <CommandItem
-                          value="new-tea"
-                          onSelect={() => {
-                            setLines((current) =>
-                              current.map((l, n) =>
-                                n === index
-                                  ? {
-                                      ...l,
-                                      productId: newTeaValue,
-                                      newTeaName: productSearch.trim() || l.newTeaName,
-                                    }
-                                  : l,
-                              ),
-                            );
-                            setOpenProductIndex(null);
-                            setProductSearch("");
-                          }}
-                        >
-                          <Plus className="h-4 w-4" /> Новый чай
-                        </CommandItem>
-                        {items.filter((i) =>
-                          (saleFormat === "loose" || i.category === "tea") && i.name.toLocaleLowerCase("ru-RU").includes(
-                            productSearch.trim().toLocaleLowerCase("ru-RU"),
-                          ),
-                        ).map((i) => (
+                        {!inventory.isLoading && !inventory.isError && !matches.length && <p className="px-2 py-3 text-sm text-muted-foreground">Подходящих товаров нет</p>}
+                        {!inventory.isLoading && !inventory.isError && matches.map((i) => (
                           <CommandItem
                             key={i.id}
                             value={`${i.name} ${i.category} ${i.id}`}
+                            title={i.name}
                             onSelect={() => {
                               setLines((current) =>
                                 current.map((l, n) =>
-                                  n === index ? { ...l, productId: String(i.id), pricePerGram: String(i.price_cents / 100) } : l,
+                                  n === index ? { ...l, productId: String(i.id), newTeaName: "", pricePerGram: String(i.price_cents / 100) } : l,
                                 ),
                               );
                               setOpenProductIndex(null);
                               setProductSearch("");
                             }}
                           >
+                            {i.category === "tea" && <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: teaTypeColor(i.tea_type || "") }} />}
                             <span className="min-w-0 flex-1 truncate">{i.name}</span>
                             <span className="shrink-0 text-xs text-muted-foreground">
                               {rub(i.price_cents)}/{units(i)}
                             </span>
                           </CommandItem>
                         ))}
+                        {!inventory.isLoading && !inventory.isError && <CommandItem
+                          value="new-tea"
+                          onSelect={() => {
+                            setLines((current) => current.map((l, n) => n === index
+                              ? { ...l, productId: newTeaValue, newTeaName: productSearch.trim() || l.newTeaName, pricePerGram: "" }
+                              : l));
+                            setOpenProductIndex(null);
+                            setProductSearch("");
+                          }}
+                        ><Plus className="h-4 w-4" /> Новый чай</CommandItem>}
                       </CommandGroup>
                     </CommandList>
                   </Command>
                 </PopoverContent>
               </Popover>
+              </div>
+              <Input
+                aria-label={`Количество ${index + 1}`}
+                type="number"
+                min="1"
+                step="1"
+                placeholder={item ? units(item) : "г/шт"}
+                className="w-20 shrink-0"
+                value={line.quantity}
+                onChange={(e) => setLines(lines.map((l, n) => n === index ? { ...l, quantity: e.target.value } : l))}
+              />
+              {line.saleFormat !== "loose" && (
+                <Popover open={openPriceIndex === index} onOpenChange={(open) => setOpenPriceIndex(open ? index : null)}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" role="combobox" aria-label={`Цена позиции ${index + 1}`}
+                      aria-expanded={openPriceIndex === index} className="h-10 w-24 shrink-0 justify-between px-2 font-normal">
+                      <span className="truncate">{line.servicePrice || "Цена"} ₽</span><ChevronsUpDown className="h-3.5 w-3.5 shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-44 space-y-1 p-2" align="start">
+                    <Input aria-label={`Своя цена позиции ${index + 1}`} inputMode="decimal" placeholder="Своя цена, ₽" autoFocus
+                      value={line.servicePrice} onFocus={(e) => e.currentTarget.select()}
+                      onChange={(e) => setLines((current) => current.map((l, n) => n === index ? { ...l, servicePrice: e.target.value } : l))}
+                      onKeyDown={(e) => { if (e.key === "Enter" && validPrice(line.servicePrice)) setOpenPriceIndex(null); }} />
+                    {(line.saleFormat === "teapot" ? [450, 550, 650, 700] : line.saleFormat === "ceremony" ? [850, 950] : [300]).map((value) =>
+                      <Button key={value} type="button" variant={line.servicePrice === String(value) ? "secondary" : "ghost"}
+                        size="sm" className="w-full justify-start" onClick={() => {
+                          setLines((current) => current.map((l, n) => n === index ? { ...l, servicePrice: String(value) } : l));
+                          setOpenPriceIndex(null);
+                        }}>{value} ₽</Button>)}
+                  </PopoverContent>
+                </Popover>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Удалить позицию ${index + 1}`}
+                disabled={lines.length === 1}
+                onClick={() => {
+                  setLines(lines.filter((_, n) => n !== index));
+                  setOpenProductIndex(null);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
               {line.productId === newTeaValue && (
-                <div className="col-span-3 grid gap-2 sm:grid-cols-2">
+                <div className="flex w-full flex-wrap gap-2 pl-1">
                   <Input
                     aria-label={`Название нового чая ${index + 1}`}
                     placeholder="Название чая"
+                    className="min-w-44 flex-1"
                     maxLength={180}
                     value={line.newTeaName}
                     onChange={(e) =>
@@ -689,6 +744,7 @@ export function InventorySale({
                     aria-label={`Цена нового чая за грамм ${index + 1}`}
                     placeholder="Цена за 1 г, ₽"
                     inputMode="decimal"
+                    className="w-32"
                     value={line.pricePerGram}
                     onChange={(e) =>
                       setLines(
@@ -700,53 +756,15 @@ export function InventorySale({
                       )
                     }
                   />
-                  <p className="text-xs text-muted-foreground sm:col-span-2">
-                    Остаток пока неизвестен. Чай появится на складе после
-                    продажи.
-                  </p>
                 </div>
               )}
-              <Input
-                aria-label={`Количество ${index + 1}`}
-                type="number"
-                min="1"
-                step="1"
-                placeholder={item ? units(item) : "Вес/шт"}
-                value={line.quantity}
-                onChange={(e) =>
-                  setLines(
-                    lines.map((l, n) =>
-                      n === index ? { ...l, quantity: e.target.value } : l,
-                    ),
-                  )
-                }
-              />
-              {item && saleFormat === "loose" && (
-                <label className="col-span-3 text-xs text-muted-foreground">Цена за 1 {units(item)}, ₽
-                  <Input aria-label={`Цена за единицу ${index + 1}`} inputMode="decimal"
+              {item && line.saleFormat === "loose" && (
+                <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                  Цена/{units(item)}, ₽
+                  <Input aria-label={`Цена за единицу ${index + 1}`} inputMode="decimal" className="h-8 w-24"
                     value={line.pricePerGram || String(item.price_cents / 100)}
                     onChange={(e) => setLines(lines.map((l, n) => n === index ? { ...l, pricePerGram: e.target.value } : l))} />
                 </label>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={`Удалить позицию ${index + 1}`}
-                disabled={lines.length === 1}
-                onClick={() => {
-                  setLines(lines.filter((_, n) => n !== index));
-                  setOpenProductIndex(null);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-              {item && (
-                <p className="col-span-3 text-xs text-muted-foreground">
-                  {item.quantity === null
-                    ? "Остаток не указан"
-                    : `${item.quantity} ${units(item)} в наличии`}{" "}
-                  · {rub(item.price_cents)} за 1 {units(item)}
-                </p>
               )}
             </div>
           );
@@ -760,11 +778,8 @@ export function InventorySale({
               const emptyIndex = lines.findIndex(
                 (line) => !filledSaleLines([line]).length,
               );
-              if (emptyIndex >= 0) {
-                setOpenProductIndex(emptyIndex);
-              } else {
+              if (emptyIndex < 0) {
                 setLines([...lines, emptyLine()]);
-                setOpenProductIndex(lines.length);
               }
             }}
           >
@@ -789,7 +804,9 @@ export function InventorySale({
           </div>}
         </div>
       )}
-      <div className="grid gap-2 sm:grid-cols-2">
+      <details className="text-sm">
+        <summary className="cursor-pointer text-muted-foreground">Настроить скидки</summary>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
         {buyer && <label className="text-sm">Скидка клиента, %
           <Input type="number" min="0" max="100" step="1" value={bonusKind === "discount" ? "20" : customerDiscount}
             placeholder={String(baseDiscount)} disabled={bonusKind === "discount"} onChange={(e) => setCustomerDiscount(e.target.value)} />
@@ -798,6 +815,7 @@ export function InventorySale({
           <Input type="number" min="0" max="100" step="1" value={extraDiscount} onChange={(e) => setExtraDiscount(e.target.value)} />
         </label>
       </div>
+      </details>
       <div className="text-sm">
         <p>Цена: {rub(subtotal)} · скидка: −{rub(discountAmount)}</p>
         <p className="font-semibold">Итого: {rub(total)}{buyer && ` · ${Math.floor((total / 100) * (settings.data?.xpMultiplier ?? 1))} XP`}</p>
@@ -821,8 +839,6 @@ export function InventorySale({
             requestId,
             actorId: Number(employee),
             userId: buyer?.id || null,
-            saleFormat,
-            servicePriceCents: saleFormat === "loose" ? undefined : priceCents(servicePrice),
             customerDiscountPercent: buyer && bonusKind !== "discount" && customerDiscount !== "" ? Number(customerDiscount) : undefined,
             extraDiscountPercent: Number(extraDiscount),
             bonusKind: bonusAvailable ? bonusKind || null : null,
@@ -833,12 +849,16 @@ export function InventorySale({
                     newTeaName: l.newTeaName.trim().replace(/\s+/g, " "),
                     quantity: Number(l.quantity),
                     priceCents: priceCents(l.pricePerGram),
+                    saleFormat: l.saleFormat,
+                    servicePriceCents: l.saleFormat === "loose" ? undefined : priceCents(l.servicePrice),
                   }
                 : {
                     productId: Number(l.productId),
                     quantity: Number(l.quantity),
-                    priceCents: saleFormat === "loose" ? priceCents(l.pricePerGram || String(items.find((i) => i.id === Number(l.productId))!.price_cents / 100)) : items.find((i) => i.id === Number(l.productId))!.price_cents,
-                    priceOverride: saleFormat === "loose" && priceCents(l.pricePerGram || String(items.find((i) => i.id === Number(l.productId))!.price_cents / 100)) !== items.find((i) => i.id === Number(l.productId))!.price_cents,
+                    priceCents: l.saleFormat === "loose" ? priceCents(l.pricePerGram || String(items.find((i) => i.id === Number(l.productId))!.price_cents / 100)) : items.find((i) => i.id === Number(l.productId))!.price_cents,
+                    priceOverride: l.saleFormat === "loose" && priceCents(l.pricePerGram || String(items.find((i) => i.id === Number(l.productId))!.price_cents / 100)) !== items.find((i) => i.id === Number(l.productId))!.price_cents,
+                    saleFormat: l.saleFormat,
+                    servicePriceCents: l.saleFormat === "loose" ? undefined : priceCents(l.servicePrice),
                   },
             ),
           };
