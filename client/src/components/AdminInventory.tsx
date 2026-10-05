@@ -481,7 +481,7 @@ export function InventorySale({
   });
   const baseDiscount = bonusAvailable && bonusKind === "discount"
     ? 20
-    : buyer?.customDiscount ?? (buyer?.phoneVerified
+    : buyer?.customDiscount ?? (buyer
       ? getLoyaltyDiscountFromSettings(buyer.xp || 0, settings.data) : 0);
   const appliedDiscount = bonusKind === "discount" && bonusAvailable
     ? 20 : customerDiscount === "" ? baseDiscount : Number(customerDiscount);

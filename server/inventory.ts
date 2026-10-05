@@ -319,7 +319,7 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
     const subtotal = perLinePricing ? pricedTotal : data.saleFormat === "loose" ? goodsTotal : data.servicePriceCents!;
     const formats = new Set(lines.map((line) => line.saleFormat));
     const receiptFormat = formats.size === 1 ? lines[0].saleFormat : "mixed";
-    const loyalty = customer?.phone_verified
+    const loyalty = customer
       ? getLoyaltyDiscountFromSettings(Number(customer.xp), {
           loyaltyLevel2MinXP: settings.loyalty_level2_min_xp,
           loyaltyLevel2Discount: settings.loyalty_level2_discount,

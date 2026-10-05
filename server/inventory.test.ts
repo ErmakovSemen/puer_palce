@@ -386,6 +386,25 @@ test("service sale, signup gift, discount and audited correction", async () => {
     assert.equal((await db.query("SELECT first_order_discount_used FROM users WHERE id='new'")).rows[0].first_order_discount_used, false);
     assert.equal((await db.query("SELECT count(*)::int AS count FROM inventory_sale_edits")).rows[0].count, 2);
 
+    await db.exec("INSERT INTO users(id,name,xp,phone_verified) VALUES('guru','Guru',15000,false)");
+    const guruSale = await call("/sales", "POST", {
+      requestId: crypto.randomUUID(), actorId: 1, userId: "guru",
+      lines: [{ productId: 1, quantity: 5, priceCents: 2500, saleFormat: "teapot", servicePriceCents: 70000 }],
+    });
+    assert.equal(guruSale.discount_percent, 15);
+    assert.equal(guruSale.discount_cents, 10500);
+    assert.equal(guruSale.total_cents, 59500);
+    assert.equal(guruSale.xp, 595);
+    await call(`/sales/${guruSale.id}/cancel`, "POST", { actorId: 1 });
+    const overrideSale = await call("/sales", "POST", {
+      requestId: crypto.randomUUID(), actorId: 1, userId: "guru", customerDiscountPercent: 10,
+      extraDiscountPercent: 5,
+      lines: [{ productId: 1, quantity: 5, priceCents: 2500, saleFormat: "teapot", servicePriceCents: 70000 }],
+    });
+    assert.equal(overrideSale.discount_percent, 10);
+    assert.equal(overrideSale.total_cents, 59850);
+    await call(`/sales/${overrideSale.id}/cancel`, "POST", { actorId: 1 });
+
     const mixed = await call("/sales", "POST", {
       requestId: crypto.randomUUID(), actorId: 1, userId: null,
       lines: [
