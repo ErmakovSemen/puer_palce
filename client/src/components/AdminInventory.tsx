@@ -75,6 +75,9 @@ const validPrice = (value: string) =>
   /^\d+([.,]\d{1,2})?$/.test(value) &&
   priceCents(value) > 0 &&
   priceCents(value) <= 10000000;
+const validServicePrice = (value: string) =>
+  /^\d+([.,]\d{1,2})?$/.test(value) &&
+  priceCents(value) >= 0 && priceCents(value) <= 10000000;
 
 export const filledSaleLines = (lines: SaleLine[]) =>
   lines.filter((line) =>
@@ -89,8 +92,8 @@ export function saleLineError(lines: SaleLine[], items: Item[]): string | null {
   const reserved = new Map<string, number>();
   for (const line of lines) {
     if (!line.productId) return "Выберите товар или «Новый чай».";
-    if (line.saleFormat !== "loose" && !validPrice(line.servicePrice))
-      return "Укажите цену выбранного формата.";
+    if (line.saleFormat !== "loose" && !validServicePrice(line.servicePrice))
+      return `«${items.find((item) => item.id === Number(line.productId))?.name || line.newTeaName || "Чай"}»: укажите цену справа от количества. Для бесплатного списания выберите 0 ₽.`;
     const amount = Number(line.quantity);
     if (!Number.isInteger(amount) || amount < 1 || amount > 10000000)
       return "Укажите количество целым числом больше нуля.";
@@ -457,7 +460,7 @@ export function InventorySale({
   const saleLines = filledSaleLines(lines);
   const subtotal = saleLines.reduce(
     (sum, l) =>
-      sum + (!l.productId || !Number(l.quantity) ? 0 : l.saleFormat !== "loose" ? validPrice(l.servicePrice) ? priceCents(l.servicePrice) : 0 :
+      sum + (!l.productId || !Number(l.quantity) ? 0 : l.saleFormat !== "loose" ? validServicePrice(l.servicePrice) ? priceCents(l.servicePrice) : 0 :
       (l.productId === newTeaValue
         ? validPrice(l.pricePerGram)
           ? priceCents(l.pricePerGram)
@@ -699,13 +702,17 @@ export function InventorySale({
                     <Input aria-label={`Своя цена позиции ${index + 1}`} inputMode="decimal" placeholder="Своя цена, ₽" autoFocus
                       value={line.servicePrice} onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => setLines((current) => current.map((l, n) => n === index ? { ...l, servicePrice: e.target.value } : l))}
-                      onKeyDown={(e) => { if (e.key === "Enter" && validPrice(line.servicePrice)) setOpenPriceIndex(null); }} />
+                      onKeyDown={(e) => { if (e.key === "Enter" && validServicePrice(line.servicePrice)) setOpenPriceIndex(null); }} />
                     {(line.saleFormat === "teapot" ? [450, 550, 650, 700] : line.saleFormat === "ceremony" ? [850, 950] : [300]).map((value) =>
                       <Button key={value} type="button" variant={line.servicePrice === String(value) ? "secondary" : "ghost"}
                         size="sm" className="w-full justify-start" onClick={() => {
                           setLines((current) => current.map((l, n) => n === index ? { ...l, servicePrice: String(value) } : l));
                           setOpenPriceIndex(null);
                         }}>{value} ₽</Button>)}
+                    <Button type="button" variant="ghost" size="sm" className="w-full justify-start" onClick={() => {
+                      setLines((current) => current.map((l, n) => n === index ? { ...l, servicePrice: "0" } : l));
+                      setOpenPriceIndex(null);
+                    }}>0 ₽ · бесплатно</Button>
                   </PopoverContent>
                 </Popover>
               )}

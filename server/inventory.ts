@@ -61,7 +61,7 @@ const saleSchema = z.object({
   actorId: actor,
   userId: z.string().min(1).nullable(),
   saleFormat: saleFormat.default("loose"),
-  servicePriceCents: z.number().int().min(1).max(10000000).optional(),
+  servicePriceCents: z.number().int().min(0).max(10000000).optional(),
   extraDiscountPercent: z.number().int().min(0).max(100).default(0),
   customerDiscountPercent: z.number().int().min(0).max(100).optional(),
   occurredAt: z.string().datetime({ offset: true }).optional(),

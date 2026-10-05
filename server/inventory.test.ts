@@ -404,6 +404,15 @@ test("service sale, signup gift, discount and audited correction", async () => {
     assert.equal(overrideSale.discount_percent, 10);
     assert.equal(overrideSale.total_cents, 59850);
     await call(`/sales/${overrideSale.id}/cancel`, "POST", { actorId: 1 });
+    const freeSale = await call("/sales", "POST", {
+      requestId: crypto.randomUUID(), actorId: 1, userId: "guru",
+      lines: [{ productId: 1, quantity: 3, priceCents: 2500, saleFormat: "cup", servicePriceCents: 0 }],
+    });
+    assert.equal(freeSale.total_cents, 0);
+    assert.equal(freeSale.xp, 0);
+    assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=1")).rows[0].quantity, 97);
+    assert.equal((await db.query("SELECT xp FROM users WHERE id='guru'")).rows[0].xp, 15000);
+    await call(`/sales/${freeSale.id}/cancel`, "POST", { actorId: 1 });
 
     const mixed = await call("/sales", "POST", {
       requestId: crypto.randomUUID(), actorId: 1, userId: null,

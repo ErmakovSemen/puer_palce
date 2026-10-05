@@ -55,3 +55,10 @@ test("a format selected on an extra row requires a product", () => {
   const lines = [{ ...blank(), productId: "1", quantity: "5" }, { ...blank(), saleFormat: "cup" as const, servicePrice: "300" }];
   assert.match(saleLineError(filledSaleLines(lines), [tea]) || "", /Выберите товар/);
 });
+
+test("a free service accepts explicit zero, but still requires a price", () => {
+  const line = { ...blank(), productId: "1", quantity: "3", saleFormat: "cup" as const, servicePrice: "0" };
+  assert.equal(saleLineError([line], [tea]), null);
+  assert.match(saleLineError([{ ...line, servicePrice: "" }], [tea]) || "", /Цзин Фа.*справа/);
+  assert.notEqual(saleLineError([{ ...line, servicePrice: "-1" }], [tea]), null);
+});
