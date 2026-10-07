@@ -20,6 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { getApiUrl } from "@/lib/api-config";
 import { getLoyaltyDiscountFromSettings } from "@shared/pricing";
+import { calculateInventoryPrice } from "@shared/inventory-pricing";
 import { getTeaTypeColor } from "@/lib/tea-colors";
 import { useTeaTypes } from "@/hooks/use-tea-types";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -36,6 +37,8 @@ type Item = {
   name: string;
   category: string;
   tea_type?: string | null;
+  description?: string;
+  inventory_archived?: boolean;
   unit: string;
   price_cents: number;
   quantity: number | null;
@@ -194,6 +197,11 @@ export default function AdminInventory({
     [price, setPrice] = useState(""),
     [reason, setReason] = useState(""),
     [offset, setOffset] = useState(0);
+  const [description, setDescription] = useState("");
+  const [teaType, setTeaType] = useState("");
+  const [archived, setArchived] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const { data: availableTypes } = useTeaTypes();
   const { toast } = useToast();
   const history = useQuery<any[]>({
     queryKey: ["/api/admin/inventory/movements", offset],
@@ -209,9 +217,10 @@ export default function AdminInventory({
           {
             actorId: Number(employee),
             revision: editing!.revision,
-            quantity: Number(balance),
+            quantity: balance === "" && editing!.category === "tea" ? null : Number(balance),
             priceCents: Math.round(Number(price) * 100),
             reason,
+            description, teaType: teaType || null, archived,
           },
           "PATCH",
         ),
@@ -225,7 +234,7 @@ export default function AdminInventory({
   });
   const rows = (inventory.data || []).filter(
     (i) =>
-      i.category === tab && i.name.toLowerCase().includes(search.toLowerCase()),
+      i.category === tab && (showArchived || !i.inventory_archived) && i.name.toLowerCase().includes(search.toLowerCase()),
   );
   return (
     <section className="space-y-4">
@@ -273,6 +282,7 @@ export default function AdminInventory({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />Показать убранные товары</label>
           <div className="divide-y border-y">
             {rows.map((i) => (
               <div
@@ -295,9 +305,12 @@ export default function AdminInventory({
                     variant="outline"
                     onClick={() => {
                       setEditing(i);
+                      setDescription(i.description || "");
+                      setTeaType(i.tea_type || "");
+                      setArchived(!!i.inventory_archived);
                       setBalance(i.quantity === null ? "" : String(i.quantity));
                       setPrice(String(i.price_cents / 100));
-                      setReason("");
+                      setReason("Изменение карточки и остатков");
                     }}
                   >
                     Изменить
@@ -325,6 +338,10 @@ export default function AdminInventory({
               <p>
                 {m.reason} · {m.actor}
               </p>
+              {m.sale_total_cents != null && <p>Итог продажи: {rub(m.sale_total_cents)}</p>}
+              {m.price_changes?.map((change: any) => <p key={change.id}>{change.comment} · {change.actor}</p>)}
+              {m.sale_comment && <p>Комментарий: {m.sale_comment}</p>}
+              {m.before_state && <details><summary className="cursor-pointer">Изменения карточки</summary><p>Тип: {m.before_state.teaType || "—"} → {m.after_state.teaType || "—"}</p><p>Описание: {m.before_state.description || "—"} → {m.after_state.description || "—"}</p><p>Доступность: {m.before_state.archived ? "убран" : "доступен"} → {m.after_state.archived ? "убран" : "доступен"}</p></details>}
               <p className="text-muted-foreground">
                 {new Date(m.created_at).toLocaleString("ru-RU")} ·{" "}
                 {rub(m.price_cents)}
@@ -355,10 +372,15 @@ export default function AdminInventory({
         open={!!editing}
         onOpenChange={(open) => !open && !save.isPending && setEditing(null)}
       >
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing?.name}</DialogTitle>
           </DialogHeader>
+          {editing?.category === "tea" && <>
+            <label className="text-sm">Описание<textarea className="w-full rounded-md border bg-background p-2" rows={3} maxLength={10000} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
+            <label className="text-sm">Тип чая<Input list="inventory-tea-types" maxLength={100} value={teaType} onChange={(event) => setTeaType(event.target.value)} /><datalist id="inventory-tea-types">{availableTypes?.map((type) => <option key={type.name} value={type.name} />)}</datalist></label>
+          </>}
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} />Убрать из доступных товаров</label>
           <label>
             Остаток после операции, {editing && units(editing)}
             <Input
@@ -393,7 +415,7 @@ export default function AdminInventory({
           <Button
             disabled={
               !employee ||
-              !balance ||
+              (balance === "" && editing?.category !== "tea") ||
               !price ||
               reason.trim().length < 2 ||
               save.isPending
@@ -436,6 +458,9 @@ export function InventorySale({
   const [lines, setLines] = useState<SaleLine[]>([emptyLine()]);
   const [customerDiscount, setCustomerDiscount] = useState("");
   const [extraDiscount, setExtraDiscount] = useState("0");
+  const [extraRubles, setExtraRubles] = useState("");
+  const [finalPrice, setFinalPrice] = useState("");
+  const [comment, setComment] = useState("");
   const [bonusKind, setBonusKind] = useState<"gift" | "discount" | "">("");
   const [giftProductId, setGiftProductId] = useState("");
   const [giftQuantity, setGiftQuantity] = useState("");
@@ -454,7 +479,7 @@ export function InventorySale({
     queryKey: ["/api/admin/inventory/sales"],
     queryFn: () => adminFetch("/api/admin/inventory/sales"),
   });
-  const items = inventory.data || [];
+  const items = (inventory.data || []).filter((item) => !item.inventory_archived);
   const teaTypes = Array.from(new Set(items.filter((item) => item.category === "tea" && item.tea_type).map((item) => item.tea_type!))).sort((a, b) => a.localeCompare(b, "ru-RU"));
   const teaTypeColor = (type: string) => teaTypePalette?.find((entry) => entry.name === type)?.backgroundColor || getTeaTypeColor(type);
   const saleLines = filledSaleLines(lines);
@@ -488,8 +513,8 @@ export function InventorySale({
       ? getLoyaltyDiscountFromSettings(buyer.xp || 0, settings.data) : 0);
   const appliedDiscount = bonusKind === "discount" && bonusAvailable
     ? 20 : customerDiscount === "" ? baseDiscount : Number(customerDiscount);
-  const afterCustomerDiscount = Math.round(subtotal * (100 - appliedDiscount) / 100);
-  const total = Math.round(afterCustomerDiscount * (100 - Number(extraDiscount || 0)) / 100);
+  const pricing = calculateInventoryPrice(subtotal, appliedDiscount, Number(extraDiscount || 0), priceCents(extraRubles || "0"), finalPrice === "" ? undefined : priceCents(finalPrice));
+  const total = pricing.total;
   const discountAmount = subtotal - total;
   const giftItem = items.find((item) => item.id === Number(giftProductId));
   const giftSoldQuantity = saleLines.filter((line) => line.productId === giftProductId).reduce((sum, line) => sum + (Number(line.quantity) || 0), 0);
@@ -499,6 +524,10 @@ export function InventorySale({
       ? "Выберите или создайте клиента выше."
       : inventory.isError
         ? "Не удалось загрузить товары. Обновите страницу."
+        : (extraRubles !== "" && !validServicePrice(extraRubles)) || (finalPrice !== "" && !validServicePrice(finalPrice))
+          ? "Укажите сумму в рублях от 0, до двух знаков после запятой."
+        : priceCents(extraRubles || "0") > pricing.afterPercent
+          ? "Дополнительная скидка больше суммы после скидки клиента."
         : !Number.isInteger(appliedDiscount) || appliedDiscount < 0 || appliedDiscount > 100 ||
           !Number.isInteger(Number(extraDiscount)) || Number(extraDiscount) < 0 || Number(extraDiscount) > 100
           ? "Скидки должны быть целыми процентами от 0 до 100."
@@ -517,6 +546,7 @@ export function InventorySale({
       setLines([emptyLine()]);
       setCustomerDiscount("");
       setExtraDiscount("0");
+      setExtraRubles(""); setFinalPrice(""); setComment("");
       setBonusKind("");
       setGiftProductId("");
       setGiftQuantity("");
@@ -821,11 +851,15 @@ export function InventorySale({
         <label className="text-sm">Дополнительная скидка, %
           <Input type="number" min="0" max="100" step="1" value={extraDiscount} onChange={(e) => setExtraDiscount(e.target.value)} />
         </label>
+        <label className="text-sm">Дополнительная скидка, ₽<Input inputMode="decimal" placeholder="0" value={extraRubles} onChange={(event) => setExtraRubles(event.target.value)} /></label>
+        <label className="text-sm">Итог вручную, ₽<Input inputMode="decimal" placeholder={String(pricing.calculatedTotal / 100)} value={finalPrice} onChange={(event) => setFinalPrice(event.target.value)} /></label>
       </div>
       </details>
+      <label className="block text-sm">Комментарий к покупке<Input maxLength={2000} placeholder="Необязательно" value={comment} onChange={(event) => setComment(event.target.value)} /></label>
       <div className="text-sm">
-        <p>Цена: {rub(subtotal)} · скидка: −{rub(discountAmount)}</p>
-        <p className="font-semibold">Итого: {rub(total)}{buyer && ` · ${Math.floor((total / 100) * (settings.data?.xpMultiplier ?? 1))} XP`}</p>
+        <p>Цена: {rub(subtotal)} · {discountAmount >= 0 ? `скидка: −${rub(discountAmount)}` : `надбавка: +${rub(-discountAmount)}`}</p>
+        <p>По расчёту: {rub(pricing.calculatedTotal)}</p>
+        <p className="font-semibold">Покупатель заплатит: {rub(total)}{buyer && ` · ${Math.floor((total / 100) * (settings.data?.xpMultiplier ?? 1))} XP`}</p>
       </div>
       {showValidation && validationError && (
         <p role="alert" className="text-sm text-destructive">
@@ -848,6 +882,9 @@ export function InventorySale({
             userId: buyer?.id || null,
             customerDiscountPercent: buyer && bonusKind !== "discount" && customerDiscount !== "" ? Number(customerDiscount) : undefined,
             extraDiscountPercent: Number(extraDiscount),
+            extraDiscountCents: priceCents(extraRubles || "0"),
+            finalPriceCents: finalPrice === "" ? undefined : priceCents(finalPrice),
+            comment,
             bonusKind: bonusAvailable ? bonusKind || null : null,
             gift: bonusKind === "gift" ? { productId: Number(giftProductId), quantity: Number(giftQuantity) } : null,
             lines: saleLines.map((l) =>

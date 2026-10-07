@@ -39,6 +39,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createPhone, setCreatePhone] = useState("");
   const [createName, setCreateName] = useState("");
+  const [createSource, setCreateSource] = useState("");
   const { toast } = useToast();
 
   const handleCopyLeaderboardLink = async () => {
@@ -70,7 +71,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
           'X-Admin-Password': adminPassword,
         },
         credentials: 'include',
-        body: JSON.stringify({ phone, name: name || undefined }),
+        body: JSON.stringify({ phone, name: name || undefined, source: createSource.trim() || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка создания пользователя');
@@ -81,6 +82,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
       setShowCreateForm(false);
       setCreatePhone("");
       setCreateName("");
+      setCreateSource("");
       // Auto-search created user
       setSearchInput(data.phone);
       setSearchedPhone(data.phone);
@@ -470,6 +472,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateUser()}
                   data-testid="input-create-name"
                 />
+                <Input aria-label="Откуда узнал о нас" placeholder="Откуда узнал о нас (необязательно)" maxLength={200} value={createSource} onChange={(event) => setCreateSource(event.target.value)} />
                 <Button type="button" onClick={handleCreateUser} disabled={createUserMutation.isPending} data-testid="button-create-user-submit">
                   {createUserMutation.isPending ? "Создаём..." : "Создать"}
                 </Button>

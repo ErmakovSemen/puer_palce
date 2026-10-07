@@ -429,6 +429,65 @@ test("service sale, signup gift, discount and audited correction", async () => {
     assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=1")).rows[0].quantity, 92);
     await call(`/sales/${mixed.id}/cancel`, "POST", { actorId: 1 });
     assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=1")).rows[0].quantity, 100);
+
+    const adjustedPayload = {
+      requestId: crypto.randomUUID(), actorId: 1, userId: "guru",
+      extraDiscountCents: 10000, finalPriceCents: 45000, comment: "Оплата вчерашней покупки",
+      lines: [{ productId: 1, quantity: 5, priceCents: 2500, saleFormat: "teapot", servicePriceCents: 70000 }],
+    };
+    const adjusted = await call("/sales", "POST", adjustedPayload);
+    assert.equal(adjusted.calculated_total_cents, 49500);
+    assert.equal(adjusted.total_cents, 45000);
+    assert.equal(adjusted.discount_cents, 25000);
+    assert.equal(adjusted.xp, 450);
+    assert.equal((await call("/customer/guru/discount")).discountPercent, 15);
+    const changes = (await db.query("SELECT * FROM inventory_price_changes WHERE sale_id=$1 ORDER BY id", [adjusted.id])).rows;
+    assert.deepEqual(changes.map((row) => [row.before_cents, row.after_cents, row.difference_cents, row.reason, row.actor]), [
+      [59500, 49500, -10000, "дополнительная скидка", "Даня"],
+      [49500, 45000, -4500, "изменение итоговой цены", "Даня"],
+    ]);
+    assert.match(String(changes[0].comment), /595,00.*495,00/);
+    await call("/sales", "POST", adjustedPayload);
+    assert.equal((await db.query("SELECT count(*)::int AS count FROM inventory_price_changes WHERE sale_id=$1", [adjusted.id])).rows[0].count, 2);
+    const historySale = (await call(`/sales?search=${adjusted.id}`)).find((row: any) => row.id === adjusted.id);
+    assert.equal(historySale.total_cents, adjusted.total_cents);
+    assert.equal(historySale.comment, adjustedPayload.comment);
+    const movement = (await call("/movements")).find((row: any) => row.sale_id === adjusted.id);
+    assert.equal(movement.sale_total_cents, historySale.total_cents);
+    assert.equal(movement.price_changes.length, 2);
+    assert.equal(movement.sale_comment, historySale.comment);
+
+    const item = (await call("")).find((row: any) => row.id === 1);
+    await call("/1", "PATCH", { actorId: 1, revision: item.revision, quantity: null, priceCents: 2500,
+      description: "Выдержанный чай", teaType: "Шу Пуэр", archived: true, reason: "Изменение карточки и остатков" });
+    const archived = (await call("")).find((row: any) => row.id === 1);
+    assert.equal(archived.inventory_archived, true);
+    assert.equal(archived.description, "Выдержанный чай");
+    assert.equal(archived.tea_type, "Шу Пуэр");
+    assert.equal(archived.quantity, null);
+    const metadata = (await call("/movements")).find((row: any) => row.kind === "adjustment" && row.product_id === 1);
+    assert.equal(metadata.before_state.archived, false);
+    assert.equal(metadata.after_state.archived, true);
+    assert.equal((await call(`/sales?search=${adjusted.id}`))[0].lines[0].name, "Пуэр");
+    const blocked = await fetch(base + "/sales", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...adjustedPayload, requestId: crypto.randomUUID() }) });
+    assert.equal(blocked.status, 409);
+    // Existing receipts remain correctable even after their tea was archived.
+    const revised = await call(`/sales/${adjusted.id}/correct`, "POST", { ...adjustedPayload, requestId: crypto.randomUUID(), finalPriceCents: 40000 });
+    assert.equal(revised.total_cents, 40000);
+    assert.equal((await db.query("SELECT before_state,after_state FROM inventory_sale_edits WHERE sale_id=$1", [adjusted.id])).rows[0].after_state.total_cents, 40000);
+    await call(`/sales/${revised.id}/cancel`, "POST", { actorId: 1 });
+    const stockNow = (await call("")).find((row: any) => row.id === 1);
+    await call("/1", "PATCH", { actorId: 1, revision: stockNow.revision, quantity: 100, priceCents: 2500, archived: false, reason: "Вернуть чай" });
+    const markup = await call("/sales", "POST", { ...adjustedPayload, requestId: crypto.randomUUID(), userId: null, extraDiscountCents: 0, finalPriceCents: 75000 });
+    assert.equal(markup.total_cents, 75000);
+    assert.equal(markup.xp, 0);
+    assert.equal(markup.user_id, null);
+    assert.equal((await db.query("SELECT difference_cents FROM inventory_price_changes WHERE sale_id=$1", [markup.id])).rows[0].difference_cents, 5000);
+    await call(`/sales/${markup.id}/cancel`, "POST", { actorId: 1 });
+    const excessive = await fetch(base + "/sales", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...adjustedPayload, requestId: crypto.randomUUID(), extraDiscountCents: 60000 }) });
+    assert.equal(excessive.status, 400);
+    assert.equal((await db.query("SELECT quantity FROM inventory_stock WHERE product_id=1")).rows[0].quantity, 100);
+    assert.equal((await db.query("SELECT xp FROM users WHERE id='guru'")).rows[0].xp, 15000);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await db.close();
@@ -439,4 +498,13 @@ test("daily report starts after 00:05 Moscow time and targets the previous day",
   const { dueSalesReportDate } = await import("./inventory");
   assert.equal(dueSalesReportDate(new Date("2026-10-03T21:04:00Z")), null);
   assert.equal(dueSalesReportDate(new Date("2026-10-03T21:05:00Z")), "2026-10-03");
+});
+
+test("shared receipt pricing rounds cents and supports explicit free total", async () => {
+  const { calculateInventoryPrice } = await import("../shared/inventory-pricing");
+  assert.deepEqual(calculateInventoryPrice(70000, 15, 0, 10000, 45000), {
+    afterCustomer: 59500, afterPercent: 59500, calculatedTotal: 49500, total: 45000, discountCents: 25000,
+  });
+  assert.equal(calculateInventoryPrice(101, 15, 5).total, 82);
+  assert.equal(calculateInventoryPrice(70000, 15, 0, 10000, 0).total, 0);
 });

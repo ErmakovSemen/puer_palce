@@ -1480,7 +1480,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/admin/users/create", requireAdminAuth, async (req, res) => {
     try {
-      const { phone, name, password } = req.body;
+      const { phone, name, password, source } = req.body;
+      if (source !== undefined && (typeof source !== "string" || source.length > 200)) return res.status(400).json({ error: "Источник должен быть текстом до 200 символов" });
 
       if (!phone || typeof phone !== "string") {
         return res.status(400).json({ error: "Укажите номер телефона" });
@@ -1510,7 +1511,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: await hashPassword(password ?? randomBytes(24).toString("hex")),
       });
 
-      await db.execute(sql`UPDATE users SET offline_signup_bonus_available = true WHERE id = ${user.id}`);
+      await db.execute(sql`UPDATE users SET offline_signup_bonus_available = true, source = ${source?.trim() || null} WHERE id = ${user.id}`);
 
       if (password) await storage.markPhoneVerified(user.id);
 

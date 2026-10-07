@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { calculateInventoryPrice } from "@shared/inventory-pricing";
 
 type Fetcher = (url: string, options?: RequestInit) => Promise<any>;
 type SaleFormat = "loose" | "teapot" | "ceremony" | "cup";
@@ -13,11 +14,12 @@ type Sale = {
   id: number; user_id: string | null; buyer: string; actor: string; lines: SaleLine[];
   total_cents: number; subtotal_cents: number; discount_cents: number;
   discount_percent: number; extra_discount_percent: number; xp: number;
+  extra_discount_cents: number; final_price_cents: number | null; calculated_total_cents: number | null; comment: string;
   sale_format: SaleFormat | "mixed"; bonus_kind: "gift" | "discount" | null;
   gift: { productId: number; quantity: number; name: string } | null;
   status: string; created_at: string;
 };
-type Product = { id: number; name: string; category: string; price_cents: number; quantity: number | null; unit: string };
+type Product = { id: number; name: string; category: string; price_cents: number; quantity: number | null; unit: string; inventory_archived?: boolean };
 type EditLine = { productId: string; quantity: string; price: string; saleFormat: SaleFormat; servicePrice: string };
 const formatNames: Record<string, string> = { loose: "Рассыпной", teapot: "Чайник", ceremony: "Церемония", cup: "Кружка", mixed: "Смешанный" };
 const money = (cents: number) => (cents / 100).toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
@@ -42,6 +44,9 @@ export default function AdminSalesLedger({ adminFetch }: { adminFetch: Fetcher }
   const [customerSearch, setCustomerSearch] = useState("");
   const [discount, setDiscount] = useState("0");
   const [extraDiscount, setExtraDiscount] = useState("0");
+  const [extraRubles, setExtraRubles] = useState("");
+  const [finalPrice, setFinalPrice] = useState("");
+  const [comment, setComment] = useState("");
   const [bonusKind, setBonusKind] = useState<"" | "gift" | "discount">("");
   const [giftProductId, setGiftProductId] = useState("");
   const [giftQuantity, setGiftQuantity] = useState("");
@@ -51,8 +56,16 @@ export default function AdminSalesLedger({ adminFetch }: { adminFetch: Fetcher }
   const editSubtotal = lines.reduce((sum, line) => sum + (line.saleFormat === "loose"
     ? (Number(line.price.replace(",", ".")) || 0) * 100 * (Number(line.quantity) || 0)
     : (Number(line.servicePrice.replace(",", ".")) || 0) * 100), 0);
-  const editCustomerDiscount = bonusKind === "discount" ? 20 : Number(discount) || 0;
-  const editTotal = Math.round(Math.round(editSubtotal * (100 - editCustomerDiscount) / 100) * (100 - (Number(extraDiscount) || 0)) / 100);
+  const automaticDiscount = useQuery<{ discountPercent: number }>({
+    queryKey: ["/api/admin/inventory/customer", customerId, "discount"],
+    enabled: !!editing && !!customerId && discount === "",
+    queryFn: () => adminFetch(`/api/admin/inventory/customer/${customerId}/discount`),
+  });
+  const discountPending = !!customerId && discount === "" && bonusKind !== "discount" && !automaticDiscount.data;
+  const editCustomerDiscount = bonusKind === "discount" ? 20 : discount === "" ? automaticDiscount.data?.discountPercent ?? 0 : Number(discount) || 0;
+  const cents = (value: string) => Math.round(Number(value.replace(",", ".")) * 100);
+  const editPricing = calculateInventoryPrice(Math.round(editSubtotal), editCustomerDiscount, Number(extraDiscount) || 0, cents(extraRubles || "0"), finalPrice === "" ? undefined : cents(finalPrice));
+  const editTotal = editPricing.total;
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const sales = useQuery<Sale[]>({
@@ -60,6 +73,7 @@ export default function AdminSalesLedger({ adminFetch }: { adminFetch: Fetcher }
     queryFn: () => adminFetch(`/api/admin/inventory/sales?date=${date}&search=${encodeURIComponent(search)}&offset=${offset}`),
   });
   const products = useQuery<Product[]>({ queryKey: ["/api/admin/inventory"], queryFn: () => adminFetch("/api/admin/inventory") });
+  const editableProducts = products.data?.filter((product) => !product.inventory_archived || editing?.lines.some((line) => line.productId === product.id) || editing?.gift?.productId === product.id);
   const admins = useQuery<{ id: number; name: string; isActive: boolean }[]>({ queryKey: ["/api/admin/crm/admins"], queryFn: () => adminFetch("/api/admin/crm/admins") });
   const suggestions = useQuery<{ id: string; name: string | null; phone: string }[]>({
     queryKey: ["/api/admin/users/suggest", customerSearch],
@@ -109,12 +123,19 @@ export default function AdminSalesLedger({ adminFetch }: { adminFetch: Fetcher }
     setCustomerSearch(sale.user_id ? sale.buyer : "");
     setDiscount(String(sale.discount_percent));
     setExtraDiscount(String(sale.extra_discount_percent));
+    setExtraRubles(String((sale.extra_discount_cents || 0) / 100));
+    setFinalPrice(sale.final_price_cents == null ? "" : String(sale.final_price_cents / 100));
+    setComment(sale.comment || "");
     setBonusKind(sale.bonus_kind || "");
     setGiftProductId(sale.gift ? String(sale.gift.productId) : "");
     setGiftQuantity(sale.gift ? String(sale.gift.quantity) : "");
     setOccurredAt(moscowDateTime(sale.created_at));
   };
   const save = () => {
+    if (discountPending) { toast({ title: "Дождитесь загрузки скидки клиента", variant: "destructive" }); return; }
+    if ([extraRubles, finalPrice].some((value) => value !== "" && !/^\d+([.,]\d{1,2})?$/.test(value)) || cents(extraRubles || "0") > editPricing.afterPercent) {
+      toast({ title: "Проверьте дополнительную скидку и итоговую цену", variant: "destructive" }); return;
+    }
     if (!editing || !actorId || !lines.length || lines.some((line) => !line.productId || !Number.isInteger(Number(line.quantity)) || Number(line.quantity) < 1)) {
       toast({ title: "Проверьте сотрудника, чай и граммовку", variant: "destructive" }); return;
     }
@@ -129,6 +150,7 @@ export default function AdminSalesLedger({ adminFetch }: { adminFetch: Fetcher }
     correct.mutate({
       requestId: correctionRequestId, actorId: Number(actorId), userId: customerId,
       customerDiscountPercent: discount === "" ? undefined : Number(discount), extraDiscountPercent: Number(extraDiscount),
+      extraDiscountCents: cents(extraRubles || "0"), finalPriceCents: finalPrice === "" ? undefined : cents(finalPrice), comment,
       bonusKind: bonusKind || null,
       gift: bonusKind === "gift" ? { productId: Number(giftProductId), quantity: Number(giftQuantity) } : null,
       occurredAt: `${occurredAt}:00+03:00`,
@@ -178,8 +200,8 @@ export default function AdminSalesLedger({ adminFetch }: { adminFetch: Fetcher }
         <td className="p-2">{formatNames[sale.sale_format] || sale.sale_format}</td>
         <td className="p-2">{sale.lines.map((line, index) => <span key={index} className="block">{sale.sale_format === "mixed" && <span className="text-xs text-muted-foreground">{formatNames[line.saleFormat || "loose"]} · </span>}{line.name} · {line.quantity} {line.unit}</span>)}{sale.gift && <span className="block text-xs">Подарок: {sale.gift.name} · {sale.gift.quantity} г</span>}{sale.bonus_kind === "discount" && <span className="block text-xs">Бонус: скидка 20%</span>}</td>
         <td className="p-2">{sale.user_id ? sale.buyer : "Анонимный"}</td>
-        <td className="p-2 whitespace-nowrap">{money(sale.subtotal_cents)}</td><td className="p-2 whitespace-nowrap">−{money(sale.discount_cents)}</td>
-        <td className="p-2 whitespace-nowrap font-medium">{money(sale.total_cents)}</td>
+        <td className="p-2 whitespace-nowrap">{money(sale.subtotal_cents)}</td><td className="p-2 whitespace-nowrap">{sale.discount_cents >= 0 ? `−${money(sale.discount_cents)}` : `+${money(-sale.discount_cents)} (надбавка)`}</td>
+        <td className="p-2 font-medium">{money(sale.total_cents)}{sale.final_price_cents != null && <span className="block text-xs font-normal">По расчёту: {money(sale.calculated_total_cents ?? sale.total_cents)}</span>}{sale.comment && <span className="block text-xs font-normal">{sale.comment}</span>}</td>
         <td className="p-2">{sale.status === "completed" ? "Проведена" : sale.status === "corrected" ? "Исправлена" : "Отменена"}</td>
         <td className="p-2">{sale.status === "completed" && <Button type="button" variant="ghost" size="icon" aria-label={`Исправить продажу ${sale.id}`} onClick={() => openEditor(sale)}><Pencil className="h-4 w-4" /></Button>}</td>
       </tr>)}</tbody>
@@ -195,7 +217,7 @@ export default function AdminSalesLedger({ adminFetch }: { adminFetch: Fetcher }
         <select aria-label={`Формат позиции ${index + 1}`} className="h-10 w-32 rounded-md border bg-background px-2" value={line.saleFormat} onChange={(event) => { const saleFormat = event.target.value as SaleFormat; setLines(lines.map((value, n) => n === index ? { ...value, productId: saleFormat !== "loose" && products.data?.find((product) => product.id === Number(value.productId))?.category !== "tea" ? "" : value.productId, saleFormat, servicePrice: saleFormat === "cup" ? "300" : saleFormat === "teapot" ? "450" : saleFormat === "ceremony" ? "850" : "" } : value)); }}>
           {Object.entries(formatNames).filter(([id]) => id !== "mixed").map(([id, name]) => <option key={id} value={id}>{name}</option>)}
         </select>
-        <select aria-label={`Товар ${index + 1}`} className="min-w-[10rem] flex-1 rounded-md border bg-background px-2" value={line.productId} onChange={(event) => { const item = products.data?.find((product) => product.id === Number(event.target.value)); setLines(lines.map((value, n) => n === index ? { ...value, productId: event.target.value, price: item ? String(item.price_cents / 100) : value.price } : value)); }}><option value="">Выберите</option>{products.data?.filter((product) => line.saleFormat === "loose" || product.category === "tea").map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
+        <select aria-label={`Товар ${index + 1}`} className="min-w-[10rem] flex-1 rounded-md border bg-background px-2" value={line.productId} onChange={(event) => { const item = products.data?.find((product) => product.id === Number(event.target.value)); setLines(lines.map((value, n) => n === index ? { ...value, productId: event.target.value, price: item ? String(item.price_cents / 100) : value.price } : value)); }}><option value="">Выберите</option>{editableProducts?.filter((product) => line.saleFormat === "loose" || product.category === "tea").map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select>
         <Input aria-label={`Граммы ${index + 1}`} type="number" min="1" step="1" className="w-20" value={line.quantity} onChange={(event) => setLines(lines.map((value, n) => n === index ? { ...value, quantity: event.target.value } : value))} />
         <Input aria-label={line.saleFormat === "loose" ? `Цена за единицу ${index + 1}` : `Цена позиции ${index + 1}`} inputMode="decimal" className="w-24" value={line.saleFormat === "loose" ? line.price : line.servicePrice} onChange={(event) => setLines(lines.map((value, n) => n === index ? { ...value, [line.saleFormat === "loose" ? "price" : "servicePrice"]: event.target.value } : value))} />
         <Button variant="ghost" size="icon" aria-label={`Удалить товар ${index + 1}`} disabled={lines.length === 1} onClick={() => setLines(lines.filter((_, n) => n !== index))}><Trash2 className="h-4 w-4" /></Button>
@@ -203,11 +225,11 @@ export default function AdminSalesLedger({ adminFetch }: { adminFetch: Fetcher }
       <div className="space-y-2"><p className="text-sm font-medium">Клиент</p><div className="flex gap-2"><Button variant={customerId ? "outline" : "default"} onClick={() => { setCustomerId(null); setCustomerSearch(""); setDiscount("0"); setBonusKind(""); }}>Анонимный</Button><Input aria-label="Найти клиента для исправления" placeholder="Имя или телефон" value={customerSearch} onChange={(event) => { setCustomerSearch(event.target.value); setCustomerId(null); setDiscount(""); setBonusKind(""); }} /></div>{!customerId && suggestions.data?.map((customer) => <Button key={customer.id} type="button" size="sm" variant="outline" onClick={() => { setCustomerId(customer.id); setCustomerSearch(`${customer.name || ""} · ${customer.phone}`); setDiscount(""); }}>{customer.name || customer.phone} · {customer.phone}</Button>)}{customerId && <p className="text-xs text-muted-foreground">Клиент выбран</p>}</div>
       <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Скидка клиента, %<Input type="number" min="0" max="100" placeholder="Авто по уровню" value={discount} onChange={(event) => setDiscount(event.target.value)} /></label><label className="text-sm">Дополнительная скидка, %<Input type="number" min="0" max="100" value={extraDiscount} onChange={(event) => setExtraDiscount(event.target.value)} /></label></div>
       <label className="text-sm">Бонус новому клиенту<select className="flex h-10 w-full rounded-md border bg-background px-3" value={bonusKind} onChange={(event) => setBonusKind(event.target.value as typeof bonusKind)}><option value="">Нет</option><option value="discount">Скидка 20%</option><option value="gift">Чай в подарок</option></select></label>
-      {bonusKind === "gift" && <div className="flex gap-2"><select aria-label="Подарочный чай" className="min-w-0 flex-1 rounded-md border bg-background px-2" value={giftProductId} onChange={(event) => setGiftProductId(event.target.value)}><option value="">Выберите чай</option>{products.data?.filter((product) => product.category === "tea").map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select><Input aria-label="Граммы подарка" type="number" min="1" className="w-24" value={giftQuantity} onChange={(event) => setGiftQuantity(event.target.value)} /></div>}
-      <p className="text-sm">Цена: {money(Math.round(editSubtotal))}{customerId && discount === "" && bonusKind !== "discount"
-        ? " · скидка и итог пересчитаются по профилю клиента"
-        : <> · скидка: −{money(Math.round(editSubtotal - editTotal))} · <strong>итог: {money(editTotal)}</strong></>}</p>
-      <div className="flex flex-wrap gap-2"><Button disabled={correct.isPending || cancel.isPending} onClick={save}>{correct.isPending ? "Сохраняем…" : "Сохранить исправление"}</Button>
+      {bonusKind === "gift" && <div className="flex gap-2"><select aria-label="Подарочный чай" className="min-w-0 flex-1 rounded-md border bg-background px-2" value={giftProductId} onChange={(event) => setGiftProductId(event.target.value)}><option value="">Выберите чай</option>{editableProducts?.filter((product) => product.category === "tea").map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}</select><Input aria-label="Граммы подарка" type="number" min="1" className="w-24" value={giftQuantity} onChange={(event) => setGiftQuantity(event.target.value)} /></div>}
+      <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">Дополнительная скидка, ₽<Input inputMode="decimal" value={extraRubles} onChange={(event) => setExtraRubles(event.target.value)} /></label><label className="text-sm">Итог вручную, ₽<Input inputMode="decimal" placeholder={String(editPricing.calculatedTotal / 100)} value={finalPrice} onChange={(event) => setFinalPrice(event.target.value)} /></label></div>
+      <label className="text-sm">Комментарий к покупке<Input maxLength={2000} value={comment} onChange={(event) => setComment(event.target.value)} /></label>
+      <p className="text-sm">{discountPending ? "Загружаем скидку клиента…" : <>По расчёту: {money(editPricing.calculatedTotal)} · Покупатель заплатит: {money(editTotal)}</>}</p>
+      <div className="flex flex-wrap gap-2"><Button disabled={correct.isPending || cancel.isPending || discountPending} onClick={save}>{correct.isPending ? "Сохраняем…" : "Сохранить исправление"}</Button>
         <Button variant="outline" disabled={correct.isPending || cancel.isPending} onClick={() => setConfirmCancel(true)}>Отменить продажу</Button>
       </div>
       {confirmCancel && <div className="space-y-2 border-t pt-3"><p className="text-sm">Вернуть чай на склад и списать начисленные XP? Действие останется в журнале.</p><Button variant="destructive" disabled={!actorId || cancel.isPending} onClick={() => cancel.mutate()}>{cancel.isPending ? "Отменяем…" : "Подтвердить отмену"}</Button><Button variant="ghost" onClick={() => setConfirmCancel(false)}>Оставить продажу</Button></div>}

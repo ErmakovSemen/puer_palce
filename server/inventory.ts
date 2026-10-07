@@ -3,9 +3,11 @@ import { z } from "zod";
 import { pool as defaultPool } from "./db";
 import { getLoyaltyDiscountFromSettings } from "../shared/pricing";
 import { sendTelegramMessage } from "./telegram";
+import { calculateInventoryPrice } from "../shared/inventory-pricing";
 
 export const inventoryDDL = `
 ALTER TABLE products ADD COLUMN IF NOT EXISTS inventory_only BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS inventory_archived BOOLEAN NOT NULL DEFAULT false;
 CREATE TABLE IF NOT EXISTS inventory_stock (
  product_id INTEGER PRIMARY KEY REFERENCES products(id) ON DELETE RESTRICT,
  quantity INTEGER NOT NULL DEFAULT 0 CHECK(quantity >= 0),
@@ -27,6 +29,17 @@ ALTER TABLE inventory_sales ADD COLUMN IF NOT EXISTS extra_discount_percent INTE
 ALTER TABLE inventory_sales ADD COLUMN IF NOT EXISTS bonus_kind TEXT;
 ALTER TABLE inventory_sales ADD COLUMN IF NOT EXISTS gift JSONB;
 ALTER TABLE inventory_sales ADD COLUMN IF NOT EXISTS used_custom_discount BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE inventory_sales ADD COLUMN IF NOT EXISTS extra_discount_cents INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE inventory_sales ADD COLUMN IF NOT EXISTS calculated_total_cents INTEGER;
+ALTER TABLE inventory_sales ADD COLUMN IF NOT EXISTS final_price_cents INTEGER;
+ALTER TABLE inventory_sales ADD COLUMN IF NOT EXISTS comment TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS inventory_price_changes (
+ id SERIAL PRIMARY KEY, sale_id INTEGER NOT NULL REFERENCES inventory_sales(id),
+ actor TEXT NOT NULL, before_cents INTEGER NOT NULL, after_cents INTEGER NOT NULL,
+ difference_cents INTEGER NOT NULL, reason TEXT NOT NULL, comment TEXT NOT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS inventory_price_changes_sale_idx ON inventory_price_changes(sale_id);
 ALTER TABLE inventory_sales ADD COLUMN IF NOT EXISTS corrected_by INTEGER REFERENCES inventory_sales(id);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS offline_signup_bonus_available BOOLEAN NOT NULL DEFAULT false;
 CREATE TABLE IF NOT EXISTS inventory_sale_edits (
@@ -46,6 +59,8 @@ CREATE TABLE IF NOT EXISTS inventory_movements (
  reason TEXT NOT NULL, actor TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE inventory_movements ALTER COLUMN balance DROP NOT NULL;
+ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS before_state JSONB;
+ALTER TABLE inventory_movements ADD COLUMN IF NOT EXISTS after_state JSONB;
 CREATE INDEX IF NOT EXISTS inventory_movements_product_idx ON inventory_movements(product_id, id DESC);
 `;
 
@@ -63,6 +78,9 @@ const saleSchema = z.object({
   saleFormat: saleFormat.default("loose"),
   servicePriceCents: z.number().int().min(0).max(10000000).optional(),
   extraDiscountPercent: z.number().int().min(0).max(100).default(0),
+  extraDiscountCents: z.number().int().min(0).max(2000000000).default(0),
+  finalPriceCents: z.number().int().min(0).max(2000000000).optional(),
+  comment: z.string().trim().max(2000).default(""),
   customerDiscountPercent: z.number().int().min(0).max(100).optional(),
   occurredAt: z.string().datetime({ offset: true }).optional(),
   bonusKind: z.enum(["gift", "discount"]).nullable().optional(),
@@ -96,9 +114,12 @@ const saleSchema = z.object({
 const stockSchema = z.object({
   actorId: actor,
   revision: z.number().int().min(0),
-  quantity,
+  quantity: quantity.nullable(),
   priceCents: z.number().int().min(0).max(10000000),
   reason: z.string().trim().min(2).max(500),
+  description: z.string().max(10000).optional(),
+  teaType: z.string().trim().max(100).nullable().optional(),
+  archived: z.boolean().optional(),
 });
 
 class InventoryError extends Error {
@@ -152,7 +173,7 @@ export async function createInventorySale(input: unknown, connectionPool: any = 
   return inventoryTransaction((client) => createInventorySaleWork(data, client), connectionPool);
 }
 
-async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client: any) {
+async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client: any, preservedProductIds: Set<number> = new Set()) {
   const perLinePricing = data.lines.some((line) => line.saleFormat !== undefined);
   if (perLinePricing && data.lines.some((line) => !line.saleFormat ||
     (line.saleFormat !== "loose" && line.servicePriceCents === undefined)))
@@ -273,6 +294,7 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
         ])
       ).rows[0];
       if (!product) throw new InventoryError(404, "Товар не найден");
+      if (product.inventory_archived && !preservedProductIds.has(product.id)) throw new InventoryError(409, `«${product.name}» убран из доступных товаров`);
       if (format !== "loose" && product.category !== "tea")
         throw new InventoryError(400, "Для этого формата выберите чай");
       const price = Math.round(Number(product.price_per_gram) * 100);
@@ -332,16 +354,19 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
       data.customerDiscountPercent ?? customer?.custom_discount ?? loyalty;
     const usedCustomDiscount = customer?.custom_discount > 0 && data.bonusKind !== "discount" &&
       (data.customerDiscountPercent === undefined || data.customerDiscountPercent === customer.custom_discount);
-    const afterCustomerDiscount = Math.round(subtotal * (100 - discountPercent) / 100);
-    const finalTotal = Math.round(afterCustomerDiscount * (100 - data.extraDiscountPercent) / 100);
-    const discountCents = subtotal - finalTotal;
+    const pricing = calculateInventoryPrice(subtotal, discountPercent, data.extraDiscountPercent, data.extraDiscountCents, data.finalPriceCents);
+    if (data.extraDiscountCents > pricing.afterPercent)
+      throw new InventoryError(400, "Дополнительная скидка больше суммы после скидки клиента");
+    const finalTotal = pricing.total;
+    const discountCents = pricing.discountCents;
     let giftSnapshot: { productId: number; quantity: number; name: string } | null = null;
     if (data.bonusKind === "gift") {
       const giftProduct = (await client.query(
-        "SELECT id,name,category FROM products WHERE id=$1 FOR UPDATE", [data.gift!.productId],
+        "SELECT id,name,category,inventory_archived FROM products WHERE id=$1 FOR UPDATE", [data.gift!.productId],
       )).rows[0];
       if (!giftProduct || giftProduct.category !== "tea")
         throw new InventoryError(400, "Подарком может быть только чай");
+      if (giftProduct.inventory_archived && !preservedProductIds.has(giftProduct.id)) throw new InventoryError(409, "Подарочный чай убран из доступных товаров");
       await client.query("INSERT INTO inventory_stock(product_id,quantity) VALUES($1,NULL) ON CONFLICT DO NOTHING", [giftProduct.id]);
       const giftStock = (await client.query("SELECT quantity FROM inventory_stock WHERE product_id=$1 FOR UPDATE", [giftProduct.id])).rows[0];
       const soldSameTea = lines.filter((line) => line.productId === giftProduct.id).reduce((sum, line) => sum + line.quantity, 0);
@@ -375,6 +400,21 @@ async function createInventorySaleWork(data: z.infer<typeof saleSchema>, client:
         ],
       )
     ).rows[0];
+    Object.assign(sale, (await client.query(
+      "UPDATE inventory_sales SET extra_discount_cents=$2,calculated_total_cents=$3,final_price_cents=$4,comment=$5 WHERE id=$1 RETURNING *",
+      [sale.id, data.extraDiscountCents, pricing.calculatedTotal, data.finalPriceCents ?? null, data.comment],
+    )).rows[0]);
+    const recordPriceChange = async (before: number, after: number, reason: string) => {
+      const money = (cents: number) => (cents / 100).toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
+      await client.query(
+        "INSERT INTO inventory_price_changes(sale_id,actor,before_cents,after_cents,difference_cents,reason,comment) VALUES($1,$2,$3,$4,$5,$6,$7)",
+        [sale.id, name, before, after, after - before, reason,
+          `${reason}: ${money(before)} → ${money(after)}; разница ${money(after - before)}`],
+      );
+    };
+    if (data.extraDiscountPercent) await recordPriceChange(pricing.afterCustomer, pricing.afterPercent, "дополнительная скидка");
+    if (data.extraDiscountCents) await recordPriceChange(pricing.afterPercent, pricing.calculatedTotal, "дополнительная скидка");
+    if (data.finalPriceCents !== undefined) await recordPriceChange(pricing.calculatedTotal, finalTotal, "изменение итоговой цены");
     if (data.occurredAt) {
       await client.query("UPDATE inventory_sales SET created_at=$2 WHERE id=$1", [sale.id, data.occurredAt]);
       sale.created_at = data.occurredAt;
@@ -533,13 +573,30 @@ export async function registerInventory(
       }
     };
   app.get(
+    "/api/admin/inventory/customer/:id/discount",
+    auth,
+    route(async (req) => {
+      const customer = (await pool.query("SELECT xp,custom_discount FROM users WHERE id=$1", [req.params.id])).rows[0];
+      if (!customer) throw new InventoryError(404, "Клиент не найден");
+      const settings = (await pool.query("SELECT * FROM site_settings LIMIT 1")).rows[0] || {};
+      return { discountPercent: customer.custom_discount ?? getLoyaltyDiscountFromSettings(Number(customer.xp), {
+        loyaltyLevel2MinXP: settings.loyalty_level2_min_xp,
+        loyaltyLevel2Discount: settings.loyalty_level2_discount,
+        loyaltyLevel3MinXP: settings.loyalty_level3_min_xp,
+        loyaltyLevel3Discount: settings.loyalty_level3_discount,
+        loyaltyLevel4MinXP: settings.loyalty_level4_min_xp,
+        loyaltyLevel4Discount: settings.loyalty_level4_discount,
+      }) };
+    }),
+  );
+  app.get(
     "/api/admin/inventory",
     auth,
     route(
       async () =>
         (
           await pool.query(
-            "SELECT p.id,p.name,p.category,p.tea_type,p.pricing_unit AS unit,ROUND((p.price_per_gram*100)::numeric)::integer AS price_cents,CASE WHEN s.product_id IS NULL AND p.category='tea' THEN NULL WHEN s.product_id IS NULL THEN 0 ELSE s.quantity END AS quantity,COALESCE(s.revision,0) AS revision FROM products p LEFT JOIN inventory_stock s ON s.product_id=p.id ORDER BY p.name",
+            "SELECT p.id,p.name,p.category,p.tea_type,p.description,p.inventory_archived,p.pricing_unit AS unit,ROUND((p.price_per_gram*100)::numeric)::integer AS price_cents,CASE WHEN s.product_id IS NULL AND p.category='tea' THEN NULL WHEN s.product_id IS NULL THEN 0 ELSE s.quantity END AS quantity,COALESCE(s.revision,0) AS revision FROM products p LEFT JOIN inventory_stock s ON s.product_id=p.id ORDER BY p.name",
           )
         ).rows,
     ),
@@ -554,11 +611,12 @@ export async function registerInventory(
         const name = await actorName(client, data.actorId);
         const product = (
           await client.query(
-            "SELECT id,category FROM products WHERE id=$1 FOR UPDATE",
+            "SELECT * FROM products WHERE id=$1 FOR UPDATE",
             [id],
           )
         ).rows[0];
         if (!product) throw new InventoryError(404, "Товар не найден");
+        if (data.quantity === null && product.category !== "tea") throw new InventoryError(400, "Укажите остаток посуды");
         await client.query(
           "INSERT INTO inventory_stock(product_id,quantity) VALUES($1,$2) ON CONFLICT DO NOTHING",
           [id, product.category === "tea" ? null : 0],
@@ -575,23 +633,25 @@ export async function registerInventory(
             "Остаток уже изменился. Обновите склад перед корректировкой",
           );
         await client.query(
-          "UPDATE products SET price_per_gram=$2 WHERE id=$1",
-          [id, data.priceCents / 100],
+          "UPDATE products SET price_per_gram=$2,description=$3,tea_type=$4,inventory_archived=$5 WHERE id=$1",
+          [id, data.priceCents / 100, data.description ?? product.description, data.teaType === undefined ? product.tea_type : data.teaType, data.archived ?? product.inventory_archived],
         );
         await client.query(
           "UPDATE inventory_stock SET quantity=$2,revision=revision+1 WHERE product_id=$1",
           [id, data.quantity],
         );
         await client.query(
-          "INSERT INTO inventory_movements(product_id,delta,balance,price_cents,kind,reason,actor) VALUES($1,$2,$3,$4,$5,$6,$7)",
+          "INSERT INTO inventory_movements(product_id,delta,balance,price_cents,kind,reason,actor,before_state,after_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
           [
             id,
-            stock.quantity === null ? 0 : data.quantity - stock.quantity,
+            stock.quantity === null || data.quantity === null ? 0 : data.quantity - stock.quantity,
             data.quantity,
             data.priceCents,
-            stock.quantity === null ? "count" : "adjustment",
+            stock.quantity === null && data.quantity !== null ? "count" : "adjustment",
             data.reason,
             name,
+            JSON.stringify({ description: product.description, teaType: product.tea_type, archived: product.inventory_archived, quantity: stock.quantity, priceCents: Math.round(Number(product.price_per_gram) * 100) }),
+            JSON.stringify({ description: data.description ?? product.description, teaType: data.teaType === undefined ? product.tea_type : data.teaType, archived: data.archived ?? product.inventory_archived, quantity: data.quantity, priceCents: data.priceCents }),
           ],
         );
         return { ok: true };
@@ -611,7 +671,7 @@ export async function registerInventory(
       const search = z.string().trim().max(100).optional().parse(req.query.search) || "";
       const offset = z.coerce.number().int().min(0).default(0).parse(req.query.offset);
       return (await pool.query(
-        "SELECT id,request_id,user_id,buyer,actor,lines,total_cents,xp,status,created_at,sale_format,COALESCE(subtotal_cents,total_cents) AS subtotal_cents,discount_cents,discount_percent,extra_discount_percent,bonus_kind,gift,payload FROM inventory_sales WHERE ($1::date IS NULL OR (created_at AT TIME ZONE 'Europe/Moscow')::date=$1::date) AND ($2='' OR buyer ILIKE '%'||$2||'%' OR lines::text ILIKE '%'||$2||'%' OR id::text LIKE '%'||$2||'%') ORDER BY created_at DESC,id DESC LIMIT 100 OFFSET $3",
+        "SELECT id,request_id,user_id,buyer,actor,lines,total_cents,xp,status,created_at,sale_format,COALESCE(subtotal_cents,total_cents) AS subtotal_cents,discount_cents,discount_percent,extra_discount_percent,extra_discount_cents,calculated_total_cents,final_price_cents,comment,bonus_kind,gift,payload FROM inventory_sales WHERE ($1::date IS NULL OR (created_at AT TIME ZONE 'Europe/Moscow')::date=$1::date) AND ($2='' OR id::text=$2 OR buyer ILIKE '%'||$2||'%' OR lines::text ILIKE '%'||$2||'%' OR comment ILIKE '%'||$2||'%') ORDER BY created_at DESC,id DESC LIMIT 100 OFFSET $3",
         [date || null, search, offset],
       )).rows;
     }),
@@ -642,7 +702,9 @@ export async function registerInventory(
       }
       if (retry) throw new InventoryError(409, "Ключ исправления уже использован");
       await reverseSale(client, prior, name);
-      const corrected = await createInventorySaleWork(data, client);
+      const preservedProductIds = new Set<number>(prior.lines.map((line: any) => line.productId));
+      if (prior.gift) preservedProductIds.add(prior.gift.productId);
+      const corrected = await createInventorySaleWork(data, client, preservedProductIds);
       await client.query("UPDATE inventory_sales SET status='corrected',corrected_by=$2 WHERE id=$1", [id, corrected.id]);
       await client.query(
         "INSERT INTO inventory_sale_edits(sale_id,actor,before_state,after_state) VALUES($1,$2,$3,$4)",
@@ -663,7 +725,7 @@ export async function registerInventory(
         .parse(req.query.offset);
       return (
         await pool.query(
-          "SELECT m.*,p.name FROM inventory_movements m JOIN products p ON p.id=m.product_id ORDER BY m.id DESC LIMIT 50 OFFSET $1",
+          "SELECT m.*,p.name,s.total_cents AS sale_total_cents,s.comment AS sale_comment,COALESCE((SELECT jsonb_agg(c ORDER BY c.id) FROM inventory_price_changes c WHERE c.sale_id=m.sale_id),'[]'::jsonb) AS price_changes FROM inventory_movements m JOIN products p ON p.id=m.product_id LEFT JOIN inventory_sales s ON s.id=m.sale_id ORDER BY m.id DESC LIMIT 50 OFFSET $1",
           [offset],
         )
       ).rows;
