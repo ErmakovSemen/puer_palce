@@ -303,6 +303,28 @@ test("warehouse, anonymous/customer sales, retries, rollback and cancellation", 
     });
     assert.equal(customerQuickSale.xp, 100);
     assert.equal(await scalar("SELECT xp FROM users WHERE id='customer'"), 215);
+    const added = await call("/products", "POST", {
+      actorId: 1, name: "Warehouse tea", category: "tea", quantity: null,
+      priceCents: 900, description: "Fresh tea", teaType: "Улун", reason: "Добавление товара на склад",
+    });
+    const addedItem = (await call("/")).find((item: any) => item.id === added.id);
+    assert.equal(addedItem.quantity, null);
+    assert.equal(addedItem.price_cents, 900);
+    assert.equal(addedItem.tea_type, "Улун");
+    assert.equal(await scalar(`SELECT inventory_only FROM products WHERE id=${added.id}`), true);
+    assert.equal((await call("/movements")).find((item: any) => item.product_id === added.id).actor, "Test admin");
+    const dish = await call("/products", "POST", {
+      actorId: 1, name: "Warehouse dish", category: "teaware", quantity: 4,
+      priceCents: 50000, reason: "Добавление товара на склад",
+    });
+    assert.equal((await call("/")).find((item: any) => item.id === dish.id).unit, "piece");
+    await call("/products", "POST", { actorId: 1, name: "No balance", category: "teaware", quantity: null, priceCents: 100, reason: "New product" }, 400);
+    const inventorySale = await call("/sales", "POST", {
+      requestId: crypto.randomUUID(), actorId: 1, userId: null,
+      lines: [{ productId: added.id, quantity: 3, priceCents: 900 }],
+    });
+    assert.equal(inventorySale.total_cents, 2700);
+    assert.equal(inventorySale.xp, 0);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await db.close();

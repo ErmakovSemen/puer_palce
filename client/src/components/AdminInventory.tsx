@@ -23,6 +23,7 @@ import { getLoyaltyDiscountFromSettings } from "@shared/pricing";
 import { calculateInventoryPrice } from "@shared/inventory-pricing";
 import { getTeaTypeColor } from "@/lib/tea-colors";
 import { useTeaTypes } from "@/hooks/use-tea-types";
+import InventoryTeaTypePicker from "./InventoryTeaTypePicker";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -201,7 +202,8 @@ export default function AdminInventory({
   const [teaType, setTeaType] = useState("");
   const [archived, setArchived] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
-  const { data: availableTypes } = useTeaTypes();
+  const [creating, setCreating] = useState(false);
+  const [productName, setProductName] = useState("");
   const { toast } = useToast();
   const history = useQuery<any[]>({
     queryKey: ["/api/admin/inventory/movements", offset],
@@ -212,21 +214,23 @@ export default function AdminInventory({
   const save = useMutation({
     mutationFn: () =>
       adminFetch(
-        `/api/admin/inventory/${editing!.id}`,
+        creating ? "/api/admin/inventory/products" : `/api/admin/inventory/${editing!.id}`,
         json(
           {
             actorId: Number(employee),
             revision: editing!.revision,
             quantity: balance === "" && editing!.category === "tea" ? null : Number(balance),
-            priceCents: Math.round(Number(price) * 100),
+            priceCents: priceCents(price),
             reason,
             description, teaType: teaType || null, archived,
+            ...(creating ? { name: productName, category: editing!.category } : {}),
           },
-          "PATCH",
+          creating ? "POST" : "PATCH",
         ),
       ),
     onSuccess: () => {
       setEditing(null);
+      setCreating(false);
       refresh();
       toast({ title: "Склад обновлён" });
     },
@@ -241,6 +245,12 @@ export default function AdminInventory({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-semibold">Склад</h2>
         {staff}
+        <Button onClick={() => {
+          const category = tab === "teaware" ? "teaware" : "tea";
+          setCreating(true); setProductName(""); setDescription(""); setTeaType(""); setArchived(false);
+          setBalance(category === "tea" ? "" : "0"); setPrice(""); setReason("Добавление товара на склад");
+          setEditing({ id: 0, name: "", category, unit: category === "tea" ? "gram" : "piece", price_cents: 0, quantity: null, revision: 0 });
+        }}><Plus className="mr-2 h-4 w-4" />Добавить товар</Button>
         <Button
           variant="outline"
           size="icon"
@@ -374,11 +384,15 @@ export default function AdminInventory({
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editing?.name}</DialogTitle>
+            <DialogTitle>{creating ? "Добавить товар на склад" : editing?.name}</DialogTitle>
           </DialogHeader>
+          {creating && <>
+            <label className="text-sm">Категория<select className={`${selectClass} w-full`} value={editing?.category} onChange={(event) => { const category = event.target.value; setEditing((item) => item ? { ...item, category, unit: category === "tea" ? "gram" : "piece" } : item); setBalance(category === "tea" ? "" : "0"); }}><option value="tea">Чай</option><option value="teaware">Посуда</option></select></label>
+            <label className="text-sm">Название<Input autoFocus maxLength={200} value={productName} onChange={(event) => setProductName(event.target.value)} /></label>
+          </>}
           {editing?.category === "tea" && <>
             <label className="text-sm">Описание<textarea className="w-full rounded-md border bg-background p-2" rows={3} maxLength={10000} value={description} onChange={(event) => setDescription(event.target.value)} /></label>
-            <label className="text-sm">Тип чая<Input list="inventory-tea-types" maxLength={100} value={teaType} onChange={(event) => setTeaType(event.target.value)} /><datalist id="inventory-tea-types">{availableTypes?.map((type) => <option key={type.name} value={type.name} />)}</datalist></label>
+            <div className="space-y-1 text-sm">Тип чая<InventoryTeaTypePicker value={teaType} onChange={setTeaType} adminFetch={adminFetch} /></div>
           </>}
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} />Убрать из доступных товаров</label>
           <label>
@@ -415,8 +429,9 @@ export default function AdminInventory({
           <Button
             disabled={
               !employee ||
+              (creating && productName.trim().length < 2) ||
               (balance === "" && editing?.category !== "tea") ||
-              !price ||
+              !validServicePrice(price) ||
               reason.trim().length < 2 ||
               save.isPending
             }
@@ -554,6 +569,8 @@ export function InventorySale({
       setPendingPayload(null);
       setLocked(false);
       setShowValidation(false);
+      setOpenProductIndex(null); setOpenPriceIndex(null); setProductSearch(""); setTeaTypeFilter(null);
+      toast({ title: "Продажа проведена", description: `№${r.id} · ${rub(r.total_cents)}${r.xp > 0 ? ` · +${r.xp} XP` : ""}. Можно оформить следующую продажу.`, duration: 5000 });
       refresh();
       onChanged?.();
     },

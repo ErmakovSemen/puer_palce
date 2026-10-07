@@ -601,6 +601,24 @@ export async function registerInventory(
         ).rows,
     ),
   );
+  app.post("/api/admin/inventory/products", auth, route(async (req) => {
+    const data = stockSchema.omit({ revision: true, archived: true }).extend({
+      name: z.string().trim().min(2).max(200),
+      category: z.enum(["tea", "teaware"]),
+    }).parse(req.body);
+    if (data.category === "teaware" && data.quantity === null) throw new InventoryError(400, "Укажите остаток посуды");
+    return transaction(async (client) => {
+      const name = await actorName(client, data.actorId);
+      const product = (await client.query(
+        "INSERT INTO products(name,category,pricing_unit,price_per_gram,description,tea_type,out_of_stock,inventory_only) VALUES($1,$2,$3,$4,$5,$6,true,true) RETURNING id",
+        [data.name, data.category, data.category === "tea" ? "gram" : "piece", data.priceCents / 100, data.description || "", data.category === "tea" ? data.teaType || "Не указан" : "Не указан"],
+      )).rows[0];
+      await client.query("INSERT INTO inventory_stock(product_id,quantity) VALUES($1,$2)", [product.id, data.quantity]);
+      await client.query("INSERT INTO inventory_movements(product_id,delta,balance,price_cents,kind,reason,actor,after_state) VALUES($1,$2,$3,$4,'count',$5,$6,$7)",
+        [product.id, data.quantity ?? 0, data.quantity, data.priceCents, data.reason, name, JSON.stringify({ description: data.description || "", teaType: data.teaType || "Не указан", quantity: data.quantity, priceCents: data.priceCents, archived: false })]);
+      return product;
+    });
+  }));
   app.patch(
     "/api/admin/inventory/:id",
     auth,

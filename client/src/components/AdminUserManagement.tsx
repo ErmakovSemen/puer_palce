@@ -634,7 +634,11 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
         buyerMode={buyerMode}
         customer={saleCustomer}
         onBusyChange={setSaleLocked}
-        onChanged={() => { if (saleCustomer) refetchUser(); }}
+        onChanged={() => {
+          setBuyerMode("guest"); setSelectedUserId(null); setSearchedPhone("");
+          setSearchInput(""); setDebouncedSearch(""); setSuggestionsOpen(false);
+          setShowCreateForm(false); setCreateName(""); setCreatePhone(""); setCreateSource("");
+        }}
       />
 
       {buyerMode === "customer" && user && selectedUserId === user.id && loyaltyProgress && (
