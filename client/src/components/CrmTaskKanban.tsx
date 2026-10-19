@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { AdminCustomerLink } from "./AdminCustomerProfile";
 
 type AdminFetch = (url: string, options?: RequestInit) => Promise<any>;
 type TaskStatus = "open" | "in_progress" | "done";
@@ -270,7 +271,7 @@ function TaskCard({ task, onStatusChange, onOpen }: { task: Task; onStatusChange
             <p className="font-medium leading-snug">{task.title}</p>
             <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span>{task.ownerName || "Не назначен"}</span>
-              {task.contactName && <span>Клиент: {task.contactName}</span>}
+              {task.contactName && <span>Клиент: <AdminCustomerLink contactId={task.contactId}>{task.contactName}</AdminCustomerLink></span>}
               <span className="inline-flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" />{formatDueAt(task.dueAt)}</span>
             </div>
             <Select value={task.status} onValueChange={(status) => onStatusChange(task.id, status as TaskStatus)}>
@@ -289,7 +290,7 @@ function TaskDialog({ task, open, onOpenChange, comments, commentsLoading, comme
     <Dialog open={open} onOpenChange={onOpenChange}>
       {task && <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader><DialogTitle>{task.title}</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">{task.ownerName || "Не назначен"} · {task.contactName ? `клиент: ${task.contactName}` : "без клиента"} · {formatDueAt(task.dueAt)}</p>
+        <p className="text-sm text-muted-foreground">{task.ownerName || "Не назначен"} · {task.contactName ? <AdminCustomerLink contactId={task.contactId}>{task.contactName}</AdminCustomerLink> : "без клиента"} · {formatDueAt(task.dueAt)}</p>
         <section className="space-y-3">
           <h3 className="text-sm font-semibold">Комментарии</h3>
           {commentsLoading ? <p className="text-sm text-muted-foreground">Загружаем комментарии…</p> : comments.length ? <div className="space-y-2">{comments.map((comment) => <div key={comment.id} className="rounded-md bg-muted/50 p-3 text-sm"><p>{comment.body}</p><p className="mt-1 text-xs text-muted-foreground">{comment.authorName || "Сотрудник"} · {formatDueAt(comment.createdAt)}</p></div>)}</div> : <p className="text-sm text-muted-foreground">Пока нет комментариев.</p>}

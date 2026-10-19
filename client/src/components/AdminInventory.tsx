@@ -24,6 +24,7 @@ import { calculateInventoryPrice } from "@shared/inventory-pricing";
 import { getTeaTypeColor } from "@/lib/tea-colors";
 import { useTeaTypes } from "@/hooks/use-tea-types";
 import InventoryTeaTypePicker from "./InventoryTeaTypePicker";
+import { AdminCustomerLink } from "./AdminCustomerProfile";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Command,
@@ -962,7 +963,7 @@ export function InventorySale({
             className="flex flex-wrap items-center justify-between gap-2 border-b py-3 text-sm"
           >
             <div>
-              №{s.id} · {s.buyer} · {rub(s.total_cents)}
+              №{s.id} · <AdminCustomerLink userId={s.user_id}>{s.buyer}</AdminCustomerLink> · {rub(s.total_cents)}
               <p className="text-xs text-muted-foreground">
                 {s.lines
                   .map((l: any) => `${l.name}: ${l.quantity} ${l.unit}`)

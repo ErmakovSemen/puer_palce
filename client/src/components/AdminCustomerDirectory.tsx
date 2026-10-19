@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { AdminCustomerLink, openAdminCustomer } from "./AdminCustomerProfile";
 
 type AdminFetch = (url: string, options?: RequestInit) => Promise<any>;
 type DirectoryUser = {
@@ -622,12 +623,12 @@ export default function AdminCustomerDirectory({
                   {filtered.map((user) => (
                     <tr
                       key={user.id}
-                      onClick={() => setSelectedUser(user)}
+                      onClick={() => openAdminCustomer({ userId: user.id })}
                       className="cursor-pointer border-b last:border-0 hover:bg-muted/30"
                     >
                       <td className="p-3">
                         <p className="font-medium">
-                          {user.name || "Без имени"}
+                          <AdminCustomerLink userId={user.id}>{user.name || "Без имени"}</AdminCustomerLink>
                         </p>
                         <p
                           className="max-w-28 truncate text-xs text-muted-foreground"
@@ -645,6 +646,7 @@ export default function AdminCustomerDirectory({
                       <td className="p-3">{user.source || "-"}</td>
                       <td className="p-3 text-right">{user.xp}</td>
                       <td className="p-3 text-right">
+                        <Button size="sm" variant="ghost" onClick={(event) => { event.stopPropagation(); setSelectedUser(user); }}>CRM</Button>
                         {user.orderCount} ·{" "}
                         {user.totalSpent.toLocaleString("ru-RU")} ₽
                       </td>
@@ -809,7 +811,7 @@ export default function AdminCustomerDirectory({
         {selectedUser && (
           <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
             <DialogHeader>
-              <DialogTitle>{selectedUser.name || "Без имени"}</DialogTitle>
+              <DialogTitle><AdminCustomerLink userId={selectedUser.id}>{selectedUser.name || "Без имени"}</AdminCustomerLink></DialogTitle>
             </DialogHeader>
             <div className="space-y-5">
               <div className="rounded-md border bg-muted/30 p-3 text-sm">

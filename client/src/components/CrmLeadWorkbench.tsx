@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { AdminCustomerLink } from "./AdminCustomerProfile";
 
 const stages: Record<string, string> = {
   new: "Новый",
@@ -229,13 +230,12 @@ export default function CrmLeadWorkbench({
       </div>
       <div className="divide-y border-y">
         {rows.slice(currentPage * 40, (currentPage + 1) * 40).map((c) => (
-          <button
+          <div
             key={c.id}
-            onClick={() => open(c.id)}
             className="flex w-full flex-wrap items-center justify-between gap-2 py-3 text-left hover:bg-muted/40"
           >
             <span className="min-w-0">
-              <span className="block font-medium break-words">{c.name}</span>
+              <span className="block font-medium break-words"><AdminCustomerLink contactId={c.id}>{c.name}</AdminCustomerLink></span>
               <span className="text-xs text-muted-foreground">
                 {c.source} · {c.ownerName || "Без ответственного"} ·{" "}
                 {c.phone || (vkLink(c) ? "VK" : c.telegram || "Нет контактов")}
@@ -244,7 +244,8 @@ export default function CrmLeadWorkbench({
             <span className="text-sm">
               {c.workStatus === "waiting" ? "Ждём ответа" : stages[c.pipelineStage] || c.pipelineStage}
             </span>
-          </button>
+            <Button type="button" variant="ghost" size="sm" onClick={() => open(c.id)}>Обработать</Button>
+          </div>
         ))}
         {!rows.length && (
           <p className="py-6 text-muted-foreground">
@@ -283,7 +284,7 @@ export default function CrmLeadWorkbench({
       >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>{selected?.name}</DialogTitle>
+            <DialogTitle><AdminCustomerLink contactId={selected?.id}>{selected?.name}</AdminCustomerLink></DialogTitle>
           </DialogHeader>
           {selected && (
             <div className="space-y-4">

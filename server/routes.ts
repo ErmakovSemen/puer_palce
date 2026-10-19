@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { registerInventory } from "./inventory";
+import { registerAdminCustomer } from "./admin-customer";
 import { isAdminRequest } from "./admin-auth";
 import { z } from "zod";
 import { createServer, type Server } from "http";
@@ -509,6 +510,7 @@ function scheduleReceiptFallback(
 
 export async function registerRoutes(app: Express): Promise<Server> {
   await registerInventory(app, requireAdminAuth);
+  await registerAdminCustomer(app, requireAdminAuth);
   // Setup user authentication (email/password)
   setupAuth(app);
 

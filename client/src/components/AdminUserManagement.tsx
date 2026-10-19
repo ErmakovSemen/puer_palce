@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Minus, Trophy, Check, Trash2, MessageCircle, RefreshCw, CheckCircle2, XCircle, HelpCircle, UserPlus } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { getLoyaltyProgress, LOYALTY_LEVELS } from "@shared/loyalty";
+import { AdminCustomerLink } from "./AdminCustomerProfile";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { getApiUrl } from "@/lib/api-config";
@@ -480,7 +481,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
             </div>
           )}
           {!showCreateForm && <>
-          {saleCustomer && <p className="text-sm text-muted-foreground" role="status">Выбран: {saleCustomer.name || saleCustomer.phone || saleCustomer.email} · {saleCustomer.phone}</p>}
+          {saleCustomer && <p className="text-sm text-muted-foreground" role="status">Выбран: <AdminCustomerLink userId={saleCustomer.id}>{saleCustomer.name || saleCustomer.phone || saleCustomer.email}</AdminCustomerLink> · {saleCustomer.phone}</p>}
           <div
             className="relative"
             onBlur={(event) => {
@@ -586,15 +587,18 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
                     {recentUsers.map((u) => {
                       const progress = getLoyaltyProgress(u.xp);
                       return (
-                        <button
+                        <div
                           key={u.id}
+                          role="button"
+                          tabIndex={0}
                           onClick={() => handleSelectUser(u)}
+                          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); handleSelectUser(u); } }}
                           className="w-full text-left p-3 rounded-md border hover-elevate active-elevate-2 transition-colors"
                           data-testid={`button-select-user-${u.id}`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{u.name || u.phone || u.email}</p>
+                              <p className="font-medium truncate"><AdminCustomerLink userId={u.id}>{u.name || u.phone || u.email}</AdminCustomerLink></p>
                               <div className="flex items-center gap-2 mt-1">
                                 <p className="text-sm text-muted-foreground">{u.phone}</p>
                                 {u.phoneVerified && (
@@ -613,7 +617,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
                               <span className="text-sm text-muted-foreground">{u.xp} XP</span>
                             </div>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -661,7 +665,7 @@ export default function AdminUserManagement({ adminPassword }: AdminUserManageme
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Имя</p>
-                  <p className="font-medium" data-testid="text-user-name">{user.name || "—"}</p>
+                  <p className="font-medium" data-testid="text-user-name"><AdminCustomerLink userId={user.id}>{user.name || user.phone}</AdminCustomerLink></p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Email</p>

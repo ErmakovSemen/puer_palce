@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { AdminCustomerLink } from "./AdminCustomerProfile";
 
 type AdminFetch = (url: string, options?: RequestInit) => Promise<any>;
 type CalendarSource = "event" | "booking";
@@ -27,6 +28,7 @@ interface CalendarItem {
   editable: boolean;
   booking?: {
     id: number;
+    userId: string | null;
     name: string;
     phone: string;
     telegram: string | null;
@@ -432,7 +434,7 @@ export default function AdminCeremonyBookings({ adminFetch, enabled }: { adminFe
           ) : selectedItem?.source === "booking" ? (
             <Card className="p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-serif text-xl font-semibold">{selectedItem.booking?.name}</h3>
+                <h3 className="font-serif text-xl font-semibold"><AdminCustomerLink userId={selectedItem.booking?.userId}>{selectedItem.booking?.name}</AdminCustomerLink></h3>
                 <Badge>{EVENT_TYPE_LABELS.booking}</Badge>
                 <Badge variant="outline">{STATUS_LABELS[selectedItem.status] ?? selectedItem.status}</Badge>
               </div>

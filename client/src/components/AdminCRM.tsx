@@ -43,6 +43,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import CrmTaskKanban from "@/components/CrmTaskKanban";
 import CrmLeadWorkbench from "@/components/CrmLeadWorkbench";
+import { AdminCustomerLink } from "./AdminCustomerProfile";
 
 type AdminFetch = (url: string, options?: RequestInit) => Promise<any>;
 type Lifecycle = "lead" | "active" | "regular" | "at_risk" | "inactive";
@@ -732,15 +733,12 @@ function TaskBlock({
               >
                 <CheckCircle2 className="h-4 w-4" />
               </Button>
-              <button
-                className="min-w-0 text-left"
-                onClick={() => onOpen(task.contact)}
-              >
-                <p className="text-sm font-medium">{task.title}</p>
+              <div className="min-w-0 text-left">
+                <button className="text-sm font-medium" onClick={() => onOpen(task.contact)}>{task.title}</button>
                 <p className="truncate text-xs text-muted-foreground">
-                  {task.contact.name} · {fmt(task.dueAt)}
+                  <AdminCustomerLink contactId={task.contact.id}>{task.contact.name}</AdminCustomerLink> · {fmt(task.dueAt)}
                 </p>
-              </button>
+              </div>
             </div>
           ))
         ) : (
@@ -803,15 +801,13 @@ function InboxView({
                   onChange={() => toggle(c.id)}
                   className="h-4 w-4 accent-primary"
                 />
-                <button
-                  className="min-w-0 flex-1 text-left"
-                  onClick={() => onOpen(c)}
-                >
-                  <p className="truncate font-medium">{c.name}</p>
+                <div className="min-w-0 flex-1 text-left">
+                  <p className="truncate font-medium"><AdminCustomerLink contactId={c.id}>{c.name}</AdminCustomerLink></p>
                   <p className="truncate text-xs text-muted-foreground">
                     {c.source} · {c.telegram || c.phone || "нет контакта"}
                   </p>
-                </button>
+                  <button className="text-xs underline" onClick={() => onOpen(c)}>Работа с клиентом</button>
+                </div>
                 <Button
                   variant="outline"
                   size="sm"
@@ -1182,7 +1178,7 @@ function KanbanPicker({
             ? leadRows.slice(0, 100).map((c) => (
                 <div key={c.id} className="flex items-center gap-3 p-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{c.name}</p>
+                    <p className="truncate text-sm font-medium"><AdminCustomerLink contactId={c.id}>{c.name}</AdminCustomerLink></p>
                     <p className="truncate text-xs text-muted-foreground">
                       {c.source} · {c.telegram || c.phone || "нет контакта"}
                     </p>
@@ -1200,7 +1196,7 @@ function KanbanPicker({
                 <div key={c.id} className="flex items-center gap-3 p-3">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      {c.name || c.phone || "Без имени"}
+                      <AdminCustomerLink userId={c.id}>{c.name || c.phone || "Без имени"}</AdminCustomerLink>
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
                       {c.orderCount} покупок ·{" "}
@@ -1246,11 +1242,11 @@ function DragLead({
       className={`rounded-md border bg-background p-3 shadow-sm ${isDragging ? "opacity-50" : ""}`}
     >
       <div className="flex gap-1">
-        <button
+        <div
           className="min-w-0 flex-1 text-left"
-          onClick={() => onOpen(contact)}
         >
-          <p className="truncate text-sm font-semibold">{contact.name}</p>
+          <p className="truncate text-sm font-semibold"><AdminCustomerLink contactId={contact.id}>{contact.name}</AdminCustomerLink></p>
+          <button type="button" className="text-xs text-muted-foreground underline" onClick={() => onOpen(contact)}>Работа с клиентом</button>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {contact.telegram || contact.phone || contact.source}
           </p>
@@ -1259,7 +1255,7 @@ function DragLead({
               Есть следующее касание
             </p>
           )}
-        </button>
+        </div>
         <button
           className="cursor-grab touch-none p-1 text-muted-foreground"
           aria-label="Перетащить лид"
@@ -1301,9 +1297,8 @@ function ContactList({
         {contacts.length ? (
           <div className="divide-y">
             {contacts.slice(0, 200).map((c) => (
-              <button
+              <div
                 key={c.id}
-                onClick={() => onOpen(c)}
                 className="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-muted/50"
               >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-secondary font-serif">
@@ -1311,7 +1306,7 @@ function ContactList({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate font-medium">{c.name}</span>
+                    <span className="truncate font-medium"><AdminCustomerLink contactId={c.id}>{c.name}</AdminCustomerLink></span>
                     <Badge
                       variant="outline"
                       className={LIFECYCLE[c.stage].className}
@@ -1324,7 +1319,8 @@ function ContactList({
                     {c.telegram || c.phone || "нет контакта"}
                   </p>
                 </div>
-              </button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => onOpen(c)}>CRM</Button>
+              </div>
             ))}
           </div>
         ) : (
@@ -1379,7 +1375,7 @@ function LeadDialog({
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex flex-wrap items-center gap-2">
-              {contact.name}
+              <AdminCustomerLink contactId={contact.id}>{contact.name}</AdminCustomerLink>
               <Badge
                 variant="outline"
                 className={LIFECYCLE[contact.stage].className}
@@ -1591,15 +1587,15 @@ function LeadRow({
   onOpen: (c: Contact) => void;
 }) {
   return (
-    <button
-      onClick={() => onOpen(contact)}
+    <div
       className="block w-full rounded-md border p-3 text-left hover:bg-muted/50"
     >
-      <p className="truncate text-sm font-medium">{contact.name}</p>
+      <p className="truncate text-sm font-medium"><AdminCustomerLink contactId={contact.id}>{contact.name}</AdminCustomerLink></p>
       <p className="truncate text-xs text-muted-foreground">
         {contact.telegram || contact.phone || contact.source}
       </p>
-    </button>
+      <button type="button" className="text-xs text-muted-foreground underline" onClick={() => onOpen(contact)}>Работа с клиентом</button>
+    </div>
   );
 }
 function Empty({ title, text }: { title: string; text: string }) {

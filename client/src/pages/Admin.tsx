@@ -16,6 +16,7 @@ import AdminInventory from "@/components/AdminInventory";
 import AdminMedia from "@/components/AdminMedia";
 import AdminCRM from "@/components/AdminCRM";
 import AdminCustomerDirectory from "@/components/AdminCustomerDirectory";
+import AdminCustomerProfile from "@/components/AdminCustomerProfile";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -404,7 +405,7 @@ export default function Admin() {
           </div>
         </div>
 
-        <Tabs defaultValue={['warehouse', 'users', 'stats'].includes(new URLSearchParams(location.search).get('tab') || '') ? new URLSearchParams(location.search).get('tab')! : 'crm'} className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
+        <Tabs defaultValue={['crm', 'clients', 'orders', 'ceremony-bookings', 'warehouse', 'users', 'stats'].includes(new URLSearchParams(location.search).get('tab') || '') ? new URLSearchParams(location.search).get('tab')! : 'crm'} onValueChange={(tab) => { const url = new URL(window.location.href); url.searchParams.set('tab', tab); window.history.replaceState(null, '', url.pathname + url.search); }} className="grid gap-6 lg:grid-cols-[13rem_minmax(0,1fr)]">
           <aside className="h-fit lg:sticky lg:top-6">
             <TabsList className="h-auto w-full flex-row flex-wrap justify-start gap-1 bg-transparent p-0 lg:flex-col lg:items-stretch">
               <TabsTrigger value="crm" data-testid="tab-crm" className="justify-start">CRM</TabsTrigger>
@@ -857,6 +858,8 @@ export default function Admin() {
           </main>
         </Tabs>
       </div>
+
+      <AdminCustomerProfile adminFetch={adminFetch} />
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">

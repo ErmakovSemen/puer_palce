@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { calculateInventoryPrice } from "@shared/inventory-pricing";
+import { AdminCustomerLink } from "./AdminCustomerProfile";
 
 type Fetcher = (url: string, options?: RequestInit) => Promise<any>;
 type SaleFormat = "loose" | "teapot" | "ceremony" | "cup";
@@ -199,7 +200,7 @@ export default function AdminSalesLedger({ adminFetch }: { adminFetch: Fetcher }
         <td className="p-2 whitespace-nowrap">{new Date(sale.created_at).toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit" })}<span className="block text-xs text-muted-foreground">№{sale.id}</span></td>
         <td className="p-2">{formatNames[sale.sale_format] || sale.sale_format}</td>
         <td className="p-2">{sale.lines.map((line, index) => <span key={index} className="block">{sale.sale_format === "mixed" && <span className="text-xs text-muted-foreground">{formatNames[line.saleFormat || "loose"]} · </span>}{line.name} · {line.quantity} {line.unit}</span>)}{sale.gift && <span className="block text-xs">Подарок: {sale.gift.name} · {sale.gift.quantity} г</span>}{sale.bonus_kind === "discount" && <span className="block text-xs">Бонус: скидка 20%</span>}</td>
-        <td className="p-2">{sale.user_id ? sale.buyer : "Анонимный"}</td>
+        <td className="p-2"><AdminCustomerLink userId={sale.user_id}>{sale.user_id ? sale.buyer : "Анонимный"}</AdminCustomerLink></td>
         <td className="p-2 whitespace-nowrap">{money(sale.subtotal_cents)}</td><td className="p-2 whitespace-nowrap">{sale.discount_cents >= 0 ? `−${money(sale.discount_cents)}` : `+${money(-sale.discount_cents)} (надбавка)`}</td>
         <td className="p-2 font-medium">{money(sale.total_cents)}{sale.final_price_cents != null && <span className="block text-xs font-normal">По расчёту: {money(sale.calculated_total_cents ?? sale.total_cents)}</span>}{sale.comment && <span className="block text-xs font-normal">{sale.comment}</span>}</td>
         <td className="p-2">{sale.status === "completed" ? "Проведена" : sale.status === "corrected" ? "Исправлена" : "Отменена"}</td>

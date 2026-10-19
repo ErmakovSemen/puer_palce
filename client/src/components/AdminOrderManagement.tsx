@@ -17,6 +17,7 @@ import { ru } from "date-fns/locale";
 import { getApiUrl } from "@/lib/api-config";
 import { useToast } from "@/hooks/use-toast";
 import type { DbOrder } from "@shared/schema";
+import { AdminCustomerLink } from "./AdminCustomerProfile";
 
 interface AdminOrderManagementProps {
   adminPassword: string;
@@ -227,7 +228,7 @@ export default function AdminOrderManagement({ adminPassword }: AdminOrderManage
                         </h4>
                         <div className="grid gap-1 text-sm pl-6">
                           <p data-testid={`text-customer-name-${order.id}`}>
-                            <span className="text-muted-foreground">Имя:</span> {order.name}
+                            <span className="text-muted-foreground">Имя:</span> <AdminCustomerLink userId={order.userId}>{order.name}</AdminCustomerLink>
                           </p>
                           <p className="flex items-center gap-1" data-testid={`text-customer-email-${order.id}`}>
                             <Mail className="h-3 w-3 text-muted-foreground" />
